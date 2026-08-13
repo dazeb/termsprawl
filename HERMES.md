@@ -60,7 +60,8 @@ suggestion. See AGENTS.md → Legal rules.
 - **Phase 9** — SSH remote projects.
 - **Phase 10** — Server Edition (browser) via the platform seam.
 - **Phase 11** — port our own extras: relay service, Telegram bot, chat
-  driver (audit imports first — PLAN.md task 11.1).
+  driver (audit is pre-done in docs/OWN-WORK.md — our fork files are marked
+  pure-ours vs entangled, with seams listed).
 - **Phase 12** — release polish, auto-update, CI.
 
 The goal: a **better experience than the competitors**, including the feature

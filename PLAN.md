@@ -270,9 +270,15 @@ extension, one feature at a time.**
 ## Phase 11 — Port our own extras
 
 ### Task 11.1: Entanglement audit (do this first)
+- **Audit is pre-done**: `docs/OWN-WORK.md` is the definitive inventory of
+  our files vs upstream-entangled files in the fork, derived from git
+  authorship (42 of our commits vs 997 upstream). Follow its port checklist.
 - For each [own] file (relay service, telegram bot, chat driver): list every
   import that reaches into prior-project core/shared; rewrite those seams so
-  the module stands alone. **Never import the old project's code.**
+  the module stands alone. **Never import the old project's code.** Known
+  seams from the 2026-08-13 audit: telegram bot reaches into the fork's
+  `shared/ipc`, `shared/types`, and `core/platform` — rewrite onto
+  termsprawl's own. The relay service is self-contained (no seams).
 - Verify: `scripts/check-originality.sh` passes on ported files.
 
 ### Task 11.2: Relay service

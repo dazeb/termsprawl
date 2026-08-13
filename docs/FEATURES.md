@@ -74,6 +74,9 @@ project and are ours to reuse; everything else is built new from scratch.
 
 ## 9. Extras **[own]**
 
+> Inventory of exactly which prior-project files are ours (and which are
+> entangled) lives in `docs/OWN-WORK.md` — consult it before porting.
+
 - Telegram bot: control terminals from the phone (list, attach, send). Local,
   no relay needed.
 - Hosted relay foundation: GitHub device-flow auth, host sessions, invite
