@@ -124,10 +124,13 @@ the `data.kind` union in `state/workspace.ts` when adding kinds.
 The repo has a real remote so agents can work in parallel without clobbering
 each other:
 
-- **origin** = `hermes-box:/srv/git/termsprawl.git` — a bare repo on hermes-box
-  (SSH alias in `~/.ssh/config`; key `~/.ssh/hermes-box_ed25519`). A GitHub
-  remote is planned once gh auth is re-established; hermes-box is the
-  working remote.
+- **github** = `https://github.com/dazeb/termsprawl.git` — canonical remote
+  (public repo, created 2026-08-13; gh auth as dazeb, HTTPS via gh credential
+  helper). Push there for any released/notable state.
+- **origin** = `hermes-box:/srv/git/termsprawl.git` — bare repo on hermes-box
+  (SSH alias in `~/.ssh/config`; key `~/.ssh/hermes-box_ed25519`). Working
+  remote for the parallel-agent loop (fast, no auth churn). Both remotes get
+  every push (`git push origin main && git push github main`).
 - **Hermes (this session)**: works in the main checkout
   (`/home/dazeb/workspace/projects/active/termsprawl`) on `main`. Owns
   checkpoint builds (AppImage → files.hermes.v0cl.one → Telegram) and
