@@ -66,7 +66,8 @@ suggestion. See AGENTS.md → Legal rules.
 
 The goal: a **better experience than the competitors**, including the feature
 set we already added to nodeterm-linux — but owned outright, MIT, and built
-on our own decisions.
+on our own decisions. **Linux only** — no macOS-specific features, ever (the
+fork's macOS phone relay is a dead end; the Telegram bot covers that use case).
 
 ## Working here
 

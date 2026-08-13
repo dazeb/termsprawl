@@ -3,7 +3,8 @@
 The target feature set, written fresh from requirements (not from any existing
 source). Items marked **[own]** are concepts we originated in the prior
 project — they are *rebuilt from scratch* here with better features, never
-copied; everything else is built new from scratch.
+copied; everything else is built new from scratch. **Linux only** — no
+macOS-specific features are in scope, ever.
 
 ## 1. Canvas
 

@@ -91,6 +91,11 @@ UpgradeDialog, license gates (`entitlement-key.ts`, `upgradeGate.ts`,
 100% free and dropped the macOS phone path in favour of Telegram. termsprawl
 inherits the decisions, not the code.
 
+**No macOS features, ever.** The macOS phone relay is explicitly not coming
+back in any form — termsprawl is Linux-only, and the Telegram bot covers
+phone control. Anything macOS-specific in the fork (entitlements plist,
+phone pairing, Continuity-style flows) is out of scope by rule.
+
 ## Our planning docs (context for v2 specs)
 
 - `.hermes/PLAN-telegram-team-access.md` in the fork — our original plan for

@@ -3,7 +3,9 @@
 **termsprawl** is a spatial terminal manager for Linux: real terminals, editors,
 and agent sessions live as draggable nodes on one infinite pan/zoom canvas.
 MIT-licensed, clean-room — **no code in this repo is copied from any other
-project** (see Legal rules below).
+project** (see Legal rules below). **Linux-only: no macOS-specific features
+will ever be added** (the fork's macOS phone relay is a dead end — the
+Telegram bot covers that use case).
 
 ## Commands
 

@@ -6,8 +6,8 @@
 **Goal:** build an independent, clean-room spatial terminal manager for Linux —
 canvas, real terminals with tmux continuity, agents, editors, source control,
 and our own extras (Telegram, relay) — with zero code from any prior project.
-Linux first; better experience than competitors, including the feature set we
-already added to the nodeterm fork.
+**Linux only** (no macOS-specific features); better experience than
+competitors, including the feature set we already added to the nodeterm fork.
 
 **Architecture:** three-process Electron app (main / preload / renderer) with a
 framework-free core behind a platform interface, so the same core also boots in
