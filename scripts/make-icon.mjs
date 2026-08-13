@@ -1,6 +1,6 @@
 // Generates build/icon.png (1024x1024) — the termsprawl mark: a black
 // rounded square with lime node dots sprawled across it, hinting at the
-// infinite canvas. Run via `npm run make-icon`.
+// infinite canvas. Run via `pnpm run make-icon`.
 
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { createCanvas } from 'canvas'

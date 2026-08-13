@@ -46,7 +46,7 @@ suggestion. See AGENTS.md → Legal rules.
   project files.
 - **Working end-to-end**, verified by tests + packaged boot: 13 vitest tests,
   typecheck clean, AppImage builds and runs.
-- **Packaging done**: `npm run dist` → AppImage + .deb, icon generator, all
+- **Packaging done**: `pnpm run dist` → AppImage + .deb, icon generator, all
   committed.
 
 ## Where we're going

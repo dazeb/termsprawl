@@ -6,6 +6,7 @@
   "type": "module",
   "license": "MIT",
   "author": "termsprawl contributors",
+  "homepage": "https://github.com/dazeb/termsprawl",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
@@ -14,8 +15,8 @@
     "test": "vitest run",
     "postinstall": "electron-rebuild -f -w node-pty",
     "make-icon": "node scripts/make-icon.mjs",
-    "dist": "npm run build && electron-builder --linux",
-    "dist:appimage": "npm run build && electron-builder --linux AppImage"
+    "dist": "pnpm run build && electron-builder --linux",
+    "dist:appimage": "pnpm run build && electron-builder --linux AppImage"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",

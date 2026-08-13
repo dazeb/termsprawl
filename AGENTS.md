@@ -8,18 +8,36 @@ project** (see Legal rules below).
 ## Commands
 
 ```bash
-npm install        # deps + rebuilds node-pty against Electron's ABI (postinstall)
-npm run dev        # dev mode with renderer HMR
-npm run build      # production build into out/
-npm start          # preview the production build
-npm run typecheck  # tsc for both node (main/preload) and web (renderer) projects
-npm test           # vitest suite (unit + integration)
-npm run dist       # AppImage + .deb into dist/ (electron-builder)
-npm run make-icon  # regenerate build/icon.png
+pnpm install        # deps + rebuilds node-pty against Electron's ABI (postinstall)
+pnpm run dev        # dev mode with renderer HMR
+pnpm run build      # production build into out/
+pnpm start          # preview the production build
+pnpm run typecheck  # tsc for both node (main/preload) and web (renderer) projects
+pnpm test           # vitest suite (unit + integration)
+pnpm run dist       # AppImage + .deb into dist/ (electron-builder)
+pnpm run make-icon  # regenerate build/icon.png
 ./scripts/check-originality.sh   # clean-room guard — run after any large change
 ```
 
-`npm run typecheck` is the fastest correctness gate.
+`pnpm run typecheck` is the fastest correctness gate.
+
+## Package manager (pnpm, not npm)
+
+The repo uses **pnpm 11** (`pnpm-lock.yaml`). Two pnpm-specific gotchas are
+already handled and must not be "fixed away":
+
+- **`node-linker=hoisted`** (`.npmrc`) — electron-builder and node-pty's
+  native loader choke on symlinked stores; hoisted keeps `node_modules`
+  npm-shaped while pnpm still owns the lockfile and install.
+- **Build-script allowlist** (`pnpm-workspace.yaml` → `allowBuilds`) — pnpm
+  10+ blocks dependency install scripts by default; `canvas`, `esbuild`,
+  `node-pty`, `electron-winstaller` are allowed there. If a new native dep is
+  added, pnpm will flag it as ignored — add it to `allowBuilds` and reinstall.
+- **Electron 43 has no postinstall script** — the binary is NOT fetched by
+  pnpm. If `node_modules/electron/dist/electron` is missing (fresh clone),
+  run `node node_modules/electron/install.js` once after `pnpm install`.
+  electron-builder downloads its own copy for packaging, so `pnpm run dist`
+  works even when the dev copy is absent — only `dev`/`start` need it.
 
 ## Process model (Electron, three contexts)
 

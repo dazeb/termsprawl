@@ -72,7 +72,7 @@ permissive, no obligations on our own code.
 - Files: `package.json`, `electron.vite.config.ts`, `tsconfig.json` +
   `tsconfig.web.json`, `src/main/index.ts`, `src/preload/index.ts`,
   `src/renderer/index.html`, `src/renderer/src/main.tsx`.
-- Verify: `npm run typecheck` clean; `npm run dev` opens a window.
+- Verify: `pnpm run typecheck` clean; `pnpm run dev` opens a window.
 
 ### Task 1.2: Preload bridge skeleton
 - Files: `src/preload/index.ts` exposing a narrow typed `window.termsprawl`
@@ -314,10 +314,10 @@ extension, one feature at a time.**
 ## Verification commands (whole repo)
 
 ```bash
-npm run typecheck   # fastest gate
-npm test            # vitest suite
-npm run build       # production build
-npm run dist:linux  # AppImage + .deb
+pnpm run typecheck   # fastest gate
+pnpm test            # vitest suite
+pnpm run build       # production build
+pnpm run dist        # AppImage + .deb
 ```
 
 ## Risks & tradeoffs
