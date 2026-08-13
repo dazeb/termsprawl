@@ -31,6 +31,9 @@ export interface SerializedNode {
   id: string
   type: string
   position: { x: number; y: number }
+  /** Parent frame id (group nodes) — kept out of live state only because
+   * React Flow owns it; persisted so groups survive a reopen. */
+  parentId?: string
   data: Record<string, unknown>
 }
 

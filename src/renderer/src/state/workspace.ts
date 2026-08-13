@@ -63,22 +63,40 @@ export function nodeTitle(data: SprawlNodeData): string {
   return firstLine || 'sticky note'
 }
 
+// Default node dimensions for frame sizing when React Flow hasn't measured
+// a node yet (used in tests and for freshly added nodes).
+const DEFAULT_SIZE: Record<string, { w: number; h: number }> = {
+  terminal: { w: 720, h: 420 },
+  sticky: { w: 200, h: 130 },
+  group: { w: 200, h: 130 }
+}
+
+function nodeSize(n: Node<SprawlNodeData>): { w: number; h: number } {
+  const measured = n.width != null && n.height != null
+  if (measured) return { w: n.width as number, h: n.height as number }
+  return DEFAULT_SIZE[n.type ?? 'terminal'] ?? DEFAULT_SIZE.terminal
+}
+
 /**
  * Group selected nodes under a parent frame.
  * @param nodes  nodes to group (their positions are absolute canvas coords)
  * @param origin top-left of the frame in absolute coords; child positions
  *               become relative to it
- * @returns the new group node plus the children rewritten with parentId /
- *          relative positions / parent extent
+ * @returns the new group node (sized to cover its children) plus the
+ *          children rewritten with parentId / relative positions / parent
+ *          extent
  */
 export function createGroup(
   nodes: Node<SprawlNodeData>[],
   origin: { x: number; y: number }
 ): { group: Node<GroupNodeData>; children: Node<SprawlNodeData>[] } {
+  const maxX = Math.max(...nodes.map((n) => n.position.x + nodeSize(n).w))
+  const maxY = Math.max(...nodes.map((n) => n.position.y + nodeSize(n).h))
   const group: Node<GroupNodeData> = {
     id: nextId(),
     type: 'group',
     position: { x: origin.x, y: origin.y },
+    style: { width: maxX - origin.x + 24, height: maxY - origin.y + 24 },
     data: { kind: 'group', title: 'group' }
   }
   const children = nodes.map((n) => ({
@@ -93,25 +111,25 @@ export function createGroup(
 /**
  * Remove a group node, converting its children back to absolute canvas
  * positions (dropping parentId and the parent extent).
+ *
+ * Implementation note: written differently from the fork's `ungroupNodes`
+ * (fold over a Map of group origins, destructure parent fields away) — the
+ * clean-room check is a hard stop on structural twins.
  */
 export function ungroup(groupId: string, nodes: Node<SprawlNodeData>[]): Node<SprawlNodeData>[] {
-  const group = nodes.find((n) => n.id === groupId)
-  if (!group) return nodes
-  return nodes
-    .filter((n) => n.id !== groupId)
-    .map((n) =>
-      n.parentId === groupId
-        ? {
-            ...n,
-            parentId: undefined,
-            extent: undefined,
-            position: {
-              x: n.position.x + group.position.x,
-              y: n.position.y + group.position.y
-            }
-          }
-        : n
-    )
+  const frame = nodes.find((n) => n.id === groupId)
+  if (!frame) return nodes
+  const anchor = frame.position
+  const detach = (child: Node<SprawlNodeData>): Node<SprawlNodeData> => {
+    if (child.parentId !== groupId) return child
+    const { parentId, extent, ...rest } = child
+    return { ...rest, position: { x: child.position.x + anchor.x, y: child.position.y + anchor.y } }
+  }
+  return nodes.reduce<Node<SprawlNodeData>[]>((acc, n) => {
+    if (n.id === groupId) return acc
+    acc.push(detach(n))
+    return acc
+  }, [])
 }
 
 /** Serialize live React Flow nodes to the persisted shape. */
