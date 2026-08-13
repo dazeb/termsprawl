@@ -1,4 +1,4 @@
-# Feature spec — termcanvas
+# Feature spec — termsprawl
 
 The target feature set, written fresh from requirements (not from any existing
 source). Items marked **[own]** were originally written by us for the prior

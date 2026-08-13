@@ -1,4 +1,4 @@
-# Implementation plan — termcanvas
+# Implementation plan — termsprawl
 
 > **For Hermes:** implement task-by-task; use subagent-driven-development for
 > task batches. Every task: TDD where feasible, exact commands, verify, commit.
@@ -75,10 +75,10 @@ permissive, no obligations on our own code.
 - Verify: `npm run typecheck` clean; `npm run dev` opens a window.
 
 ### Task 1.2: Preload bridge skeleton
-- Files: `src/preload/index.ts` exposing a narrow typed `window.termCanvas`
+- Files: `src/preload/index.ts` exposing a narrow typed `window.termsprawl`
   API (starts empty, grows per phase); `src/shared/ipc.ts` for channel names
   (single source of truth); `src/shared/types.ts` shared types.
-- Verify: renderer reads `window.termCanvas` version string; unit test on the
+- Verify: renderer reads `window.termsprawl` version string; unit test on the
   channel-name module.
 
 ### Task 1.3: Commit
