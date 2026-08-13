@@ -1,8 +1,9 @@
 # Feature spec — termsprawl
 
 The target feature set, written fresh from requirements (not from any existing
-source). Items marked **[own]** were originally written by us for the prior
-project and are ours to reuse; everything else is built new from scratch.
+source). Items marked **[own]** are concepts we originated in the prior
+project — they are *rebuilt from scratch* here with better features, never
+copied; everything else is built new from scratch.
 
 ## 1. Canvas
 
@@ -74,8 +75,8 @@ project and are ours to reuse; everything else is built new from scratch.
 
 ## 9. Extras **[own]**
 
-> Inventory of exactly which prior-project files are ours (and which are
-> entangled) lives in `docs/OWN-WORK.md` — consult it before porting.
+> Concept reference for what we originated lives in `docs/OWN-WORK.md` —
+> consult it when designing the v2 rebuilds (we rebuild, we do not port).
 
 - Telegram bot: control terminals from the phone (list, attach, send). Local,
   no relay needed.

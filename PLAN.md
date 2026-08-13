@@ -28,10 +28,11 @@ terminals; Monaco renders editors/diffs.
    patterns are free to use; expression is not.
 2. **Allowed to reuse:** third-party OSS libraries (xterm.js, React Flow,
    Monaco, node-pty, tmux as an external program) under their own licenses.
-3. **Allowed to port as-is:** our own prior work **[own]** — the standalone
-   relay service, Telegram bot logic, and the provider-agnostic chat driver.
-   These are ours. Before porting, check each file for imports that drag in
-   upstream code; rewrite those seams (see task 11.1).
+3. **Allowed as concepts only:** our own prior work **[own]** — the relay
+   service, Telegram bot logic, and the provider-agnostic chat driver. Their
+   *ideas* inform Phase 11 v2 designs, but **no file from the prior project is
+   ever copied into termsprawl** — everything is written fresh (see
+   `docs/OWN-WORK.md`).
 4. Every phase ends with a **no-copy scan**: diff new files against the prior
    project's tree; any identical block > 5 lines is a red flag — rewrite it.
    (Script: `scripts/check-originality.sh`, task 0.4.)
@@ -267,32 +268,33 @@ extension, one feature at a time.**
 ### Task 10.2: Commit
 - `git commit -m "feat: server edition"`
 
-## Phase 11 — Port our own extras
+## Phase 11 — Our own extras (rebuilt from scratch, better than the originals)
 
-### Task 11.1: Entanglement audit (do this first)
-- **Audit is pre-done**: `docs/OWN-WORK.md` is the definitive inventory of
-  our files vs upstream-entangled files in the fork, derived from git
-  authorship (42 of our commits vs 997 upstream). Follow its port checklist.
-- For each [own] file (relay service, telegram bot, chat driver): list every
-  import that reaches into prior-project core/shared; rewrite those seams so
-  the module stands alone. **Never import the old project's code.** Known
-  seams from the 2026-08-13 audit: telegram bot reaches into the fork's
-  `shared/ipc`, `shared/types`, and `core/platform` — rewrite onto
-  termsprawl's own. The relay service is self-contained (no seams).
-- Verify: `scripts/check-originality.sh` passes on ported files.
+*Direction: we do NOT port code from the fork — not even files we wrote
+there. The fork's extras (relay, Telegram bot, chat driver) are concepts we
+originated; each is rebuilt from scratch against termsprawl's own core/shared,
+with better features. `docs/OWN-WORK.md` is a design reference for those
+concepts, not a porting source.*
 
-### Task 11.2: Relay service
-- Port: `relay/` — GitHub device flow, host sessions, invite quotas, E2E
-  relay frames. Standalone Node service; its own README.
+### Task 11.1: Concept spec v2 (no code)
+- Read `docs/OWN-WORK.md` for the feature concepts we originated in the fork
+  (relay: GitHub device flow, host sessions, invite quotas, E2E relay frames;
+  Telegram bot; provider-agnostic chat driver).
+- Write v2 specs for each with better features than the fork had. Zero code
+  is copied from the fork; every file is written fresh.
 
-### Task 11.3: Telegram bot
-- Port: local bot (no relay), commands: /terminals /attach /send /help.
+### Task 11.2: Relay service v2
+- Build standalone: `relay/` — GitHub device flow, host sessions, invite
+  quotas, E2E relay frames. Its own README.
 
-### Task 11.4: Chat driver (provider-agnostic)
-- Port + generalize: SDK chat node with streaming, permission cards, cost chip.
+### Task 11.3: Telegram bot v2
+- Build local bot (no relay): commands: /terminals /attach /send /help.
+
+### Task 11.4: Chat driver v2 (provider-agnostic)
+- SDK chat node with streaming, permission cards, cost chip.
 
 ### Task 11.5: Commit
-- `git commit -m "feat: port own extras (relay, telegram, chat)"`
+- `git commit -m "feat: rebuild own extras (relay, telegram, chat)"`
 
 ## Phase 12 — Packaging & release
 

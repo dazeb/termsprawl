@@ -98,9 +98,9 @@ touch build config, re-verify with a packaged boot test.
 
 Only `terminal` is implemented today (Phase 5 = MVP cut). The plan
 (`PLAN.md`) adds sticky/group/editor/diff/chat, agents, source control, SSH
-remote, Server Edition, then ports our own extras (Telegram, relay, chat
-driver). Extend `NODE_TYPES` and the `data.kind` union in `state/workspace.ts`
-when adding kinds.
+remote, Server Edition, then rebuilds our own extras from scratch (Telegram,
+relay, chat driver — concepts only, never ported). Extend `NODE_TYPES` and
+the `data.kind` union in `state/workspace.ts` when adding kinds.
 
 ## Tests
 
@@ -121,8 +121,9 @@ not shed its license. Therefore:
    nodeterm-linux (or any other terminal-manager project). Ideas and features
    are free; expression is not.
 2. Our own prior work (Telegram bot, relay service, provider-agnostic chat
-   driver) is ours to port — but audit each file for imports that drag in
-   upstream code (PLAN.md task 11.1).
+   driver) is ours conceptually — but we **do not port any file** from the
+   fork. Each feature is rebuilt from scratch with better features
+   (docs/OWN-WORK.md is the concept reference).
 3. `scripts/check-originality.py` diffs the tree against the prior project and
    fails on identical blocks ≥ 5 lines. Known-benign matches are documented in
    the script (library export names, channel names, generic CSS). Run it after

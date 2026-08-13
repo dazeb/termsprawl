@@ -1,12 +1,14 @@
-# OWN-WORK.md — our prior work, marked for porting
+# OWN-WORK.md — concepts we originated (design reference)
 
-*Purpose: this file is the definitive inventory of what is genuinely OURS in
-the prior fork (`../nodeterm-linux`), so Phase 11 (task 11.1) ports with
-confidence and never drags upstream expression across. It was produced by
-git-author separation — the fork has 997 upstream commits (author `enes`) and
-42 of ours (authors `dazeb` / `Darren Bennett`, starting 2026-07-15).*
+*Purpose: this file records which features and design concepts in the prior
+fork (`../nodeterm-linux`) are genuinely OURS — so Phase 11 can rebuild them
+from scratch, with better features, without ever touching the fork's files.
+We do NOT port code, not even our own: every line in termsprawl is written
+fresh. The fork is read-only source material for ideas.*
 
-## Regenerating this inventory
+*Provenance: git-author separation in the fork — 997 upstream commits (author
+`enes`) vs 42 of ours (authors `dazeb` / `Darren Bennett`, starting
+2026-07-15). Regenerate with:*
 
 ```bash
 cd ../nodeterm-linux
@@ -16,147 +18,88 @@ git log --format='' --name-only --diff-filter=M $AUTH | grep -v '^$' | sort -u  
 git log --format='' --name-only --diff-filter=D $AUTH | grep -v '^$' | sort -u   # upstream files we DELETED
 ```
 
-## Porting rules (summary)
-
-| Category | Rule |
-|---|---|
-| **PURE OURS** (files we added) | Port as-is, then audit imports for seams (below). |
-| **ENTANGLED** (upstream files we modified) | Do NOT copy the file. Extract the *concept* and reimplement against termsprawl's own core/shared. The expression is mixed with upstream's — clean-room requires a rewrite. |
-| **DELETED** (upstream files we removed) | Only the *decision* is ours (free Pro, no macOS phone relay). Nothing to port. |
+**How to use this file:** read a section, take the *concept* (what the feature
+did, why it existed, rough shape), then design a v2 that is strictly better.
+The file paths point at the fork's implementation for concept-reading only —
+they are never copied into this repo.
 
 ---
 
-## A. Telegram bot — PURE OURS, three seams
+## A. Telegram bot (concept: local bot controlling the app from a phone)
 
-Files we added (port as-is):
+What we built in the fork: a local Telegram bot (no relay) that lists open
+projects/sessions, attaches to a terminal, sends keystrokes, and surfaces
+captured output — plus device pairing (approve flow, token store, masked
+form), an approval workflow for allowed users, and a menu with status buttons.
 
-```
-src/core/telegram-bot.ts            src/core/telegram-commands.ts
-src/core/telegram-menu.ts           src/core/telegram-approved.ts
-src/core/telegram-bot-info.ts       src/core/telegram-pairing.ts
-src/core/telegram-*.test.ts         (one per module)
-src/main/telegram-token-store.ts    src/main/telegram-token-store.test.ts
-src/renderer/state/telegramBot.ts   src/renderer/components/TelegramPairingDialog.tsx
-src/renderer/components/settings/sections/TelegramSection.tsx
-```
+Concept points worth keeping in v2:
+- pairing/approval flow (secure by default — nothing works until the desktop
+  owner approves)
+- /terminals /attach /send /help command surface
+- session↔project awareness (bot sees the workspace, not just raw shells)
+- privacy: masked bot token form, persist bot id
 
-Third-party: `telegraf` (MIT — keep, it's a library).
+v2 improvement ideas (design, don't inherit): multi-channel delivery
+(Telegram + Matrix later), inline keyboards for node pick, read-only viewer
+mode, per-node allowlist, session-scoped attach tokens.
 
-**Seams to rewrite at port time** (imports reaching into upstream, from the
-2026-08-13 audit):
+## B. Hosted relay service (concept: E2E relay between hosts and phones)
 
-- `../shared/ipc` → IPC channel names (termsprawl has its own in `src/shared/ipc.ts`)
-- `../shared/types` → shared types (termsprawl's own)
-- `./platform` → upstream's core platform abstraction (termsprawl's `CorePlatform` seam is the analogue)
+What we built in the fork: a standalone Node service (`src/relay-service/` —
+GitHub device-flow auth, host sessions, pairing invites with quotas,
+E2E-encrypted relay frames, SQLite/pg-backed repository). It was fully
+self-contained (only node builtins + `pg` + its own modules) — the cleanest
+concept in the set to rebuild.
 
-The bot logic itself (commands, menus, pairing, approval, token store) imports
-only node builtins + telegraf + those three seams.
+Concept points worth keeping in v2:
+- GitHub device-flow auth (no passwords)
+- host sessions + invite quotas
+- E2E relay frames (server never sees plaintext)
 
-## B. Hosted relay service — PURE OURS, standalone
+v2 improvement ideas: WebRTC data-channel direct path with relay fallback,
+per-invite expiry + revocation, admin API, usage metrics, optional Tailscale
+discovery instead of a public relay.
 
-Files we added (port as-is):
+## C. Provider-agnostic chat driver (concept: SDK chat, not a PTY)
 
-```
-src/relay-service/api.ts          src/relay-service/api.test.ts
-src/relay-service/auth.ts         src/relay-service/auth.test.ts
-src/relay-service/config.ts       src/relay-service/config.test.ts
-src/relay-service/db.ts           src/relay-service/github.ts
-src/relay-service/github.test.ts  src/relay-service/repository.ts
-src/relay-service/repository.test.ts
-src/relay-service/migrations/001_initial.sql
-```
+What we built in the fork: replaced the Claude-only SDK chat with a
+provider-agnostic LLM driver — streaming, permission cards, stop, thinking
+blocks, slash commands, image paste, diff cards, cost chip, resume-based
+continuity. Implemented inside upstream files (`core/chat-driver.ts`,
+`nodes/ChatNode.tsx`), so the fork's file contents are entangled — another
+reason this is concept-only.
 
-The service is **fully self-contained**: imports only its own modules + node
-builtins (`http`, `crypto`, `path`, `fs`) + `pg` + vitest. No upstream imports.
-This is the cleanest port in the set — a standalone Node service, exactly as
-PLAN.md task 11.2 describes.
+v2 improvement ideas: unified agent/chat surface with the Phase 7 agent
+registry, token-budget meter per provider, model routing by job, conversation
+branching.
 
-Client-side pieces we added (port with them, audit imports):
+## D. Fork features we modified (concept notes)
 
-```
-src/main/remote/host-session-store.ts       src/main/remote/host-session-store.test.ts
-src/main/remote/hosted-relay-client.ts
-src/main/remote/invite-deep-link.ts         src/main/remote/invite-deep-link.test.ts
-src/main/invite-protocol.ts                 src/main/invite-protocol.test.ts
-src/renderer/lib/remoteInvite.ts            src/renderer/lib/remoteInvite.test.ts
-src/renderer/components/RemoteInviteDialog.tsx
-```
+- **Free Pro removal** — we stripped the license/subscription gates to
+  always-permitted stubs. termsprawl simply has no licensing; nothing to carry.
+- **Linux port** — electron-builder AppImage/.deb, icon, Ctrl-based shortcut
+  display. termsprawl's own packaging (Phase 12, done) already supersedes it.
+- **Auto-updates** — we switched the update feed from the upstream server to
+  GitHub Releases. Concept: own the update channel; termsprawl Phase 12 does
+  this natively.
 
-`hosted-relay-client.ts` imports `../telegram-token-store` (ours) and
-`./remote/invite-deep-link` (ours) — clean. Re-verify each at port time.
+## E. What we deleted in the fork (record)
 
-## C. Provider-agnostic chat driver — CONCEPT ours, FILES entangled
+UpgradeDialog, license gates (`entitlement-key.ts`, `upgradeGate.ts`,
+`LicenseSection.tsx`), macOS phone relay (`PhoneSection.tsx`,
+`PhonePairPopover.tsx`, `usePhonePairing.ts`). Decisions only — the fork went
+100% free and dropped the macOS phone path in favour of Telegram. termsprawl
+inherits the decisions, not the code.
 
-The concept (provider-agnostic SDK driver with streaming, permission cards,
-cost chip, multi-provider) is ours — commit `867909b feat(chat): replace
-Claude-only SDK with provider-agnostic LLM driver`. BUT it was implemented by
-**modifying upstream files**:
-
-```
-src/core/chat-driver.ts            (upstream file, modified by us)
-src/renderer/nodes/ChatNode.tsx    (upstream file, modified by us)
-```
-
-**Porting rule: do not copy these files.** Reimplement the driver against
-termsprawl's own core/renderer (FEATURES.md §5 already marks chat node as
-"[own concept, reimplemented]"). What is ours here: the driver design, the
-multi-provider interface, the UI behaviors — not the file contents.
-
-## D. Entangled upstream files we modified — extract concepts only
-
-These carry upstream expression; we added our features inside them. Rewrite
-against termsprawl; do not diff-copy:
-
-- **Free Pro removal** (decision ours, code was upstream's): `src/core/license.ts`,
-  `src/renderer/state/entitlement.ts` — our change was to strip license gates to
-  always-permitted stubs. termsprawl has no licensing at all; nothing to port.
-- **Linux port**: `package.json`, `electron.vite.config.ts`, `tsconfig.node.json`,
-  `vitest.config.ts`, `.github/workflows/release.yml` — termsprawl's packaging
-  already supersedes this (own electron-builder config, own scripts).
-- **Settings/UI additions**: `settings/SettingsPage.tsx`, `settings/nav.ts`,
-  `settings/SettingsIcons.tsx`, `settings/sections/TeamAccessSection.tsx`,
-  `settings/teamAccessView.ts`, `components/PhonePairPopover.tsx` (later
-  deleted), `components/ShortcutsPanel.tsx` (Ctrl-shortcut display), `stubs.ts`,
-  `bridge/stubs.ts`, `bridge/stubs.test.ts` — our settings sections and shortcut
-  panel concepts are ours; the files are upstream scaffolds.
-- **Remote/SSH/updater touches**: `main/remote/relay-host.ts`,
-  `main/remote/relay-socket.ts`, `main/remote/relay-host-service.ts`,
-  `main/updater.ts` (switch to GitHub Releases), `components/UpdateCard.tsx`,
-  `components/RemoteAccessDialog.tsx`, `components/SshProjectDialog.tsx`,
-  `canvas/Canvas.tsx`, `state/workspace.ts`, `shared/ipc.ts`, `shared/types.ts`,
-  `preload/index.ts`, `core/check.ts`, `core/settings-store.ts` — verify each
-  concept at Phase 8/9/11 port time; treat file contents as upstream.
-- **Docs we rewrote**: `README.md` (Linux fork rewrite), `docs/remote-sessions.md`
-  — concepts reusable, text is ours but trivial to write fresh.
-
-## E. What we deleted (for the record)
-
-Upstream files removed by us — the *decisions* are ours, nothing to port:
-
-```
-src/core/entitlement-key.ts  src/core/license.test.ts
-src/renderer/state/upgradeGate.ts
-src/renderer/components/UpgradeDialog.tsx
-src/renderer/components/settings/sections/LicenseSection.tsx
-src/renderer/components/PhonePairPopover.tsx
-src/renderer/components/settings/sections/PhoneSection.tsx
-src/renderer/components/settings/usePhonePairing.ts
-```
-
-These were the paid-tier + macOS-phone-relay machinery: we stripped the
-license/subscription system ("100% free") and replaced the macOS phone relay
-with the Telegram bot. termsprawl starts from the stripped concept.
-
-## Our planning docs (context for porting)
+## Our planning docs (context for v2 specs)
 
 - `.hermes/PLAN-telegram-team-access.md` in the fork — our original plan for
-  Telegram + team access. Ours; read it before porting the bot/relay.
+  Telegram + team access. Ours; useful background for Phase 11 spec writing.
 
-## Port checklist (maps to PLAN.md task 11.1)
+## Phase 11 workflow (maps to PLAN.md)
 
-1. [ ] Re-run the regeneration commands above (history is the source of truth).
-2. [ ] Port relay-service/ verbatim-ish (standalone; add its own README).
-3. [ ] Port telegram bot: rewrite the three seams (ipc / types / platform) onto termsprawl's own.
-4. [ ] Chat driver: reimplement, do not copy (entangled).
-5. [ ] Client relay pieces: port, verify each import stays within our files.
-6. [ ] Run `./scripts/check-originality.sh` over every ported file — a FAIL is a hard stop.
+1. [ ] Read the relevant section above + skim the fork file paths for concept.
+2. [ ] Write the v2 spec with the improvement ideas (better, not equal).
+3. [ ] Implement fresh against termsprawl's own core/shared — no imports from
+      the fork, no file copied, no diff lifted.
+4. [ ] Run `./scripts/check-originality.sh` — a FAIL is a hard stop.
