@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest'
+import type { Node } from 'reactflow'
 import {
+  createGroup,
   createStickyNode,
   createTerminalNode,
   deserializeNodes,
   nodeTitle,
-  serializeNodes
+  serializeNodes,
+  ungroup
 } from './workspace'
+import type { SprawlNodeData } from './workspace'
 
 describe('sticky nodes', () => {
   it('creates a sticky node with defaults', () => {
@@ -44,5 +48,77 @@ describe('sticky nodes', () => {
     expect(nodeTitle(node.data)).toBe('sticky note')
     node.data.text = 'TODO\n- ship phase 6'
     expect(nodeTitle(node.data)).toBe('TODO')
+  })
+})
+
+describe('group nodes', () => {
+  const twoNodes = (): Node<SprawlNodeData>[] => {
+    const a = createTerminalNode('/tmp')
+    a.position = { x: 100, y: 120 }
+    a.id = 'term-a'
+    const b = createStickyNode()
+    b.position = { x: 300, y: 260 }
+    b.id = 'sticky-b'
+    return [a, b]
+  }
+
+  it('createGroup returns a group node at the bounds origin', () => {
+    const [a, b] = twoNodes()
+    const { group, children } = createGroup([a, b], { x: 80, y: 100 })
+
+    expect(group.type).toBe('group')
+    expect(group.data.kind).toBe('group')
+    expect(group.position).toEqual({ x: 80, y: 100 })
+    // bounds computed from node positions (min x/y)
+    expect(children).toHaveLength(2)
+  })
+
+  it('children gain parentId and relative positions', () => {
+    const [a, b] = twoNodes()
+    const { group, children } = createGroup([a, b], { x: 80, y: 100 })
+
+    const childA = children.find((n) => n.id === 'term-a')
+    const childB = children.find((n) => n.id === 'sticky-b')
+    expect(childA?.parentId).toBe(group.id)
+    expect(childB?.parentId).toBe(group.id)
+    expect(childA?.position).toEqual({ x: 20, y: 20 }) // 100-80, 120-100
+    expect(childB?.position).toEqual({ x: 220, y: 160 }) // 300-80, 260-100
+  })
+
+  it('children are constrained to the parent', () => {
+    const [a] = twoNodes()
+    const { children } = createGroup([a], { x: 80, y: 100 })
+    expect(children[0].extent).toBe('parent')
+  })
+
+  it('ungroup removes the group and restores absolute positions', () => {
+    const [a, b] = twoNodes()
+    const { group, children } = createGroup([a, b], { x: 80, y: 100 })
+    const grouped = [...children, group]
+
+    const result = ungroup(group.id, grouped)
+    expect(result.some((n) => n.id === group.id)).toBe(false)
+
+    const childA = result.find((n) => n.id === 'term-a')
+    const childB = result.find((n) => n.id === 'sticky-b')
+    expect(childA?.position).toEqual({ x: 100, y: 120 })
+    expect(childB?.position).toEqual({ x: 300, y: 260 })
+    expect(childA?.parentId).toBeUndefined()
+    expect(childB?.extent).toBeUndefined()
+  })
+
+  it('round-trips parentId through serialize/deserialize', () => {
+    const [a, b] = twoNodes()
+    const { group, children } = createGroup([a, b], { x: 80, y: 100 })
+    const nodes = [...children, group]
+
+    const restored = deserializeNodes(serializeNodes(nodes))
+    const childA = restored.find((n) => n.id === 'term-a')
+    const groupRestored = restored.find((n) => n.id === group.id)
+
+    expect(childA?.parentId).toBe(group.id)
+    expect(childA?.position).toEqual({ x: 20, y: 20 })
+    expect(groupRestored?.type).toBe('group')
+    expect(groupRestored?.data.kind).toBe('group')
   })
 })

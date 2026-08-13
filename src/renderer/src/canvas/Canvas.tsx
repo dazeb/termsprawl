@@ -96,13 +96,19 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
   const canvasApi = useMemo(() => ({ updateNodeData, commit }), [updateNodeData, commit])
 
   const addTerminal = useCallback(() => {
-    const node = createTerminalNode(cwd)
-    if (menu && wrapperRef.current) {
-      node.position = screenToFlowPosition({ x: menu.x, y: menu.y })
+    try {
+      const node = createTerminalNode(cwd)
+      if (menu && wrapperRef.current) {
+        node.position = screenToFlowPosition({ x: menu.x, y: menu.y })
+      }
+      console.log('[canvas] addTerminal', node.id)
+      setNodes((nds) => [...nds, node])
+      push()
+      setMenu(null)
+    } catch (err) {
+      console.error('[canvas] addTerminal failed:', err)
+      throw err
     }
-    setNodes((nds) => [...nds, node])
-    push()
-    setMenu(null)
   }, [cwd, menu, push, screenToFlowPosition])
 
   const addSticky = useCallback(() => {

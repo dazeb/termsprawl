@@ -186,6 +186,8 @@ extension, one feature at a time.**
 - Colored note (muted palette fitting the dark theme), double-click to edit
   text, collapse toggle, drag by header, persists via project file.
 - AppImage checkpoint 1.
+- **Status: DONE (commit c1bd6fd, checkpoint 1 AppImage built + uploaded).**
+  **User test 2026-08-13: "sticky notes work" — verified.**
 
 ### Task 6.2: Group node
 - Real parent/child frames (React Flow parentId): select ≥2 nodes → group;
