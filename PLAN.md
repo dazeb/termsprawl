@@ -176,19 +176,38 @@ extension, one feature at a time.**
 
 ## Phase 6 — More node kinds
 
-### Task 6.1: Sticky + group
-- Sticky: colored note, collapsible. Group: real parent/child frame,
-  group/ungroup transforms, label pill.
-- Verify: group moves children; ungroup restores positions.
+> **Delivery workflow (user-approved 2026-08-13):** each major commit ends
+> with an AppImage checkpoint — build, upload to files.dazeb.dev
+> (r2-file-upload skill), send the link to the default Telegram channel with
+> "what to test" notes; the user tests on their machine and reports what
+> worked. Detailed plan: `.hermes/plans/2026-08-13_phase6-node-kinds.md`.
 
-### Task 6.2: Editor node
-- Monaco for a file path; fs read/write; language detect; Ctrl+S save; dirty
-  dot; markdown preview; image preview for raster formats.
+### Task 6.1: Sticky node
+- Colored note (muted palette fitting the dark theme), double-click to edit
+  text, collapse toggle, drag by header, persists via project file.
+- AppImage checkpoint 1.
 
-### Task 6.3: Diff node
-- Monaco diff editor; staged vs unstaged via git show + fs read. Read-only.
+### Task 6.2: Group node
+- Real parent/child frames (React Flow parentId): select ≥2 nodes → group;
+  drag frame moves children; ungroup restores absolute positions; label pill;
+  deleting a group ungroups children (terminals keep their tmux sessions).
+- AppImage checkpoint 2.
 
-### Task 6.4: Commit
+### Task 6.3: Editor node
+- Monaco (local, no CDN; vite `?worker` workers): open file via dialog,
+  fs read/write through a new electron-free `core/file-service.ts` + IPC,
+  language detect by extension, Ctrl+S save, dirty dot, markdown preview
+  (marked), image preview via `termsprawl-file://` custom protocol.
+- AppImage checkpoint 3.
+
+### Task 6.4: Diff node
+- Monaco diff editor, read-only; `core/git-service.ts` (repoRoot +
+  `git show`): staged (`:path`) vs HEAD; path picker; status line for
+  not-a-repo / no-changes.
+- AppImage checkpoint 4.
+
+### Task 6.5: Commit + status
+- Update PLAN.md status with checkpoint results.
 - `git commit -m "feat: sticky, group, editor, diff nodes"`
 
 ## Phase 7 — Agents
