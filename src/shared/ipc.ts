@@ -5,6 +5,15 @@ export const IPC = {
   // App metadata
   appVersion: 'app:version',
 
+  // Workspace / projects (Phase 5)
+  workspaceSnapshot: 'workspace:snapshot',
+  workspaceSaveNodes: 'workspace:save-nodes',
+  projectAdd: 'project:add',
+  projectClose: 'project:close',
+  projectReopen: 'project:reopen',
+  projectDelete: 'project:delete',
+  dialogSelectFolder: 'dialog:select-folder',
+
   // Terminal sessions (Phase 2)
   ptyCreate: 'pty:create',
   ptyWrite: 'pty:write',

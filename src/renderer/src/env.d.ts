@@ -1,10 +1,26 @@
-import type { PtyCreateRequest, PtyCreateResult, PtyExitInfo } from '@shared/types'
+import type {
+  ProjectMeta,
+  PtyCreateRequest,
+  PtyCreateResult,
+  PtyExitInfo,
+  SerializedNode,
+  WorkspaceSnapshot
+} from '@shared/types'
 
 // The shape of window.termsprawl as exposed by the preload bridge.
 declare global {
   interface Window {
     termsprawl: {
       appVersion(): Promise<string>
+      workspace: {
+        snapshot(): Promise<WorkspaceSnapshot>
+        saveNodes(id: string, nodes: SerializedNode[]): Promise<number>
+        addProject(name: string, cwd: string | null): Promise<ProjectMeta>
+        closeProject(id: string): Promise<void>
+        reopenProject(id: string): Promise<void>
+        deleteProject(id: string): Promise<void>
+        selectFolder(): Promise<string | null>
+      }
       pty: {
         create(req: PtyCreateRequest): Promise<PtyCreateResult>
         write(id: string, data: string): void

@@ -1,11 +1,30 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC, ptyDataChannel, ptyExitChannel } from '../shared/ipc'
-import type { PtyCreateRequest, PtyCreateResult, PtyExitInfo } from '../shared/types'
+import type {
+  ProjectMeta,
+  PtyCreateRequest,
+  PtyCreateResult,
+  PtyExitInfo,
+  SerializedNode,
+  WorkspaceSnapshot
+} from '../shared/types'
 
 // The narrow API surface exposed to the renderer as window.termsprawl.
 // Grows per phase; the renderer must never touch ipcRenderer directly.
 const api = {
   appVersion: (): Promise<string> => ipcRenderer.invoke(IPC.appVersion),
+
+  workspace: {
+    snapshot: (): Promise<WorkspaceSnapshot> => ipcRenderer.invoke(IPC.workspaceSnapshot),
+    saveNodes: (id: string, nodes: SerializedNode[]): Promise<number> =>
+      ipcRenderer.invoke(IPC.workspaceSaveNodes, id, nodes),
+    addProject: (name: string, cwd: string | null): Promise<ProjectMeta> =>
+      ipcRenderer.invoke(IPC.projectAdd, name, cwd),
+    closeProject: (id: string): Promise<void> => ipcRenderer.invoke(IPC.projectClose, id),
+    reopenProject: (id: string): Promise<void> => ipcRenderer.invoke(IPC.projectReopen, id),
+    deleteProject: (id: string): Promise<void> => ipcRenderer.invoke(IPC.projectDelete, id),
+    selectFolder: (): Promise<string | null> => ipcRenderer.invoke(IPC.dialogSelectFolder)
+  },
 
   pty: {
     create: (req: PtyCreateRequest): Promise<PtyCreateResult> =>

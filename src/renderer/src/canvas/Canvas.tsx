@@ -12,8 +12,9 @@ import ReactFlow, {
 import 'reactflow/dist/style.css'
 import type { Connection, Edge, EdgeChange, Node, NodeChange } from 'reactflow'
 import { TerminalNode } from '../nodes/TerminalNode'
-import { createTerminalNode } from '../state/workspace'
+import { createTerminalNode, serializeNodes, deserializeNodes } from '../state/workspace'
 import { useHistory } from '../state/history'
+import { useProjects } from '../state/projects'
 import type { SprawlNodeData } from '../state/workspace'
 
 const nodeTypes = { terminal: TerminalNode }
@@ -23,11 +24,31 @@ interface CanvasProps {
 }
 
 export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
-  const [nodes, setNodes] = useState<Node<SprawlNodeData>[]>(() => [createTerminalNode(cwd)])
+  const activeProjectId = useProjects((s) => s.activeProjectId)
+  const nodeCache = useProjects((s) => s.nodeCache)
+  const saveNodes = useProjects((s) => s.saveNodes)
+
+  const [nodes, setNodes] = useState<Node<SprawlNodeData>[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const { screenToFlowPosition } = useReactFlow()
+  const loadingRef = useRef(false)
+
+  // Load the active project's serialized nodes into React Flow.
+  // keyed on activeProjectId — switching projects swaps the canvas.
+  useEffect(() => {
+    loadingRef.current = true
+    const serialized = activeProjectId ? nodeCache[activeProjectId] ?? [] : []
+    const initial = deserializeNodes(serialized)
+    setNodes(initial.length > 0 ? initial : [createTerminalNode(cwd)])
+    setEdges([])
+    // let React Flow settle before clearing the loading flag
+    setTimeout(() => {
+      loadingRef.current = false
+    }, 0)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProjectId])
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => setNodes((nds) => applyNodeChanges(changes, nds)),
@@ -61,6 +82,16 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
   }, [])
 
   const onPaneClick = useCallback(() => setMenu(null), [])
+
+  // Persist the active project's nodes (debounced) as the canvas settles.
+  useEffect(() => {
+    if (loadingRef.current) return
+    if (!activeProjectId) return
+    const timer = setTimeout(() => {
+      void saveNodes(serializeNodes(nodes))
+    }, 600)
+    return () => clearTimeout(timer)
+  }, [nodes, activeProjectId, saveNodes])
 
   // Ctrl+Z / Ctrl+Shift+Z undo/redo — skip while typing in inputs/terminals.
   useEffect(() => {

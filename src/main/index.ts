@@ -1,9 +1,11 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import { join } from 'node:path'
 import { IPC } from '../shared/ipc'
-import type { PtyCreateRequest, PtyExitInfo } from '../shared/types'
+import type { PtyCreateRequest, PtyExitInfo, SerializedNode } from '../shared/types'
 import type { CorePlatform } from '../core/platform'
 import { PtyManager } from '../core/pty-manager'
+import { WorkspaceStore } from '../core/workspace-store'
+import type { ProjectMeta } from '../core/workspace-files'
 
 // The Electron implementation of the core's platform seam.
 const platform: CorePlatform = {
@@ -16,6 +18,31 @@ const platform: CorePlatform = {
 }
 
 const ptyManager = new PtyManager(platform)
+const workspaceStore = new WorkspaceStore(platform)
+
+function registerWorkspaceIpc(): void {
+  ipcMain.handle(IPC.workspaceSnapshot, () => workspaceStore.snapshot())
+  ipcMain.handle(IPC.workspaceSaveNodes, (_event, id: string, nodes: SerializedNode[]) =>
+    workspaceStore.saveNodes(id, nodes)
+  )
+  ipcMain.handle(IPC.projectAdd, (_event, name: string, cwd: string | null): ProjectMeta => {
+    if (cwd) {
+      const existing = workspaceStore.snapshot().index.projects.find((p) => p.cwd === cwd)
+      if (existing) return existing // folder already has a project — dedupe
+    }
+    return workspaceStore.addProject(name, cwd)
+  })
+  ipcMain.handle(IPC.projectClose, (_event, id: string) => workspaceStore.closeProject(id))
+  ipcMain.handle(IPC.projectReopen, (_event, id: string) => workspaceStore.reopenProject(id))
+  ipcMain.handle(IPC.projectDelete, (_event, id: string) => workspaceStore.deleteProject(id))
+  ipcMain.handle(IPC.dialogSelectFolder, async () => {
+    const win = BrowserWindow.getFocusedWindow()
+    const result = await dialog.showOpenDialog(win!, {
+      properties: ['openDirectory', 'createDirectory']
+    })
+    return result.canceled ? null : result.filePaths[0]
+  })
+}
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -54,6 +81,7 @@ function registerPtyIpc(): void {
 void app.whenReady().then(() => {
   ipcMain.handle(IPC.appVersion, () => app.getVersion())
   registerPtyIpc()
+  registerWorkspaceIpc()
 
   createWindow()
 

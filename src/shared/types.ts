@@ -24,3 +24,24 @@ export interface PtyExitInfo {
   exitCode: number
   signal?: number
 }
+
+// Serialized node shape for workspace persistence (mirrors core's
+// SerializedNode so the renderer never imports core).
+export interface SerializedNode {
+  id: string
+  type: string
+  position: { x: number; y: number }
+  data: Record<string, unknown>
+}
+
+export interface ProjectMeta {
+  id: string
+  name: string
+  cwd: string | null
+  closed: boolean
+}
+
+export interface WorkspaceSnapshot {
+  index: { version: 1; projects: ProjectMeta[] }
+  projects: Record<string, SerializedNode[]>
+}
