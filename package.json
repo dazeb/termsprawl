@@ -12,7 +12,10 @@
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
-    "postinstall": "electron-rebuild -f -w node-pty"
+    "postinstall": "electron-rebuild -f -w node-pty",
+    "make-icon": "node scripts/make-icon.mjs",
+    "dist": "npm run build && electron-builder --linux",
+    "dist:appimage": "npm run build && electron-builder --linux AppImage"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",
@@ -29,10 +32,40 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^5.1.4",
+    "canvas": "^3.2.3",
     "electron": "^43.4.0",
+    "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
     "typescript": "~5.9.3",
     "vite": "^7.3.6",
     "vitest": "^4.1.10"
+  },
+  "build": {
+    "appId": "dev.termsprawl.app",
+    "productName": "termsprawl",
+    "asarUnpack": [
+      "node_modules/node-pty/**"
+    ],
+    "files": [
+      "out/**",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Development",
+      "icon": "build/icon.png",
+      "synopsis": "A spatial terminal manager for Linux — terminals sprawled across one infinite canvas",
+      "maintainer": "termsprawl contributors"
+    },
+    "appImage": {
+      "artifactName": "termsprawl-${version}.${ext}"
+    }
   }
 }
