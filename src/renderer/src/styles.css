@@ -1,0 +1,57 @@
+:root {
+  --bg: #0a0a0a;
+  --fg: #e8e8e6;
+  --muted: #8a8a86;
+  --accent: #c6f135;
+  --panel: #131313;
+  --border: #262626;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: 'Geist', 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background:
+    radial-gradient(circle at 50% 40%, rgba(198, 241, 53, 0.06), transparent 60%),
+    var(--bg);
+}
+
+.brand {
+  font-size: 28px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.hint {
+  color: var(--muted);
+  max-width: 420px;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.version {
+  color: var(--accent);
+  font-family: 'Geist Mono', 'JetBrains Mono', monospace;
+  font-size: 13px;
+}
