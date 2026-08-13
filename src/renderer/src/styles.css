@@ -155,6 +155,128 @@ body {
   min-height: 0;
 }
 
+/* ---- sticky notes ---- */
+
+.sticky-node {
+  min-width: 200px;
+  min-height: 130px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+}
+
+.sticky-node-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.28);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  cursor: grab;
+  user-select: none;
+}
+
+.sticky-node-header:active {
+  cursor: grabbing;
+}
+
+.sticky-node-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.sticky-node-dot:hover {
+  filter: brightness(1.25);
+}
+
+.sticky-node-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+
+.sticky-node-toggle {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0 2px;
+}
+
+.sticky-node-toggle:hover {
+  color: var(--accent);
+}
+
+.sticky-node textarea {
+  flex: 1;
+  width: 100%;
+  min-height: 90px;
+  padding: 10px;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  color: #e8e8e6;
+  font-family: 'Geist Mono', 'JetBrains Mono', monospace;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.sticky-node textarea::placeholder {
+  color: rgba(232, 232, 230, 0.35);
+}
+
+.sticky-node.collapsed {
+  min-height: 0;
+}
+
+.sticky-slate {
+  background: #1c1c22;
+}
+.sticky-amber {
+  background: #2c2413;
+}
+.sticky-lime {
+  background: #242c11;
+}
+.sticky-pink {
+  background: #2c1621;
+}
+.sticky-cyan {
+  background: #11262d;
+}
+
+.sticky-slate .sticky-node-dot {
+  background: #6a6a76;
+}
+.sticky-amber .sticky-node-dot {
+  background: #d9a441;
+}
+.sticky-lime .sticky-node-dot {
+  background: var(--accent);
+}
+.sticky-pink .sticky-node-dot {
+  background: #d96a9e;
+}
+.sticky-cyan .sticky-node-dot {
+  background: #41b8d9;
+}
+
 .context-menu {
   position: fixed;
   z-index: 1000;

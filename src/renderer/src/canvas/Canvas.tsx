@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -12,12 +12,27 @@ import ReactFlow, {
 import 'reactflow/dist/style.css'
 import type { Connection, Edge, EdgeChange, Node, NodeChange } from 'reactflow'
 import { TerminalNode } from '../nodes/TerminalNode'
-import { createTerminalNode, serializeNodes, deserializeNodes } from '../state/workspace'
+import { StickyNode } from '../nodes/StickyNode'
+import { createStickyNode, createTerminalNode, serializeNodes, deserializeNodes } from '../state/workspace'
 import { useHistory } from '../state/history'
 import { useProjects } from '../state/projects'
 import type { SprawlNodeData } from '../state/workspace'
 
-const nodeTypes = { terminal: TerminalNode }
+const nodeTypes = { terminal: TerminalNode, sticky: StickyNode }
+
+// Canvas context: lets custom nodes update their own data and record undo
+// snapshots without polluting serialized node data with callbacks.
+interface CanvasApi {
+  updateNodeData(id: string, patch: Partial<SprawlNodeData>, record?: boolean): void
+  commit(): void
+}
+const CanvasContext = createContext<CanvasApi | null>(null)
+
+export function useCanvas(): CanvasApi {
+  const ctx = useContext(CanvasContext)
+  if (!ctx) throw new Error('useCanvas must be used inside Canvas')
+  return ctx
+}
 
 interface CanvasProps {
   cwd?: string
@@ -66,6 +81,20 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
   // Undo/redo: debounced snapshots of the nodes array.
   const { push, undo, redo, canUndo, canRedo } = useHistory(nodes, setNodes)
 
+  // Custom-node updates (sticky/editor/diff): patch node data, optionally
+  // record a history snapshot (e.g. collapse toggles, blur commits).
+  const updateNodeData = useCallback(
+    (id: string, patch: Partial<SprawlNodeData>, record = false) => {
+      setNodes((nds) =>
+        nds.map((n) => (n.id === id ? { ...n, data: { ...n.data, ...patch } as SprawlNodeData } : n))
+      )
+      if (record) push()
+    },
+    [push]
+  )
+  const commit = useCallback(() => push(), [push])
+  const canvasApi = useMemo(() => ({ updateNodeData, commit }), [updateNodeData, commit])
+
   const addTerminal = useCallback(() => {
     const node = createTerminalNode(cwd)
     if (menu && wrapperRef.current) {
@@ -75,6 +104,16 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
     push()
     setMenu(null)
   }, [cwd, menu, push, screenToFlowPosition])
+
+  const addSticky = useCallback(() => {
+    const node = createStickyNode()
+    if (menu && wrapperRef.current) {
+      node.position = screenToFlowPosition({ x: menu.x, y: menu.y })
+    }
+    setNodes((nds) => [...nds, node])
+    push()
+    setMenu(null)
+  }, [menu, push, screenToFlowPosition])
 
   const onPaneContextMenu = useCallback((event: React.MouseEvent) => {
     event.preventDefault()
@@ -115,7 +154,8 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
   const nodeTypesMemo = useMemo(() => nodeTypes, [])
 
   return (
-    <div className="canvas" ref={wrapperRef}>
+    <CanvasContext.Provider value={canvasApi}>
+      <div className="canvas" ref={wrapperRef}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -143,6 +183,7 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
           onClick={(e) => e.stopPropagation()}
         >
           <button onClick={addTerminal}>New terminal</button>
+          <button onClick={addSticky}>New sticky note</button>
         </div>
       )}
 
@@ -154,6 +195,7 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
           ↪
         </button>
       </div>
-    </div>
+      </div>
+    </CanvasContext.Provider>
   )
 }
