@@ -1,12 +1,5 @@
 import { useEffect, useState } from 'react'
-
-declare global {
-  interface Window {
-    termsprawl?: {
-      appVersion: () => Promise<string>
-    }
-  }
-}
+import { TerminalNode } from './nodes/TerminalNode'
 
 export function App(): React.JSX.Element {
   const [version, setVersion] = useState<string>('…')
@@ -17,12 +10,13 @@ export function App(): React.JSX.Element {
 
   return (
     <div className="shell">
-      <div className="brand">termsprawl</div>
-      <div className="hint">
-        An infinite canvas for your terminals. Phase 1 scaffold — canvas and
-        sessions land next.
+      <div className="toolbar">
+        <span className="brand">termsprawl</span>
+        <span className="version">v{version}</span>
       </div>
-      <div className="version">v{version}</div>
+      <div className="canvas">
+        <TerminalNode id="demo-1" title="demo shell" cwd={process.cwd()} />
+      </div>
     </div>
   )
 }
