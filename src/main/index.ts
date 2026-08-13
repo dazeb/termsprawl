@@ -25,7 +25,7 @@ function createWindow(): void {
     title: 'termsprawl',
     backgroundColor: '#0a0a0a',
     webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
+      preload: join(__dirname, '../preload/index.mjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { TerminalNode } from './nodes/TerminalNode'
+import { ReactFlowProvider } from 'reactflow'
+import { Canvas } from './canvas/Canvas'
 
 export function App(): React.JSX.Element {
   const [version, setVersion] = useState<string>('…')
@@ -14,9 +15,9 @@ export function App(): React.JSX.Element {
         <span className="brand">termsprawl</span>
         <span className="version">v{version}</span>
       </div>
-      <div className="canvas">
-        <TerminalNode id="demo-1" title="demo shell" cwd={process.cwd()} />
-      </div>
+      <ReactFlowProvider>
+        <Canvas />
+      </ReactFlowProvider>
     </div>
   )
 }
