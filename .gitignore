@@ -1,0 +1,24 @@
+# deps
+node_modules/
+
+# build output
+out/
+dist/
+release/
+
+# logs
+*.log
+npm-debug.log*
+
+# env / secrets
+.env
+.env.*
+
+# editor/OS
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# hermes plan files
+.hermes/
