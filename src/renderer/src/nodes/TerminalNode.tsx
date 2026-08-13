@@ -4,13 +4,16 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import type { TerminalNodeData } from '../state/workspace'
+import { useCanvas } from '../canvas/Canvas'
 
 // One terminal session, rendered with xterm, as a React Flow custom node.
 // The PTY session id IS the React Flow node id — keep ids stable or the
 // session respawns. The body is nodrag so xterm owns mouse input; dragging
-// happens via the header (the drag handle).
+// happens via the header (the drag handle). The × button closes the node and
+// destroys its tmux session (unmount cleanup calls pty.destroy).
 export function TerminalNode({ id, data }: NodeProps<TerminalNodeData>): React.JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null)
+  const { closeNode } = useCanvas()
 
   useEffect(() => {
     const host = hostRef.current
@@ -84,6 +87,18 @@ export function TerminalNode({ id, data }: NodeProps<TerminalNodeData>): React.J
       <div className="terminal-node-header">
         <span className="terminal-node-dot" />
         <span className="terminal-node-title">{data.title}</span>
+        <button
+          className="node-close"
+          title="Close terminal (kills session)"
+          aria-label="Close terminal"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation()
+            closeNode(id)
+          }}
+        >
+          ×
+        </button>
       </div>
       <div className="terminal-node-host nodrag nowheel" ref={hostRef} />
     </div>

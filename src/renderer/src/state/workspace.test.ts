@@ -6,6 +6,7 @@ import {
   createTerminalNode,
   deserializeNodes,
   nodeTitle,
+  removeNode,
   serializeNodes,
   ungroup
 } from './workspace'
@@ -120,5 +121,37 @@ describe('group nodes', () => {
     expect(childA?.position).toEqual({ x: 20, y: 20 })
     expect(groupRestored?.type).toBe('group')
     expect(groupRestored?.data.kind).toBe('group')
+  })
+})
+
+describe('removeNode', () => {
+  it('removes a plain node and leaves others', () => {
+    const a = createTerminalNode('/tmp')
+    a.id = 'term-a'
+    const b = createStickyNode()
+    b.id = 'sticky-b'
+
+    const result = removeNode([a, b], 'term-a')
+    expect(result.map((n) => n.id)).toEqual(['sticky-b'])
+  })
+
+  it('removing a group ungroups its children instead of deleting them', () => {
+    const a = createTerminalNode('/tmp')
+    a.position = { x: 100, y: 120 }
+    a.id = 'term-a'
+    const { group, children } = createGroup([a], { x: 80, y: 100 })
+    const grouped = [...children, group]
+
+    const result = removeNode(grouped, group.id)
+    expect(result.some((n) => n.id === group.id)).toBe(false)
+    const childA = result.find((n) => n.id === 'term-a')
+    expect(childA?.position).toEqual({ x: 100, y: 120 })
+    expect(childA?.parentId).toBeUndefined()
+  })
+
+  it('unknown id is a no-op', () => {
+    const a = createTerminalNode('/tmp')
+    a.id = 'term-a'
+    expect(removeNode([a], 'ghost')).toHaveLength(1)
   })
 })

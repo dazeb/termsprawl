@@ -9,7 +9,7 @@ import type { StickyNodeData } from '../state/workspace'
 // nodrag/nowheel so text selection and scrolling work; dragging happens via
 // the header, same as terminal nodes.
 export function StickyNode({ id, data }: NodeProps<StickyNodeData>): React.JSX.Element {
-  const { updateNodeData, commit } = useCanvas()
+  const { updateNodeData, commit, closeNode } = useCanvas()
   const blurTimer = useRef<number | null>(null)
 
   const cycleColor = (): void => {
@@ -38,6 +38,18 @@ export function StickyNode({ id, data }: NodeProps<StickyNodeData>): React.JSX.E
           aria-label="Cycle color"
         />
         <span className="sticky-node-title">{nodeTitle(data)}</span>
+        <button
+          className="node-close"
+          title="Close note"
+          aria-label="Close note"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation()
+            closeNode(id)
+          }}
+        >
+          ×
+        </button>
         <button
           className="sticky-node-toggle"
           onClick={toggleCollapsed}

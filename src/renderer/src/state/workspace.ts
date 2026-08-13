@@ -63,6 +63,18 @@ export function nodeTitle(data: SprawlNodeData): string {
   return firstLine || 'sticky note'
 }
 
+/**
+ * Remove a node. Groups are ungrouped first (children keep absolute
+ * positions — terminals inside keep their tmux sessions); the frame itself
+ * is removed. Unknown ids are a no-op.
+ */
+export function removeNode(nodes: Node<SprawlNodeData>[], id: string): Node<SprawlNodeData>[] {
+  const target = nodes.find((n) => n.id === id)
+  if (!target) return nodes
+  if (target.type === 'group') return ungroup(id, nodes)
+  return nodes.filter((n) => n.id !== id)
+}
+
 // Default node dimensions for frame sizing when React Flow hasn't measured
 // a node yet (used in tests and for freshly added nodes).
 const DEFAULT_SIZE: Record<string, { w: number; h: number }> = {

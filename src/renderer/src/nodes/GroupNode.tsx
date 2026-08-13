@@ -8,7 +8,7 @@ import type { GroupNodeData } from '../state/workspace'
 // React Flow moves children (parentId) along with it. The label pill is
 // editable on double-click; edits commit one history snapshot on blur/Enter.
 export function GroupNode({ id, data }: NodeProps<GroupNodeData>): React.JSX.Element {
-  const { updateNodeData, commit } = useCanvas()
+  const { updateNodeData, commit, closeNode } = useCanvas()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(data.title)
 
@@ -52,6 +52,18 @@ export function GroupNode({ id, data }: NodeProps<GroupNodeData>): React.JSX.Ele
         ) : (
           <span className="group-label-text">{nodeTitle(data)}</span>
         )}
+        <button
+          className="node-close"
+          title="Close group (ungroups children)"
+          aria-label="Close group"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation()
+            closeNode(id)
+          }}
+        >
+          ×
+        </button>
       </div>
     </div>
   )

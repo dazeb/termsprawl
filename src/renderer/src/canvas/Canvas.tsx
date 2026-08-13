@@ -18,6 +18,7 @@ import {
   createGroup,
   createStickyNode,
   createTerminalNode,
+  removeNode,
   serializeNodes,
   deserializeNodes,
   ungroup
@@ -33,6 +34,8 @@ const nodeTypes = { terminal: TerminalNode, sticky: StickyNode, group: GroupNode
 interface CanvasApi {
   updateNodeData(id: string, patch: Partial<SprawlNodeData>, record?: boolean): void
   commit(): void
+  /** Remove a node; groups ungroup their children instead of deleting them. */
+  closeNode(id: string): void
 }
 const CanvasContext = createContext<CanvasApi | null>(null)
 
@@ -122,7 +125,17 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
     [push]
   )
   const commit = useCallback(() => push(), [push])
-  const canvasApi = useMemo(() => ({ updateNodeData, commit }), [updateNodeData, commit])
+  const closeNode = useCallback(
+    (id: string) => {
+      setNodes((nds) => removeNode(nds, id))
+      push()
+    },
+    [push]
+  )
+  const canvasApi = useMemo(
+    () => ({ updateNodeData, commit, closeNode }),
+    [updateNodeData, commit, closeNode]
+  )
 
   const addTerminal = useCallback(() => {
     try {
@@ -195,6 +208,12 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
     push()
     setMenu(null)
   }, [menu, push])
+
+  const closeMenuNode = useCallback(() => {
+    if (!menu?.nodeId) return
+    closeNode(menu.nodeId)
+    setMenu(null)
+  }, [menu, closeNode])
 
   // Deleting a group ungroups its children instead of destroying them —
   // terminals inside keep their tmux sessions. Intercepted in onNodesChange
@@ -271,6 +290,7 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
           ) : (
             canGroup && <button onClick={groupSelection}>Group selection</button>
           )}
+          {menu?.nodeId && <button onClick={closeMenuNode}>Close</button>}
           <button onClick={addTerminal}>New terminal</button>
           <button onClick={addSticky}>New sticky note</button>
         </div>
