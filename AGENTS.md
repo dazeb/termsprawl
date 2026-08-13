@@ -119,6 +119,29 @@ remote, Server Edition, then rebuilds our own extras from scratch (Telegram,
 relay, chat driver — concepts only, never ported). Extend `NODE_TYPES` and
 the `data.kind` union in `state/workspace.ts` when adding kinds.
 
+## Remote & parallel-agent workflow (worktrees)
+
+The repo has a real remote so agents can work in parallel without clobbering
+each other:
+
+- **origin** = `hermes-box:/srv/git/termsprawl.git` — a bare repo on hermes-box
+  (SSH alias in `~/.ssh/config`; key `~/.ssh/hermes-box_ed25519`). A GitHub
+  remote is planned once gh auth is re-established; hermes-box is the
+  working remote.
+- **Hermes (this session)**: works in the main checkout
+  (`/home/dazeb/workspace/projects/active/termsprawl`) on `main`. Owns
+  checkpoint builds (AppImage → files.hermes.v0cl.one → Telegram) and
+  phase status updates in PLAN.md.
+- **Local agent (codex/opencode)**: works in the worktree
+  `/home/dazeb/workspace/projects/active/termsprawl-agent` on
+  `feature/editor-node` (Phase 6 Commit 3). Owns the feature branch.
+- Protocol: pull before starting; commit per task; push when a unit of work
+  is done; never edit files in the other's checkout. Main stays
+  release-ready (gates must pass before pushing to main). Feature branches
+  get merged to main by Hermes after verification.
+- Checkout plumbing (`git worktree list`): two linked worktrees share one
+  object database — a remote is only for cross-checkout/backup sync.
+
 ## Tests
 
 - `src/core/pty-manager.test.ts` — real node-pty integration: spawn/echo,
