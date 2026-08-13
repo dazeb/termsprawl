@@ -194,6 +194,10 @@ extension, one feature at a time.**
   drag frame moves children; ungroup restores absolute positions; label pill;
   deleting a group ungroups children (terminals keep their tmux sessions).
 - AppImage checkpoint 2.
+- **Status: BUILT + DELIVERED (commit 50effe9, v0.2.1, Telegram msg 7874).**
+  Packaged E2E: group 2 stickies → frame sized to children → frame drag moved
+  both children → label renamed → ungroup preserved both positions; zero
+  renderer errors. Awaiting user test on target machine.
 
 ### Task 6.3: Editor node
 - Monaco (local, no CDN; vite `?worker` workers): open file via dialog,
