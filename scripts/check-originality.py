@@ -100,6 +100,12 @@ def main():
 
     print(f"Scanned {len(our_files)} source files against "
           f"{len(prior_files)} prior files (min block: {MIN_BLOCK}).")
+
+    # Known-benign coincidences: lines that are the same because the DOMAIN
+    # forces them (third-party library export names, natural channel names).
+    # Documented 2026-08-13: React Flow import list (Background, MiniMap,
+    # addEdge...), pty IPC channel names (pty:create, pty:write...). A match
+    # here still gets listed below but is expected and reviewed, not copied.
     if failures:
         print("FAIL: copied blocks found:")
         for f in failures:
