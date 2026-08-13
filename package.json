@@ -7,6 +7,7 @@
   "license": "MIT",
   "author": "termsprawl contributors",
   "homepage": "https://github.com/dazeb/termsprawl",
+  "desktopName": "termsprawl",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
@@ -63,7 +64,8 @@
       "category": "Development",
       "icon": "build/icon.png",
       "synopsis": "A spatial terminal manager for Linux — terminals sprawled across one infinite canvas",
-      "maintainer": "termsprawl contributors"
+      "maintainer": "termsprawl contributors",
+      "syncDesktopName": true
     },
     "appImage": {
       "artifactName": "termsprawl-${version}.${ext}"

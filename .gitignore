@@ -7,6 +7,9 @@ dist/
 release/
 build/
 
+# tsbuildinfo (incremental compiler caches)
+*.tsbuildinfo
+
 # logs
 *.log
 npm-debug.log*
