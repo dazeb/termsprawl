@@ -134,9 +134,6 @@ body {
 }
 
 .terminal-node {
-  position: absolute;
-  top: 40px;
-  left: 40px;
   width: 720px;
   height: 420px;
   display: flex;
