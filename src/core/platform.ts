@@ -5,4 +5,6 @@
 export interface CorePlatform {
   /** Push an event to the renderer (or server clients). */
   broadcast(channel: string, payload: unknown): void
+  /** Stable per-app data directory (tmux config/sockets, scrollback, etc.). */
+  userDataPath: string
 }

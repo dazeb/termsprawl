@@ -7,6 +7,7 @@ import { PtyManager } from '../core/pty-manager'
 
 // The Electron implementation of the core's platform seam.
 const platform: CorePlatform = {
+  userDataPath: app.getPath('userData'),
   broadcast(channel: string, payload: unknown): void {
     for (const win of BrowserWindow.getAllWindows()) {
       win.webContents.send(channel, payload)
@@ -47,6 +48,7 @@ function registerPtyIpc(): void {
     ptyManager.resize(id, cols, rows)
   )
   ipcMain.on(IPC.ptyDestroy, (_event, id: string) => ptyManager.destroy(id))
+  ipcMain.handle(IPC.ptyReadScrollback, (_event, id: string) => ptyManager.readScrollback(id))
 }
 
 void app.whenReady().then(() => {

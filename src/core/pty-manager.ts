@@ -1,32 +1,75 @@
 // PTY manager — spawns and owns terminal sessions.
 //
-// Phase 2: plain node-pty sessions keyed by a stable per-node id.
-// Phase 4: each session moves inside a persistent tmux session so terminals
-// survive app restarts (the id becomes the tmux session key).
+// Each session runs inside a persistent tmux session (dedicated socket +
+// generated config), so terminals survive app restarts: node unmount detaches,
+// app quit detaches, and reopening reattaches to the same tmux session. The
+// node id is the tmux session key — keep it stable.
+//
+// create() probes `tmux has-session` BEFORE spawning so the result carries a
+// `fresh` flag: false = warm reattach (tmux redraws), true = cold start.
+//
+// If tmux is unavailable, falls back to a plain shell (no cross-restart
+// continuity) and reports fresh: true.
 //
 // Electron-free: talks to the outside world only through CorePlatform.
 
+import { execFileSync } from 'node:child_process'
 import * as pty from 'node-pty'
 import type { CorePlatform } from './platform'
 import { ptyDataChannel, ptyExitChannel } from '../shared/ipc'
 import type { PtyCreateRequest, PtyCreateResult, PtyExitInfo } from '../shared/types'
+import { ensureTmuxConfig, hasSession, sessionNameFor, type TmuxConfig } from './tmux'
+import { ScrollbackStore } from './scrollback-store'
 
 export class PtyManager {
   private readonly sessions = new Map<string, pty.IPty>()
+  private readonly scrollback: ScrollbackStore
+  private tmux: TmuxConfig | null
 
-  constructor(private readonly platform: CorePlatform) {}
+  constructor(private readonly platform: CorePlatform) {
+    this.tmux = ensureTmuxConfig(platform.userDataPath)
+    this.scrollback = new ScrollbackStore(platform.userDataPath)
+  }
 
   create(req: PtyCreateRequest): PtyCreateResult {
     const shell = req.shell ?? process.env.SHELL ?? '/bin/bash'
-    const session = pty.spawn(shell, [], {
+    const cwd = req.cwd ?? process.cwd()
+    const sessionName = sessionNameFor(req.id)
+
+    let fresh = true
+    let spawnFile = shell
+    let spawnArgs: string[] = []
+
+    if (this.tmux) {
+      fresh = !hasSession(this.tmux, req.id)
+      spawnFile = this.tmux.tmuxPath
+      spawnArgs = [
+        ...this.tmux.baseArgs,
+        'new-session',
+        '-A',
+        '-D',
+        '-s',
+        sessionName,
+        '--',
+        shell
+      ]
+    }
+
+    // Strip tmux nesting vars so a reattach inside tmux can't refuse.
+    const env: Record<string, string> = { ...process.env, ...req.env } as Record<string, string>
+    delete env['TMUX']
+    delete env['TMUX_PANE']
+
+    const session = pty.spawn(spawnFile, spawnArgs, {
       name: 'xterm-256color',
       cols: req.cols,
       rows: req.rows,
-      cwd: req.cwd ?? process.cwd(),
-      env: { ...process.env, ...req.env } as Record<string, string>
+      cwd,
+      env
     })
 
     this.sessions.set(req.id, session)
+    if (this.tmux) this.scrollback.start(req.id, this.tmux)
 
     session.onData((data) => {
       this.platform.broadcast(ptyDataChannel(req.id), data)
@@ -35,9 +78,10 @@ export class PtyManager {
       const info: PtyExitInfo = { id: req.id, exitCode, signal }
       this.platform.broadcast(ptyExitChannel(req.id), info)
       this.sessions.delete(req.id)
+      this.scrollback.stop(req.id, this.tmux ?? undefined)
     })
 
-    return { id: req.id, pid: session.pid, fresh: true }
+    return { id: req.id, pid: session.pid, fresh }
   }
 
   write(id: string, data: string): void {
@@ -48,22 +92,44 @@ export class PtyManager {
     this.sessions.get(id)?.resize(cols, rows)
   }
 
+  /** Permanent: kills the tmux session too, so nothing survives. */
   destroy(id: string): void {
     const session = this.sessions.get(id)
-    if (!session) return
-    session.kill()
-    this.sessions.delete(id)
+    if (session) {
+      session.kill()
+      this.sessions.delete(id)
+    }
+    this.scrollback.destroy(id)
+    if (this.tmux) {
+      try {
+        execFileSync(this.tmux.tmuxPath, [...this.tmux.baseArgs, 'kill-session', '-t', sessionNameFor(id)], {
+          stdio: 'ignore',
+          timeout: 2000
+        })
+      } catch {
+        // session already gone — fine
+      }
+    }
   }
 
   has(id: string): boolean {
     return this.sessions.has(id)
   }
 
-  /** Detach everything — deliberately does NOT kill tmux sessions (Phase 4). */
+  /** Stored scrollback for a cold start (null when none / warm reattach). */
+  readScrollback(id: string): string | null {
+    return this.scrollback.read(id)
+  }
+
+  /**
+   * Detach everything on quit — deliberately does NOT kill tmux sessions,
+   * so terminals keep running and reattach on next launch.
+   */
   killAll(): void {
     for (const session of this.sessions.values()) {
       session.kill()
     }
     this.sessions.clear()
+    if (this.tmux) this.scrollback.stopAll(this.tmux)
   }
 }

@@ -14,6 +14,8 @@ const api = {
     resize: (id: string, cols: number, rows: number): void =>
       ipcRenderer.send(IPC.ptyResize, id, cols, rows),
     destroy: (id: string): void => ipcRenderer.send(IPC.ptyDestroy, id),
+    readScrollback: (id: string): Promise<string | null> =>
+      ipcRenderer.invoke(IPC.ptyReadScrollback, id),
 
     onData: (id: string, cb: (data: string) => void): (() => void) => {
       const channel = ptyDataChannel(id)

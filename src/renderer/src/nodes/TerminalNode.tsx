@@ -40,6 +40,18 @@ export function TerminalNode({ id, data }: NodeProps<TerminalNodeData>): React.J
 
     void window.termsprawl.pty
       .create({ id, cols: term.cols, rows: term.rows, cwd: data.cwd })
+      .then(async (result) => {
+        // Cold start (first open or post-reboot): the tmux session is gone, so
+        // replay the persisted scrollback snapshot. Warm reattach skips it —
+        // tmux already redraws.
+        if (result.fresh) {
+          const scrollback = await window.termsprawl.pty.readScrollback(id)
+          if (scrollback) {
+            term.write(`\x1b[2J\x1b[H${scrollback}`)
+            term.write('\r\n\x1b[90m── session restored ──\x1b[0m\r\n')
+          }
+        }
+      })
       .catch((err: unknown) => {
         term.write(`\r\n\x1b[91m[spawn failed: ${String(err)}]\x1b[0m\r\n`)
       })

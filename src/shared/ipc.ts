@@ -10,6 +10,7 @@ export const IPC = {
   ptyWrite: 'pty:write',
   ptyResize: 'pty:resize',
   ptyDestroy: 'pty:destroy',
+  ptyReadScrollback: 'pty:read-scrollback',
   ptyData: 'pty:data', // suffixed ':<sessionId>' for the push channel
   ptyExit: 'pty:exit' // suffixed ':<sessionId>' for the push channel
 } as const
