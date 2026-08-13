@@ -23,6 +23,21 @@ pnpm run make-icon  # regenerate build/icon.png
 
 `pnpm run typecheck` is the fastest correctness gate.
 
+## Runtime prerequisites (user machines)
+
+The packaged app needs, at runtime:
+- **tmux >= 3.2** — required for session continuity/scrollback; every terminal
+  spawns inside `tmux new-session -A -D` (found via PATH). Without it,
+  terminals still appear but lose continuity. Install: `sudo apt install tmux`
+  (Debian/Ubuntu), `dnf install tmux`, `pacman -S tmux`.
+- **FUSE** — to run AppImages: `libfuse2t64` (Ubuntu 24.04),
+  `libfuse2` (20.04–22.04), `fuse-libs` (Fedora), `fuse2` (Arch). Fallback:
+  `--appimage-extract-and-run`.
+- A shell ($SHELL or /bin/bash) and glibc >= 2.31 (Ubuntu 20.04+).
+- Optional: Geist/Geist Mono fonts (falls back to JetBrains Mono/monospace).
+- Clipboard needs nothing extra — tmux copy-mode copies via OSC 52 through
+  xterm.js.
+
 ## Package manager (pnpm, not npm)
 
 The repo uses **pnpm 11** (`pnpm-lock.yaml`). Two pnpm-specific gotchas are
