@@ -124,9 +124,9 @@ the `data.kind` union in `state/workspace.ts` when adding kinds.
 The repo has a real remote so agents can work in parallel without clobbering
 each other:
 
-- **github** = `https://github.com/dazeb/termsprawl.git` — canonical remote
-  (public repo, created 2026-08-13; gh auth as dazeb, HTTPS via gh credential
-  helper). Push there for any released/notable state.
+- **github** = `git@github.com:dazeb/termsprawl.git` — canonical remote
+  (public repo, created 2026-08-13; SSH key auth — id_ed25519 registered on
+  GitHub, no tokens needed). Push there for any released/notable state.
 - **origin** = `hermes-box:/srv/git/termsprawl.git` — bare repo on hermes-box
   (SSH alias in `~/.ssh/config`; key `~/.ssh/hermes-box_ed25519`). Working
   remote for the parallel-agent loop (fast, no auth churn). Both remotes get
