@@ -72,6 +72,22 @@ describe('PtyManager', () => {
     expect(platform.captured.some((c) => c.data.includes('TERMSPRAWL_OK'))).toBe(true)
   })
 
+  it('runs a command instead of a bare shell when one is given', async () => {
+    const { manager, platform } = makeManager()
+
+    const result = manager.create({
+      id: 'cmd1',
+      cols: 80,
+      rows: 24,
+      cwd: process.cwd(),
+      command: 'echo COMMAND_MARK'
+    })
+    expect(result.pid).toBeGreaterThan(0)
+
+    await waitFor(() => platform.captured.some((c) => c.data.includes('COMMAND_MARK')))
+    expect(platform.captured.some((c) => c.data.includes('COMMAND_MARK'))).toBe(true)
+  })
+
   it('emits an exit event when the session is destroyed', async () => {
     const { manager, platform } = makeManager()
 

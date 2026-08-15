@@ -12,6 +12,8 @@ export interface TerminalNodeData {
   kind: 'terminal'
   title: string
   cwd?: string
+  /** Optional command the PTY runs instead of a bare shell (e.g. `druk`). */
+  command?: string
 }
 
 export const STICKY_COLORS = ['slate', 'amber', 'lime', 'pink', 'cyan'] as const
@@ -52,6 +54,16 @@ export function createTerminalNode(cwd?: string): Node<TerminalNodeData> {
     type: 'terminal',
     position: { x: 60 + Math.random() * 240, y: 60 + Math.random() * 160 },
     data: { kind: 'terminal', title: 'shell', cwd }
+  }
+}
+
+/** A terminal node preset that launches the druk TUI code editor. */
+export function createDrukNode(cwd?: string): Node<TerminalNodeData> {
+  return {
+    id: nextId(),
+    type: 'terminal',
+    position: { x: 60 + Math.random() * 240, y: 60 + Math.random() * 160 },
+    data: { kind: 'terminal', title: 'druk', cwd, command: 'druk' }
   }
 }
 

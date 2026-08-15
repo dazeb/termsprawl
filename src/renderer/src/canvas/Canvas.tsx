@@ -17,6 +17,7 @@ import { GroupNode } from '../nodes/GroupNode'
 import { DiffNode } from '../nodes/DiffNode'
 import {
   createDiffNode,
+  createDrukNode,
   createGroup,
   createStickyNode,
   createTerminalNode,
@@ -175,6 +176,17 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
     setMenu(null)
   }, [menu, push, screenToFlowPosition])
 
+  // A druk terminal: launches the druk TUI code editor in the project cwd.
+  const addDruk = useCallback(() => {
+    const node = createDrukNode(cwd)
+    if (menu && wrapperRef.current) {
+      node.position = screenToFlowPosition({ x: menu.x, y: menu.y })
+    }
+    setNodes((nds) => [...nds, node])
+    push()
+    setMenu(null)
+  }, [cwd, menu, push, screenToFlowPosition])
+
   const onPaneContextMenu = useCallback((event: React.MouseEvent) => {
     event.preventDefault()
     setMenu({ x: event.clientX, y: event.clientY })
@@ -306,6 +318,7 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
           <button onClick={addTerminal}>New terminal</button>
           <button onClick={addSticky}>New sticky note</button>
           <button onClick={addDiff}>New diff</button>
+          <button onClick={addDruk}>druk</button>
         </div>
       )}
 

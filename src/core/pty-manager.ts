@@ -36,6 +36,11 @@ export class PtyManager {
     const cwd = req.cwd ?? process.cwd()
     const sessionName = sessionNameFor(req.id)
 
+    // With a command, run `shell -lc <command>` inside the session (login
+    // shell so the user's PATH from .zshrc/.profile applies — druk lives in
+    // ~/.druk/bin, sourced in .zshrc). Without one, a bare interactive shell.
+    const sessionCommand = req.command ? [shell, '-lc', req.command] : [shell]
+
     let fresh = true
     let spawnFile = shell
     let spawnArgs: string[] = []
@@ -51,8 +56,10 @@ export class PtyManager {
         '-s',
         sessionName,
         '--',
-        shell
+        ...sessionCommand
       ]
+    } else {
+      spawnArgs = req.command ? ['-lc', req.command] : []
     }
 
     // Strip tmux nesting vars so a reattach inside tmux can't refuse.

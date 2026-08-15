@@ -7,6 +7,9 @@ export interface PtyCreateRequest {
   shell?: string
   /** Working directory; default: project cwd. */
   cwd?: string
+  /** Optional command to run instead of an interactive shell (e.g. `druk`).
+   * Runs as `shell -lc <command>` so the user's login PATH applies. */
+  command?: string
   cols: number
   rows: number
   env?: Record<string, string>

@@ -42,7 +42,7 @@ export function TerminalNode({ id, data }: NodeProps<TerminalNodeData>): React.J
     })
 
     void window.termsprawl.pty
-      .create({ id, cols: term.cols, rows: term.rows, cwd: data.cwd })
+      .create({ id, cols: term.cols, rows: term.rows, cwd: data.cwd, command: data.command })
       .then(async (result) => {
         // Cold start (first open or post-reboot): the tmux session is gone, so
         // replay the persisted scrollback snapshot. Warm reattach skips it —

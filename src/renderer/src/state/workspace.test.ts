@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Node } from 'reactflow'
 import {
   createDiffNode,
+  createDrukNode,
   createGroup,
   createStickyNode,
   createTerminalNode,
@@ -44,6 +45,20 @@ describe('sticky nodes', () => {
     expect(restored.type).toBe('terminal')
     if (restored.data.kind !== 'terminal') throw new Error('expected terminal node')
     expect(restored.data.cwd).toBe('/tmp')
+  })
+
+  it('creates a druk preset terminal that persists its command', () => {
+    const node = createDrukNode('/repo')
+    expect(node.type).toBe('terminal')
+    if (node.data.kind !== 'terminal') throw new Error('expected terminal node')
+    expect(node.data.title).toBe('druk')
+    expect(node.data.command).toBe('druk')
+    expect(node.data.cwd).toBe('/repo')
+
+    const restored = deserializeNodes(serializeNodes([node]))[0]
+    if (restored.data.kind !== 'terminal') throw new Error('expected terminal node')
+    expect(restored.data.command).toBe('druk')
+    expect(restored.data.title).toBe('druk')
   })
 
   it('titles sticky notes with their first line', () => {
