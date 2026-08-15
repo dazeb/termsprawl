@@ -232,6 +232,13 @@ extension, one feature at a time.**
 - Create: `src/shared/agents/config.ts` — agent config keyed by open id
   (claude/codex/gemini/custom), capability lists, helpers. Agent node spawns
   CLI once via initialCommand.
+- **Status: DONE (commit 50e6bb2→…, v0.2.5+).** Registry (claude/codex/
+  gemini/custom with capability lists), `createAgentNode()` factory, context
+  menu "Open agent ▸" submenu. Spawn reuses the command-preset mechanism from
+  the druk node (resolveCommandLine → absolute path, so GUI-launched apps find
+  agent CLIs in ~/.local/bin). Fixed a latent gap: `@shared/*` value imports
+  never resolved at bundle/test time (only type imports were erased) — added
+  aliases to electron.vite.config.ts + vitest.config.ts. 62 tests green.
 
 ### Task 7.2: Hook server + status
 - Create: `src/main/agents/hook-server.ts` (loopback HTTP, per-session token,

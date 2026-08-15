@@ -43,6 +43,19 @@ describe('findExecutable', () => {
     process.env.PATH = '/usr/local/bin:/usr/bin:/bin'
     expect(findExecutable('definitely-not-a-real-cmd-xyz', home)).toBeNull()
   })
+
+  it('finds agent CLIs under ~/.local/bin', () => {
+    const home = mkdtempSync(join(tmpdir(), 'ts-home-'))
+    tempDirs.push(home)
+    const bin = join(home, '.local', 'bin')
+    mkdirSync(bin, { recursive: true })
+    const codex = join(bin, 'codex')
+    writeFileSync(codex, '#!/bin/sh\necho codex\n', 'utf8')
+    chmodSync(codex, 0o755)
+
+    process.env.PATH = '/usr/local/bin:/usr/bin:/bin'
+    expect(findExecutable('codex', home)).toBe(join(home, '.local', 'bin', 'codex'))
+  })
 })
 
 describe('resolveCommandLine', () => {

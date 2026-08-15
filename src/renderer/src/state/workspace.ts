@@ -4,6 +4,7 @@
 
 import type { Node } from 'reactflow'
 import type { SerializedNode } from '@shared/types'
+import { agentTitle, agentCommand, type AgentId } from '@shared/agents/config'
 
 export const NODE_TYPES = ['terminal', 'sticky', 'group', 'diff'] as const
 export type NodeKind = (typeof NODE_TYPES)[number]
@@ -70,6 +71,23 @@ export function createDrukNode(cwd?: string): Node<TerminalNodeData> {
       title: 'druk',
       cwd,
       command: cwd ? `druk ${cwd}` : 'druk'
+    }
+  }
+}
+
+/** A terminal node preset that launches an agent CLI once (Phase 7, Task 7.1).
+ * The command resolves to an absolute path at spawn time (GUI apps lack the
+ * shell PATH where agent CLIs like codex/claude live). */
+export function createAgentNode(agentId: AgentId, cwd?: string): Node<TerminalNodeData> {
+  return {
+    id: nextId(),
+    type: 'terminal',
+    position: { x: 60 + Math.random() * 240, y: 60 + Math.random() * 160 },
+    data: {
+      kind: 'terminal',
+      title: agentTitle(agentId),
+      cwd,
+      command: agentCommand(agentId)
     }
   }
 }

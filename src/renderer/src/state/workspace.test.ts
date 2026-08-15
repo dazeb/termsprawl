@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Node } from 'reactflow'
 import {
+  createAgentNode,
   createDiffNode,
   createDrukNode,
   createGroup,
@@ -65,6 +66,19 @@ describe('sticky nodes', () => {
     const node = createDrukNode()
     if (node.data.kind !== 'terminal') throw new Error('expected terminal node')
     expect(node.data.command).toBe('druk')
+  })
+
+  it('agent preset launches the agent CLI with its title', () => {
+    const node = createAgentNode('codex', '/repo')
+    expect(node.type).toBe('terminal')
+    if (node.data.kind !== 'terminal') throw new Error('expected terminal node')
+    expect(node.data.title).toBe('codex')
+    expect(node.data.command).toBe('codex')
+    expect(node.data.cwd).toBe('/repo')
+
+    const restored = deserializeNodes(serializeNodes([node]))[0]
+    if (restored.data.kind !== 'terminal') throw new Error('expected terminal node')
+    expect(restored.data.command).toBe('codex')
   })
 
   it('titles sticky notes with their first line', () => {

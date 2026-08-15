@@ -15,8 +15,9 @@ import { isAbsolute, join } from 'node:path'
  * Resolve a command name to an absolute path. Checks, in order:
  *   1. already-absolute input → returned as-is
  *   2. each dir on $PATH
- *   3. known user-local install locations (~/.druk/bin — where the druk TUI
- *      lives; GUI apps won't see it on a minimal PATH)
+ *   3. known user-local install locations (~/.local/bin for agent CLIs,
+ *      ~/.druk/bin for the druk TUI, ~/bin) — GUI apps won't see these on a
+ *      minimal PATH)
  * Returns null when nothing matches.
  */
 export function findExecutable(name: string, home: string = homedir()): string | null {
@@ -29,8 +30,11 @@ export function findExecutable(name: string, home: string = homedir()): string |
     if (existsSync(candidate)) return candidate
   }
 
-  const userBin = join(home, '.druk', 'bin', name)
-  if (existsSync(userBin)) return userBin
+  const userDirs = ['.local/bin', '.druk/bin', 'bin']
+  for (const sub of userDirs) {
+    const candidate = join(home, sub, name)
+    if (existsSync(candidate)) return candidate
+  }
 
   return null
 }

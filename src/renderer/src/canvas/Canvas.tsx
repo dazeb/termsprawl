@@ -16,6 +16,7 @@ import { StickyNode } from '../nodes/StickyNode'
 import { GroupNode } from '../nodes/GroupNode'
 import { DiffNode } from '../nodes/DiffNode'
 import {
+  createAgentNode,
   createDiffNode,
   createDrukNode,
   createGroup,
@@ -26,6 +27,8 @@ import {
   deserializeNodes,
   ungroup
 } from '../state/workspace'
+import { agentIds, agentName, agentTitle } from '@shared/agents/config'
+import type { AgentId } from '@shared/agents/config'
 import { useHistory } from '../state/history'
 import { useProjects } from '../state/projects'
 import type { SprawlNodeData } from '../state/workspace'
@@ -60,6 +63,7 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
   const [nodes, setNodes] = useState<Node<SprawlNodeData>[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
   const [menu, setMenu] = useState<{ x: number; y: number; nodeId?: string } | null>(null)
+  const [agentMenuOpen, setAgentMenuOpen] = useState(false)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const wrapperRef = useRef<HTMLDivElement>(null)
   const { screenToFlowPosition } = useReactFlow()
@@ -187,14 +191,31 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
     setMenu(null)
   }, [cwd, menu, push, screenToFlowPosition])
 
+  // An agent terminal: launches the agent CLI once in the project cwd.
+  const addAgent = useCallback(
+    (agentId: AgentId) => {
+      const node = createAgentNode(agentId, cwd)
+      if (menu && wrapperRef.current) {
+        node.position = screenToFlowPosition({ x: menu.x, y: menu.y })
+      }
+      setNodes((nds) => [...nds, node])
+      push()
+      setMenu(null)
+      setAgentMenuOpen(false)
+    },
+    [cwd, menu, push, screenToFlowPosition]
+  )
+
   const onPaneContextMenu = useCallback((event: React.MouseEvent) => {
     event.preventDefault()
+    setAgentMenuOpen(false)
     setMenu({ x: event.clientX, y: event.clientY })
   }, [])
 
   const onNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
     event.preventDefault()
     event.stopPropagation()
+    setAgentMenuOpen(false)
     setMenu({ x: event.clientX, y: event.clientY, nodeId: node.id })
   }, [])
 
@@ -319,6 +340,21 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
           <button onClick={addSticky}>New sticky note</button>
           <button onClick={addDiff}>New diff</button>
           <button onClick={addDruk}>Open druk</button>
+          <button
+            className="context-submenu-toggle"
+            onClick={() => setAgentMenuOpen((v) => !v)}
+          >
+            Open agent ▸
+          </button>
+          {agentMenuOpen && (
+            <div className="context-submenu">
+              {agentIds().map((id) => (
+                <button key={id} onClick={() => addAgent(id)} title={agentName(id)}>
+                  {agentTitle(id)}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

@@ -124,7 +124,7 @@ export function TabBar(): React.JSX.Element {
                     onClick={() => void doDelete(p.id)}
                     title="Delete permanently"
                   >
-                    ×
+                    🗑
                   </button>
                 </div>
               ))}
