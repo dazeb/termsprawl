@@ -205,16 +205,26 @@ extension, one feature at a time.**
   language detect by extension, Ctrl+S save, dirty dot, markdown preview
   (marked), image preview via `termsprawl-file://` custom protocol.
 - AppImage checkpoint 3.
+- **Status: IN AGENT WORKTREE** — lives on `feature/editor-node`
+  (`/home/dazeb/workspace/projects/active/termsprawl-agent`), not merged to
+  main. Diff node (6.4) added Monaco + `files.openDialog()` on main first;
+  expected merge reconciliation when the branch lands.
 
 ### Task 6.4: Diff node
 - Monaco diff editor, read-only; `core/git-service.ts` (repoRoot +
   `git show`): staged (`:path`) vs HEAD; path picker; status line for
   not-a-repo / no-changes.
 - AppImage checkpoint 4.
+- **Status: DONE (commits 0f81c76→f584815 on main, v0.2.4).** TDD:
+  git-service (11 tests), diff-node data round-trips (4 tests) — 40 total
+  green. Checkpoint 4 AppImage built + uploaded; user test pending.
 
 ### Task 6.5: Commit + status
 - Update PLAN.md status with checkpoint results.
 - `git commit -m "feat: sticky, group, editor, diff nodes"`
+- **Status: DONE on main (diff node; 5 commits 0f81c76→f584815).** Editor
+  node commits land from the worktree branch when merged; main's Phase 6
+  contribution = sticky + group + diff.
 
 ## Phase 7 — Agents
 
