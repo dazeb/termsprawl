@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Node } from 'reactflow'
 import {
+  createDiffNode,
   createGroup,
   createStickyNode,
   createTerminalNode,
@@ -153,5 +154,43 @@ describe('removeNode', () => {
     const a = createTerminalNode('/tmp')
     a.id = 'term-a'
     expect(removeNode([a], 'ghost')).toHaveLength(1)
+  })
+})
+
+describe('diff nodes', () => {
+  it('creates a diff node with defaults', () => {
+    const node = createDiffNode()
+    expect(node.type).toBe('diff')
+    expect(node.data.kind).toBe('diff')
+    expect(node.data.path).toBeNull()
+    expect(node.data.base).toBe('HEAD')
+  })
+
+  it('round-trips diff data through serialize/deserialize', () => {
+    const node = createDiffNode()
+    node.data.path = '/repo/src/app.ts'
+    node.data.base = 'staged'
+
+    const restored = deserializeNodes(serializeNodes([node]))[0]
+    expect(restored.type).toBe('diff')
+    if (restored.data.kind !== 'diff') throw new Error('expected diff node')
+    expect(restored.data.path).toBe('/repo/src/app.ts')
+    expect(restored.data.base).toBe('staged')
+  })
+
+  it('rehydrates legacy diff data with defaults when fields are missing', () => {
+    const restored = deserializeNodes([
+      { id: 'd1', type: 'diff', position: { x: 0, y: 0 }, data: { kind: 'diff' } }
+    ])[0]
+    if (restored.data.kind !== 'diff') throw new Error('expected diff node')
+    expect(restored.data.path).toBeNull()
+    expect(restored.data.base).toBe('HEAD')
+  })
+
+  it('titles diff nodes with the file basename, else "diff"', () => {
+    const node = createDiffNode()
+    expect(nodeTitle(node.data)).toBe('diff')
+    node.data.path = '/repo/src/app.ts'
+    expect(nodeTitle(node.data)).toBe('app.ts')
   })
 })

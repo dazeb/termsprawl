@@ -5,7 +5,7 @@
 import type { Node } from 'reactflow'
 import type { SerializedNode } from '@shared/types'
 
-export const NODE_TYPES = ['terminal', 'sticky', 'group'] as const
+export const NODE_TYPES = ['terminal', 'sticky', 'group', 'diff'] as const
 export type NodeKind = (typeof NODE_TYPES)[number]
 
 export interface TerminalNodeData {
@@ -29,7 +29,15 @@ export interface GroupNodeData {
   title: string
 }
 
-export type SprawlNodeData = TerminalNodeData | StickyNodeData | GroupNodeData
+export interface DiffNodeData {
+  kind: 'diff'
+  /** Absolute path of the file being diffed; null until one is chosen. */
+  path: string | null
+  /** Which ref the "original" side comes from. */
+  base: 'staged' | 'HEAD'
+}
+
+export type SprawlNodeData = TerminalNodeData | StickyNodeData | GroupNodeData | DiffNodeData
 
 let counter = 0
 
@@ -56,9 +64,19 @@ export function createStickyNode(): Node<StickyNodeData> {
   }
 }
 
+export function createDiffNode(): Node<DiffNodeData> {
+  return {
+    id: nextId(),
+    type: 'diff',
+    position: { x: 60 + Math.random() * 240, y: 60 + Math.random() * 160 },
+    data: { kind: 'diff', path: null, base: 'HEAD' }
+  }
+}
+
 export function nodeTitle(data: SprawlNodeData): string {
   if (data.kind === 'terminal') return data.title
   if (data.kind === 'group') return data.title
+  if (data.kind === 'diff') return data.path ? data.path.split('/').pop() ?? 'diff' : 'diff'
   const firstLine = data.text.split('\n')[0].trim()
   return firstLine || 'sticky note'
 }
@@ -80,7 +98,8 @@ export function removeNode(nodes: Node<SprawlNodeData>[], id: string): Node<Spra
 const DEFAULT_SIZE: Record<string, { w: number; h: number }> = {
   terminal: { w: 720, h: 420 },
   sticky: { w: 200, h: 130 },
-  group: { w: 200, h: 130 }
+  group: { w: 200, h: 130 },
+  diff: { w: 560, h: 360 }
 }
 
 function nodeSize(n: Node<SprawlNodeData>): { w: number; h: number } {
@@ -176,6 +195,12 @@ export function deserializeNodes(serialized: SerializedNode[]): Node<SprawlNodeD
       return {
         ...base,
         data: { kind: 'group', title: 'group', ...data } as GroupNodeData
+      }
+    }
+    if (data.kind === 'diff') {
+      return {
+        ...base,
+        data: { kind: 'diff', path: null, base: 'HEAD', ...data } as DiffNodeData
       }
     }
     return {
