@@ -21,7 +21,11 @@ export const IPC = {
   ptyDestroy: 'pty:destroy',
   ptyReadScrollback: 'pty:read-scrollback',
   ptyData: 'pty:data', // suffixed ':<sessionId>' for the push channel
-  ptyExit: 'pty:exit' // suffixed ':<sessionId>' for the push channel
+  ptyExit: 'pty:exit', // suffixed ':<sessionId>' for the push channel
+
+  // Node services (Phase 6)
+  diffInfo: 'diff:info',
+  dialogOpenFile: 'dialog:open-file'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC, ptyDataChannel, ptyExitChannel } from '../shared/ipc'
 import type {
+  DiffBase,
+  DiffInfoResult,
   ProjectMeta,
   PtyCreateRequest,
   PtyCreateResult,
@@ -53,6 +55,15 @@ const api = {
         ipcRenderer.removeListener(channel, listener)
       }
     }
+  },
+
+  diff: {
+    info: (path: string, base: DiffBase): Promise<DiffInfoResult> =>
+      ipcRenderer.invoke(IPC.diffInfo, path, base)
+  },
+
+  files: {
+    openDialog: (): Promise<string | null> => ipcRenderer.invoke(IPC.dialogOpenFile)
   }
 }
 

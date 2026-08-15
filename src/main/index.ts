@@ -1,8 +1,9 @@
 import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import { join } from 'node:path'
 import { IPC } from '../shared/ipc'
-import type { PtyCreateRequest, PtyExitInfo, SerializedNode } from '../shared/types'
+import type { DiffBase, DiffInfoResult, PtyCreateRequest, PtyExitInfo, SerializedNode } from '../shared/types'
 import type { CorePlatform } from '../core/platform'
+import { diffInfo } from '../core/git-service'
 import { PtyManager } from '../core/pty-manager'
 import { WorkspaceStore } from '../core/workspace-store'
 import type { ProjectMeta } from '../core/workspace-files'
@@ -39,6 +40,21 @@ function registerWorkspaceIpc(): void {
     const win = BrowserWindow.getFocusedWindow()
     const result = await dialog.showOpenDialog(win!, {
       properties: ['openDirectory', 'createDirectory']
+    })
+    return result.canceled ? null : result.filePaths[0]
+  })
+}
+
+function registerDiffIpc(): void {
+  ipcMain.handle(
+    IPC.diffInfo,
+    (_event, path: string, base: DiffBase): Promise<DiffInfoResult> => diffInfo(path, base)
+  )
+  ipcMain.handle(IPC.dialogOpenFile, async () => {
+    const win = BrowserWindow.getFocusedWindow()
+    const result = await dialog.showOpenDialog(win!, {
+      properties: ['openFile'],
+      filters: [{ name: 'All files', extensions: ['*'] }]
     })
     return result.canceled ? null : result.filePaths[0]
   })
@@ -82,6 +98,7 @@ void app.whenReady().then(() => {
   ipcMain.handle(IPC.appVersion, () => app.getVersion())
   registerPtyIpc()
   registerWorkspaceIpc()
+  registerDiffIpc()
 
   createWindow()
 

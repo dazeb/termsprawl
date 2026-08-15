@@ -1,4 +1,6 @@
 import type {
+  DiffBase,
+  DiffInfoResult,
   ProjectMeta,
   PtyCreateRequest,
   PtyCreateResult,
@@ -29,6 +31,12 @@ declare global {
         readScrollback(id: string): Promise<string | null>
         onData(id: string, cb: (data: string) => void): () => void
         onExit(id: string, cb: (info: PtyExitInfo) => void): () => void
+      }
+      diff: {
+        info(path: string, base: DiffBase): Promise<DiffInfoResult>
+      }
+      files: {
+        openDialog(): Promise<string | null>
       }
     }
   }

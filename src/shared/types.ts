@@ -48,3 +48,12 @@ export interface WorkspaceSnapshot {
   index: { version: 1; projects: ProjectMeta[] }
   projects: Record<string, SerializedNode[]>
 }
+
+// Diff node (Phase 6): original = git ref content, modified = working tree.
+export type DiffBase = 'staged' | 'HEAD'
+
+export interface DiffInfoResult {
+  original: string | null
+  modified: string | null
+  error?: { code: 'NO_REPO' | 'MISSING' | 'IO'; message: string }
+}
