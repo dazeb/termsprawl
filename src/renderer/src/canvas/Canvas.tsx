@@ -14,7 +14,9 @@ import type { Connection, Edge, EdgeChange, Node, NodeChange } from 'reactflow'
 import { TerminalNode } from '../nodes/TerminalNode'
 import { StickyNode } from '../nodes/StickyNode'
 import { GroupNode } from '../nodes/GroupNode'
+import { DiffNode } from '../nodes/DiffNode'
 import {
+  createDiffNode,
   createGroup,
   createStickyNode,
   createTerminalNode,
@@ -27,7 +29,7 @@ import { useHistory } from '../state/history'
 import { useProjects } from '../state/projects'
 import type { SprawlNodeData } from '../state/workspace'
 
-const nodeTypes = { terminal: TerminalNode, sticky: StickyNode, group: GroupNode }
+const nodeTypes = { terminal: TerminalNode, sticky: StickyNode, group: GroupNode, diff: DiffNode }
 
 // Canvas context: lets custom nodes update their own data and record undo
 // snapshots without polluting serialized node data with callbacks.
@@ -155,6 +157,16 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
 
   const addSticky = useCallback(() => {
     const node = createStickyNode()
+    if (menu && wrapperRef.current) {
+      node.position = screenToFlowPosition({ x: menu.x, y: menu.y })
+    }
+    setNodes((nds) => [...nds, node])
+    push()
+    setMenu(null)
+  }, [menu, push, screenToFlowPosition])
+
+  const addDiff = useCallback(() => {
+    const node = createDiffNode()
     if (menu && wrapperRef.current) {
       node.position = screenToFlowPosition({ x: menu.x, y: menu.y })
     }
@@ -293,6 +305,7 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
           {menu?.nodeId && <button onClick={closeMenuNode}>Close</button>}
           <button onClick={addTerminal}>New terminal</button>
           <button onClick={addSticky}>New sticky note</button>
+          <button onClick={addDiff}>New diff</button>
         </div>
       )}
 

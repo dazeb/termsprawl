@@ -444,3 +444,112 @@ body {
   overflow: hidden;
   border: 1px solid var(--border);
 }
+
+/* ---- diff nodes ---- */
+
+.diff-node {
+  width: 560px;
+  height: 360px;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+}
+
+.diff-node-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.28);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  cursor: grab;
+  user-select: none;
+}
+
+.diff-node-header:active {
+  cursor: grabbing;
+}
+
+.diff-node-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+
+.diff-toggle {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--muted);
+  font-size: 10px;
+  font-family: 'Geist Mono', 'JetBrains Mono', monospace;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.diff-toggle:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.diff-toggle:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.node-action {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--muted);
+  font-size: 10px;
+  font-family: 'Geist Mono', 'JetBrains Mono', monospace;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.node-action:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.diff-node-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.diff-host {
+  flex: 1;
+  min-height: 0;
+}
+
+.diff-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(232, 232, 230, 0.35);
+  font-size: 12px;
+}
+
+.diff-status {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-family: 'Geist Mono', 'JetBrains Mono', monospace;
+  color: #ff8a8a;
+  background: rgba(255, 60, 60, 0.08);
+  border-top: 1px solid rgba(255, 60, 60, 0.15);
+}
