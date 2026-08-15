@@ -18,6 +18,7 @@ import * as pty from 'node-pty'
 import type { CorePlatform } from './platform'
 import { ptyDataChannel, ptyExitChannel } from '../shared/ipc'
 import type { PtyCreateRequest, PtyCreateResult, PtyExitInfo } from '../shared/types'
+import { resolveCommandLine } from './command-resolver'
 import { ensureTmuxConfig, hasSession, sessionNameFor, type TmuxConfig } from './tmux'
 import { ScrollbackStore } from './scrollback-store'
 
@@ -38,8 +39,11 @@ export class PtyManager {
 
     // With a command, run `shell -lc <command>` inside the session (login
     // shell so the user's PATH from .zshrc/.profile applies — druk lives in
-    // ~/.druk/bin, sourced in .zshrc). Without one, a bare interactive shell.
-    const sessionCommand = req.command ? [shell, '-lc', req.command] : [shell]
+    // ~/.druk/bin, sourced in .zshrc). The command's first token is resolved
+    // to an absolute path first because GUI-launched apps inherit a minimal
+    // PATH and `-lc` does NOT source .zshrc. Without a command: bare shell.
+    const command = req.command ? resolveCommandLine(req.command) : undefined
+    const sessionCommand = command ? [shell, '-lc', command] : [shell]
 
     let fresh = true
     let spawnFile = shell
@@ -59,7 +63,7 @@ export class PtyManager {
         ...sessionCommand
       ]
     } else {
-      spawnArgs = req.command ? ['-lc', req.command] : []
+      spawnArgs = command ? ['-lc', command] : []
     }
 
     // Strip tmux nesting vars so a reattach inside tmux can't refuse.
