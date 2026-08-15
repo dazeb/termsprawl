@@ -9,6 +9,9 @@ export function App(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const loaded = useProjects((s) => s.loaded)
   const load = useProjects((s) => s.load)
+  const activeProjectId = useProjects((s) => s.activeProjectId)
+  const projects = useProjects((s) => s.projects)
+  const activeCwd = projects.find((p) => p.id === activeProjectId)?.cwd ?? undefined
 
   useEffect(() => {
     void window.termsprawl?.appVersion().then(setVersion)
@@ -46,7 +49,7 @@ export function App(): React.JSX.Element {
       )}
       {loaded ? (
         <ReactFlowProvider>
-          <Canvas />
+          <Canvas cwd={activeCwd} />
         </ReactFlowProvider>
       ) : (
         <div className="canvas" />

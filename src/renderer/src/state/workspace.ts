@@ -73,6 +73,16 @@ export function createDiffNode(): Node<DiffNodeData> {
   }
 }
 
+/** Project name from a chosen folder path (basename), or the fallback when no
+ * folder was picked (cwd-less inline project). */
+export function projectNameFromPath(cwd: string | null, fallback: string): string {
+  if (!cwd) return fallback
+  const trimmed = cwd.replace(/\/+$/, '')
+  if (!trimmed) return fallback
+  const parts = trimmed.split('/')
+  return parts[parts.length - 1] || fallback
+}
+
 export function nodeTitle(data: SprawlNodeData): string {
   if (data.kind === 'terminal') return data.title
   if (data.kind === 'group') return data.title

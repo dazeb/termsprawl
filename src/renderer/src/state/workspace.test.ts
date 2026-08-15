@@ -7,6 +7,7 @@ import {
   createTerminalNode,
   deserializeNodes,
   nodeTitle,
+  projectNameFromPath,
   removeNode,
   serializeNodes,
   ungroup
@@ -192,5 +193,23 @@ describe('diff nodes', () => {
     expect(nodeTitle(node.data)).toBe('diff')
     node.data.path = '/repo/src/app.ts'
     expect(nodeTitle(node.data)).toBe('app.ts')
+  })
+})
+
+describe('projectNameFromPath', () => {
+  it('uses the folder basename', () => {
+    expect(projectNameFromPath('/home/dazeb/work/termsprawl', 'fallback')).toBe('termsprawl')
+  })
+
+  it('handles trailing slashes', () => {
+    expect(projectNameFromPath('/tmp/repo/', 'fallback')).toBe('repo')
+  })
+
+  it('falls back when no folder is chosen', () => {
+    expect(projectNameFromPath(null, 'project-1')).toBe('project-1')
+  })
+
+  it('falls back for a root path', () => {
+    expect(projectNameFromPath('/', 'project-1')).toBe('project-1')
   })
 })

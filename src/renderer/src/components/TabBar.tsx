@@ -1,4 +1,5 @@
 import { useProjects } from '../state/projects'
+import { projectNameFromPath } from '../state/workspace'
 
 // Project tabs — the app's window chrome drag region.
 export function TabBar(): React.JSX.Element {
@@ -9,9 +10,13 @@ export function TabBar(): React.JSX.Element {
 
   const openProjects = projects.filter((p) => !p.closed)
 
+  // A project is tied to a folder: ask the user which one, then name the
+  // project after it. Cancel = no project created.
   const newProject = async (): Promise<void> => {
-    const name = `project-${openProjects.length + 1}`
-    await create(name, null)
+    const cwd = await window.termsprawl.workspace.selectFolder()
+    if (!cwd) return
+    const name = projectNameFromPath(cwd, `project-${openProjects.length + 1}`)
+    await create(name, cwd)
   }
 
   return (
