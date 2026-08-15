@@ -246,6 +246,15 @@ extension, one feature at a time.**
 - Normalize each agent's hooks → shared state model (working/waiting/blocked/
   done) + subagent/recurring/session kinds.
 - Verify: node shows RUNNING/NEEDS YOU badge.
+- **Status: DONE (commit 540b8ab).** `core/agent-status.ts` normalizer (TDD,
+  claude payloads → working/waiting/blocked/done + subagent kind),
+  `main/agents/hook-server.ts` (loopback 127.0.0.1, fail-open 200s, routed
+  /hook/<agent>), `main/agents/hook-installer.ts` (merge-only install/uninstall
+  of Claude URL hooks into ~/.claude/settings.json, __termsprawlManaged
+  marker), renderer agent-status store + RUNNING/NEEDS YOU/BLOCKED/DONE badges
+  on command-spawned terminal nodes. claude nodes pin `--session-id <nodeId>`
+  so hook events map to the exact node. Live-verified: app boot installs hooks
+  pointing at the live loopback port; POSTs accepted (unit-tested). 82 tests.
 
 ### Task 7.3: Notifications + unread
 - Unread dot on busy→idle while unfocused; OS notification; focus-node click.
