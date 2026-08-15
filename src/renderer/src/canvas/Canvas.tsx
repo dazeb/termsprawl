@@ -318,7 +318,7 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
           <button onClick={addTerminal}>New terminal</button>
           <button onClick={addSticky}>New sticky note</button>
           <button onClick={addDiff}>New diff</button>
-          <button onClick={addDruk}>druk</button>
+          <button onClick={addDruk}>Open druk</button>
         </div>
       )}
 
