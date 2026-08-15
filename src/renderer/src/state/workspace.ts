@@ -77,17 +77,21 @@ export function createDrukNode(cwd?: string): Node<TerminalNodeData> {
 
 /** A terminal node preset that launches an agent CLI once (Phase 7, Task 7.1).
  * The command resolves to an absolute path at spawn time (GUI apps lack the
- * shell PATH where agent CLIs like codex/claude live). */
+ * shell PATH where agent CLIs like codex/claude live). Claude gets
+ * `--session-id <nodeId>` so hook events map back to this exact node. */
 export function createAgentNode(agentId: AgentId, cwd?: string): Node<TerminalNodeData> {
+  const id = nextId()
+  const command =
+    agentId === 'claude' ? `claude --session-id ${id}` : agentCommand(agentId)
   return {
-    id: nextId(),
+    id,
     type: 'terminal',
     position: { x: 60 + Math.random() * 240, y: 60 + Math.random() * 160 },
     data: {
       kind: 'terminal',
       title: agentTitle(agentId),
       cwd,
-      command: agentCommand(agentId)
+      command
     }
   }
 }

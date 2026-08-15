@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain } from 'electron'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { IPC } from '../shared/ipc'
 import type { DiffBase, DiffInfoResult, PtyCreateRequest, PtyExitInfo, SerializedNode } from '../shared/types'
@@ -7,6 +8,8 @@ import { diffInfo } from '../core/git-service'
 import { PtyManager } from '../core/pty-manager'
 import { WorkspaceStore } from '../core/workspace-store'
 import type { ProjectMeta } from '../core/workspace-files'
+import { HookServer } from './agents/hook-server'
+import { claudeSettingsPath, installClaudeHooks } from './agents/hook-installer'
 
 // The Electron implementation of the core's platform seam.
 const platform: CorePlatform = {
@@ -20,6 +23,13 @@ const platform: CorePlatform = {
 
 const ptyManager = new PtyManager(platform)
 const workspaceStore = new WorkspaceStore(platform)
+
+// Agent hook server (Phase 7): receives lifecycle POSTs from agent CLIs and
+// broadcasts normalized status events to the renderer. Fail-open — an agent
+// keeps working even if this never fires.
+const hookServer = new HookServer((event) => {
+  platform.broadcast(`${IPC.agentStatus}:${event.sessionId}`, event)
+})
 
 function registerWorkspaceIpc(): void {
   ipcMain.handle(IPC.workspaceSnapshot, () => workspaceStore.snapshot())
@@ -106,11 +116,20 @@ function registerPtyIpc(): void {
   ipcMain.handle(IPC.ptyReadScrollback, (_event, id: string) => ptyManager.readScrollback(id))
 }
 
-void app.whenReady().then(() => {
+void app.whenReady().then(async () => {
   ipcMain.handle(IPC.appVersion, () => app.getVersion())
   registerPtyIpc()
   registerWorkspaceIpc()
   registerDiffIpc()
+
+  // Start the hook server and point Claude Code's URL hooks at it, so agent
+  // nodes can show RUNNING / NEEDS YOU badges.
+  await hookServer.start()
+  try {
+    installClaudeHooks(claudeSettingsPath(homedir()), hookServer.url)
+  } catch (err) {
+    console.error('[hooks] install failed:', err)
+  }
 
   createWindow()
 

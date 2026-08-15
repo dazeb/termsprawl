@@ -1,4 +1,5 @@
 import type {
+  AgentStatusEvent,
   DiffBase,
   DiffInfoResult,
   ProjectMeta,
@@ -38,6 +39,9 @@ declare global {
       }
       files: {
         openDialog(): Promise<string | null>
+      }
+      agent: {
+        onStatus(sessionId: string, cb: (event: AgentStatusEvent) => void): () => void
       }
     }
   }

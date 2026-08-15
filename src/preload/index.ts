@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC, ptyDataChannel, ptyExitChannel } from '../shared/ipc'
 import type {
+  AgentStatusEvent,
   DiffBase,
   DiffInfoResult,
   ProjectMeta,
@@ -65,6 +66,18 @@ const api = {
 
   files: {
     openDialog: (): Promise<string | null> => ipcRenderer.invoke(IPC.dialogOpenFile)
+  },
+
+  agent: {
+    /** Subscribe to normalized hook status for one session/node id. */
+    onStatus: (sessionId: string, cb: (event: AgentStatusEvent) => void): (() => void) => {
+      const channel = `${IPC.agentStatus}:${sessionId}`
+      const listener = (_event: Electron.IpcRendererEvent, e: AgentStatusEvent): void => cb(e)
+      ipcRenderer.on(channel, listener)
+      return () => {
+        ipcRenderer.removeListener(channel, listener)
+      }
+    }
   }
 }
 

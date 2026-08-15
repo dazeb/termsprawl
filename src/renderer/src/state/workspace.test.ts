@@ -81,6 +81,12 @@ describe('sticky nodes', () => {
     expect(restored.data.command).toBe('codex')
   })
 
+  it('claude agent pins its session id to the node id for hook mapping', () => {
+    const node = createAgentNode('claude', '/repo')
+    if (node.data.kind !== 'terminal') throw new Error('expected terminal node')
+    expect(node.data.command).toBe(`claude --session-id ${node.id}`)
+  })
+
   it('titles sticky notes with their first line', () => {
     const node = createStickyNode()
     expect(nodeTitle(node.data)).toBe('sticky note')

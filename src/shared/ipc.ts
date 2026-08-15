@@ -26,7 +26,10 @@ export const IPC = {
 
   // Node services (Phase 6)
   diffInfo: 'diff:info',
-  dialogOpenFile: 'dialog:open-file'
+  dialogOpenFile: 'dialog:open-file',
+
+  // Agent hooks (Phase 7)
+  agentStatus: 'agent:status' // suffixed ':<sessionId>' for the push channel
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

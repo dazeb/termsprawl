@@ -1,10 +1,20 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Node, NodeProps } from 'reactflow'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import type { TerminalNodeData } from '../state/workspace'
 import { useCanvas } from '../canvas/Canvas'
+import { useAgentStatuses } from '../state/agents'
+
+// Status badge labels for agent nodes (Phase 7). Only nodes spawned with a
+// command (agent presets like claude/codex, druk) can carry a status.
+const STATUS_LABEL: Record<string, string> = {
+  working: 'RUNNING',
+  waiting: 'NEEDS YOU',
+  blocked: 'BLOCKED',
+  done: 'DONE'
+}
 
 // One terminal session, rendered with xterm, as a React Flow custom node.
 // The PTY session id IS the React Flow node id — keep ids stable or the
@@ -14,6 +24,24 @@ import { useCanvas } from '../canvas/Canvas'
 export function TerminalNode({ id, data }: NodeProps<TerminalNodeData>): React.JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null)
   const { closeNode } = useCanvas()
+  const agentStatus = useAgentStatuses((s) => s.byId[id])
+  const setAgentStatus = useAgentStatuses((s) => s.set)
+  const clearAgentStatus = useAgentStatuses((s) => s.clear)
+  const [agentHint, setAgentHint] = useState(false)
+
+  // Agent nodes (spawned with a command) subscribe to hook status. Only claude
+  // pins session-id = node id today; others never receive events (fail-open).
+  useEffect(() => {
+    if (!data.command) return
+    setAgentHint(true)
+    const off = window.termsprawl.agent.onStatus(id, (event) => {
+      setAgentStatus(id, event.status)
+    })
+    return () => {
+      off()
+      clearAgentStatus(id)
+    }
+  }, [id, data.command, setAgentStatus, clearAgentStatus])
 
   useEffect(() => {
     const host = hostRef.current
@@ -87,6 +115,9 @@ export function TerminalNode({ id, data }: NodeProps<TerminalNodeData>): React.J
       <div className="terminal-node-header">
         <span className="terminal-node-dot" />
         <span className="terminal-node-title">{data.title}</span>
+        {agentHint && agentStatus && (
+          <span className={`agent-badge agent-${agentStatus}`}>{STATUS_LABEL[agentStatus]}</span>
+        )}
         <button
           className="node-close"
           title="Close terminal (kills session)"

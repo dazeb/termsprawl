@@ -62,3 +62,14 @@ export interface DiffInfoResult {
   modified: string | null
   error?: { code: 'NO_REPO' | 'MISSING' | 'IO'; message: string }
 }
+
+// Agent status (Phase 7): normalized hook events pushed to the renderer.
+export type AgentStatus = 'working' | 'waiting' | 'blocked' | 'done'
+
+export interface AgentStatusEvent {
+  sessionId: string
+  status: AgentStatus
+  kind: 'session' | 'subagent' | 'recurring'
+  tool?: string
+  ts: number
+}
