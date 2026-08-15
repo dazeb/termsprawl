@@ -52,13 +52,19 @@ describe('sticky nodes', () => {
     expect(node.type).toBe('terminal')
     if (node.data.kind !== 'terminal') throw new Error('expected terminal node')
     expect(node.data.title).toBe('druk')
-    expect(node.data.command).toBe('druk')
+    expect(node.data.command).toBe('druk /repo')
     expect(node.data.cwd).toBe('/repo')
 
     const restored = deserializeNodes(serializeNodes([node]))[0]
     if (restored.data.kind !== 'terminal') throw new Error('expected terminal node')
-    expect(restored.data.command).toBe('druk')
+    expect(restored.data.command).toBe('druk /repo')
     expect(restored.data.title).toBe('druk')
+  })
+
+  it('druk preset without a folder uses a bare druk command', () => {
+    const node = createDrukNode()
+    if (node.data.kind !== 'terminal') throw new Error('expected terminal node')
+    expect(node.data.command).toBe('druk')
   })
 
   it('titles sticky notes with their first line', () => {

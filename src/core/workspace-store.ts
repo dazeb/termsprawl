@@ -9,6 +9,7 @@ import {
   folderHasProject,
   loadIndex,
   loadProjectFile,
+  removeProjectFile,
   saveIndex,
   saveProjectFile,
   type ProjectMeta,
@@ -44,7 +45,7 @@ export class WorkspaceStore {
 
   addProject(name: string, cwd: string | null): ProjectMeta {
     const id = `p-${Date.now().toString(36)}`
-    const project: ProjectMeta = { id, name, cwd, closed: false }
+    const project: ProjectMeta = { id, name, cwd, closed: false, archived: false }
     this.index.projects.push(project)
     this.revs.set(id, 0)
     this.persistIndex()
@@ -59,18 +60,32 @@ export class WorkspaceStore {
     }
   }
 
+  /** Archive = close + hide from the tab bar; data and tmux sessions kept. */
+  archiveProject(id: string): void {
+    const project = this.index.projects.find((p) => p.id === id)
+    if (project) {
+      project.closed = true
+      project.archived = true
+      this.persistIndex()
+    }
+  }
+
   reopenProject(id: string): void {
     const project = this.index.projects.find((p) => p.id === id)
     if (project) {
       project.closed = false
+      project.archived = false
       this.persistIndex()
     }
   }
 
   deleteProject(id: string): void {
+    const project = this.index.projects.find((p) => p.id === id)
     this.index.projects = this.index.projects.filter((p) => p.id !== id)
     this.revs.delete(id)
     this.persistIndex()
+    // Remove the project file so a deleted project never comes back.
+    if (project) removeProjectFile(this.platform.userDataPath, project)
   }
 
   /** Save nodes for a project; returns the new monotonic rev. */

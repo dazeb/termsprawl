@@ -34,8 +34,20 @@ function registerWorkspaceIpc(): void {
     return workspaceStore.addProject(name, cwd)
   })
   ipcMain.handle(IPC.projectClose, (_event, id: string) => workspaceStore.closeProject(id))
+  ipcMain.handle(IPC.projectArchive, (_event, id: string) => workspaceStore.archiveProject(id))
   ipcMain.handle(IPC.projectReopen, (_event, id: string) => workspaceStore.reopenProject(id))
-  ipcMain.handle(IPC.projectDelete, (_event, id: string) => workspaceStore.deleteProject(id))
+  ipcMain.handle(IPC.projectDelete, (_event, id: string) => {
+    // Destroy every terminal session that belonged to the project — delete is
+    // permanent, unlike close/archive which keep tmux sessions alive.
+    const project = workspaceStore.snapshot().index.projects.find((p) => p.id === id)
+    if (project) {
+      const nodes = workspaceStore.snapshot().projects[id] ?? []
+      for (const node of nodes) {
+        if (node.type === 'terminal') ptyManager.destroy(node.id)
+      }
+    }
+    workspaceStore.deleteProject(id)
+  })
   ipcMain.handle(IPC.dialogSelectFolder, async () => {
     const win = BrowserWindow.getFocusedWindow()
     const result = await dialog.showOpenDialog(win!, {

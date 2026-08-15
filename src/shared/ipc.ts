@@ -10,6 +10,7 @@ export const IPC = {
   workspaceSaveNodes: 'workspace:save-nodes',
   projectAdd: 'project:add',
   projectClose: 'project:close',
+  projectArchive: 'project:archive',
   projectReopen: 'project:reopen',
   projectDelete: 'project:delete',
   dialogSelectFolder: 'dialog:select-folder',

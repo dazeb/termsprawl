@@ -1,14 +1,26 @@
+import { useEffect, useRef, useState } from 'react'
 import { useProjects } from '../state/projects'
 import { projectNameFromPath } from '../state/workspace'
 
-// Project tabs — the app's window chrome drag region.
+// Project tabs — the app's window chrome drag region. Right-click a tab for
+// Close / Archive / Delete; the ▾ menu lists closed/archived projects to
+// reopen (their tmux sessions survive close/archive — delete is permanent).
 export function TabBar(): React.JSX.Element {
   const projects = useProjects((s) => s.projects)
   const activeProjectId = useProjects((s) => s.activeProjectId)
   const select = useProjects((s) => s.select)
   const create = useProjects((s) => s.create)
+  const closeActive = useProjects((s) => s.closeActive)
+  const archiveActive = useProjects((s) => s.archiveActive)
+  const reopen = useProjects((s) => s.reopen)
+  const del = useProjects((s) => s.delete)
 
-  const openProjects = projects.filter((p) => !p.closed)
+  const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null)
+  const [storedOpen, setStoredOpen] = useState(false)
+  const storedRef = useRef<HTMLDivElement>(null)
+
+  const openProjects = projects.filter((p) => !p.closed && !p.archived)
+  const storedProjects = projects.filter((p) => p.closed || p.archived)
 
   // A project is tied to a folder: ask the user which one, then name the
   // project after it. Cancel = no project created.
@@ -19,6 +31,50 @@ export function TabBar(): React.JSX.Element {
     await create(name, cwd)
   }
 
+  const onTabContextMenu = (event: React.MouseEvent, id: string): void => {
+    event.preventDefault()
+    setStoredOpen(false)
+    setMenu({ x: event.clientX, y: event.clientY, id })
+  }
+
+  const closeMenu = (): void => setMenu(null)
+
+  const doClose = async (id: string): Promise<void> => {
+    if (id === activeProjectId) await closeActive()
+    else {
+      await window.termsprawl.workspace.closeProject(id)
+    }
+    closeMenu()
+  }
+
+  const doArchive = async (id: string): Promise<void> => {
+    if (id === activeProjectId) await archiveActive()
+    else await window.termsprawl.workspace.archiveProject(id)
+    closeMenu()
+  }
+
+  const doDelete = async (id: string): Promise<void> => {
+    const name = projects.find((p) => p.id === id)?.name ?? 'project'
+    if (!window.confirm(`Delete project "${name}" permanently? Terminals in it will be destroyed.`)) {
+      closeMenu()
+      return
+    }
+    await del(id)
+    closeMenu()
+  }
+
+  // Click outside closes the tab context menu / stored-projects panel.
+  useEffect(() => {
+    const onDown = (e: MouseEvent): void => {
+      const t = e.target as HTMLElement
+      if (storedRef.current?.contains(t)) return
+      setMenu(null)
+      setStoredOpen(false)
+    }
+    window.addEventListener('mousedown', onDown)
+    return () => window.removeEventListener('mousedown', onDown)
+  }, [])
+
   return (
     <div className="tab-bar">
       {openProjects.map((p) => (
@@ -26,15 +82,70 @@ export function TabBar(): React.JSX.Element {
           key={p.id}
           className={`tab ${p.id === activeProjectId ? 'tab-active' : ''}`}
           onClick={() => select(p.id)}
+          onContextMenu={(e) => onTabContextMenu(e, p.id)}
           title={p.cwd ?? p.name}
         >
           <span className="tab-dot" />
           {p.name}
         </button>
       ))}
-      <button className="tab tab-new" onClick={() => void newProject()} title="New project">
+      <button className="tab tab-new" onClick={() => void newProject()} title="New project (folder)">
         +
       </button>
+      {storedProjects.length > 0 && (
+        <div className="tab-stored-wrap" ref={storedRef}>
+          <button
+            className="tab tab-stored"
+            onClick={() => {
+              setMenu(null)
+              setStoredOpen((v) => !v)
+            }}
+            title="Closed / archived projects"
+          >
+            ▾
+          </button>
+          {storedOpen && (
+            <div className="stored-menu">
+              <div className="stored-menu-title">Closed / archived</div>
+              {storedProjects.map((p) => (
+                <div key={p.id} className="stored-row">
+                  <button
+                    className="stored-reopen"
+                    onClick={() => {
+                      void reopen(p.id)
+                      setStoredOpen(false)
+                    }}
+                    title={p.cwd ?? p.name}
+                  >
+                    {p.archived ? '🗄' : '○'} {p.name}
+                  </button>
+                  <button
+                    className="stored-delete"
+                    onClick={() => void doDelete(p.id)}
+                    title="Delete permanently"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {menu && (
+        <div
+          className="tab-context-menu"
+          style={{ left: menu.x, top: menu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button onClick={() => void doClose(menu.id)}>Close</button>
+          <button onClick={() => void doArchive(menu.id)}>Archive</button>
+          <button className="danger" onClick={() => void doDelete(menu.id)}>
+            Delete…
+          </button>
+        </div>
+      )}
     </div>
   )
 }

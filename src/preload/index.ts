@@ -23,6 +23,7 @@ const api = {
     addProject: (name: string, cwd: string | null): Promise<ProjectMeta> =>
       ipcRenderer.invoke(IPC.projectAdd, name, cwd),
     closeProject: (id: string): Promise<void> => ipcRenderer.invoke(IPC.projectClose, id),
+    archiveProject: (id: string): Promise<void> => ipcRenderer.invoke(IPC.projectArchive, id),
     reopenProject: (id: string): Promise<void> => ipcRenderer.invoke(IPC.projectReopen, id),
     deleteProject: (id: string): Promise<void> => ipcRenderer.invoke(IPC.projectDelete, id),
     selectFolder: (): Promise<string | null> => ipcRenderer.invoke(IPC.dialogSelectFolder)

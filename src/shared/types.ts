@@ -45,6 +45,8 @@ export interface ProjectMeta {
   name: string
   cwd: string | null
   closed: boolean
+  /** Archived = hidden from the tab bar, preserved; reopen restores it. */
+  archived?: boolean
 }
 
 export interface WorkspaceSnapshot {

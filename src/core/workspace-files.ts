@@ -8,7 +8,7 @@
 // The renderer's React Flow state is the single live source of truth; these
 // files are the serialization layer.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 export interface SerializedNode {
@@ -24,6 +24,8 @@ export interface ProjectMeta {
   /** Project folder; null = cwd-less inline canvas. */
   cwd: string | null
   closed: boolean
+  /** Archived = hidden from the tab bar, preserved; reopen restores it. */
+  archived?: boolean
 }
 
 export interface WorkspaceIndex {
@@ -108,4 +110,15 @@ export function saveProjectFile(
 /** True when a folder already carries a project file (adoption). */
 export function folderHasProject(cwd: string): boolean {
   return existsSync(folderProjectPath(cwd))
+}
+
+/** Delete a project's file (inline project file, or the folder's project.json
+ * for folder projects). Best-effort: missing files are fine. */
+export function removeProjectFile(userDataPath: string, project: ProjectMeta): void {
+  const path = project.cwd ? folderProjectPath(project.cwd) : inlineProjectPath(userDataPath, project.id)
+  try {
+    rmSync(path, { force: true })
+  } catch {
+    // already gone — fine
+  }
 }

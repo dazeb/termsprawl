@@ -57,13 +57,20 @@ export function createTerminalNode(cwd?: string): Node<TerminalNodeData> {
   }
 }
 
-/** A terminal node preset that launches the druk TUI code editor. */
+/** A terminal node preset that launches the druk TUI code editor, opening the
+ * project folder (`druk <cwd>`). Falls back to a bare `druk` (current dir)
+ * when the project has no folder. */
 export function createDrukNode(cwd?: string): Node<TerminalNodeData> {
   return {
     id: nextId(),
     type: 'terminal',
     position: { x: 60 + Math.random() * 240, y: 60 + Math.random() * 160 },
-    data: { kind: 'terminal', title: 'druk', cwd, command: 'druk' }
+    data: {
+      kind: 'terminal',
+      title: 'druk',
+      cwd,
+      command: cwd ? `druk ${cwd}` : 'druk'
+    }
   }
 }
 

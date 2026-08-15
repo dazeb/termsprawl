@@ -19,6 +19,7 @@ declare global {
         saveNodes(id: string, nodes: SerializedNode[]): Promise<number>
         addProject(name: string, cwd: string | null): Promise<ProjectMeta>
         closeProject(id: string): Promise<void>
+        archiveProject(id: string): Promise<void>
         reopenProject(id: string): Promise<void>
         deleteProject(id: string): Promise<void>
         selectFolder(): Promise<string | null>

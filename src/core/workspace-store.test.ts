@@ -76,9 +76,41 @@ describe('WorkspaceStore', () => {
     expect(store.snapshot().index.projects[0].closed).toBe(false)
   })
 
+  it('archive marks a project archived+closed; reopen restores both', () => {
+    const project = store.addProject('arch', null)
+    store.archiveProject(project.id)
+    const meta = store.snapshot().index.projects[0]
+    expect(meta.archived).toBe(true)
+    expect(meta.closed).toBe(true)
+
+    store.reopenProject(project.id)
+    const restored = store.snapshot().index.projects[0]
+    expect(restored.archived).toBe(false)
+    expect(restored.closed).toBe(false)
+  })
+
+  it('archive round-trips across a fresh store instance', () => {
+    const project = store.addProject('arch2', null)
+    store.archiveProject(project.id)
+
+    const store2 = new WorkspaceStore(platform)
+    const meta = store2.snapshot().index.projects[0]
+    expect(meta.archived).toBe(true)
+  })
+
   it('delete removes the project from the index', () => {
     const project = store.addProject('gone', null)
     store.deleteProject(project.id)
     expect(store.snapshot().index.projects).toEqual([])
+  })
+
+  it('delete removes the inline project file from disk', () => {
+    const project = store.addProject('gone2', null)
+    store.saveNodes(project.id, [makeNode('n1', 1, 1)])
+    store.deleteProject(project.id)
+    // A fresh store sees nothing; the orphaned file must not be re-read.
+    const store2 = new WorkspaceStore(platform)
+    expect(store2.snapshot().index.projects).toEqual([])
+    expect(store2.snapshot().projects).toEqual({})
   })
 })

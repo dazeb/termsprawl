@@ -94,6 +94,118 @@ body {
   padding: 2px 10px;
 }
 
+/* ---- project lifecycle (tab context menu + stored projects) ---- */
+
+.tab-context-menu {
+  position: fixed;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  min-width: 140px;
+  padding: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+}
+
+.tab-context-menu button {
+  background: none;
+  border: none;
+  border-radius: 5px;
+  color: var(--fg);
+  font-size: 13px;
+  text-align: left;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.tab-context-menu button:hover {
+  background: rgba(198, 241, 53, 0.12);
+  color: var(--accent);
+}
+
+.tab-context-menu button.danger:hover {
+  background: rgba(255, 60, 60, 0.14);
+  color: #ff8a8a;
+}
+
+.tab-stored-wrap {
+  position: relative;
+}
+
+.tab-stored {
+  font-size: 11px;
+  padding: 2px 9px;
+}
+
+.stored-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 100;
+  min-width: 220px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+}
+
+.stored-menu-title {
+  padding: 5px 8px 4px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.stored-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.stored-reopen {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  border-radius: 5px;
+  color: var(--fg);
+  font-size: 12px;
+  text-align: left;
+  padding: 5px 8px;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stored-reopen:hover {
+  background: rgba(198, 241, 53, 0.12);
+  color: var(--accent);
+}
+
+.stored-delete {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  border-radius: 5px;
+  color: var(--muted);
+  font-size: 13px;
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+}
+
+.stored-delete:hover {
+  background: rgba(255, 60, 60, 0.14);
+  color: #ff8a8a;
+}
+
 .brand {
   font-size: 15px;
   font-weight: 650;

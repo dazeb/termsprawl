@@ -19,6 +19,7 @@ interface ProjectsState {
   /** Persist the active project's nodes. */
   saveNodes(nodes: SerializedNode[]): Promise<void>
   closeActive(): Promise<void>
+  archiveActive(): Promise<void>
   reopen(id: string): Promise<void>
   delete(id: string): Promise<void>
 }
@@ -67,7 +68,20 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     await window.termsprawl.workspace.closeProject(id)
     set((s) => {
       const projects = s.projects.map((p) => (p.id === id ? { ...p, closed: true } : p))
-      const nextOpen = projects.find((p) => !p.closed)
+      const nextOpen = projects.find((p) => !p.closed && !p.archived)
+      return { projects, activeProjectId: nextOpen?.id ?? null }
+    })
+  },
+
+  async archiveActive() {
+    const id = get().activeProjectId
+    if (!id) return
+    await window.termsprawl.workspace.archiveProject(id)
+    set((s) => {
+      const projects = s.projects.map((p) =>
+        p.id === id ? { ...p, closed: true, archived: true } : p
+      )
+      const nextOpen = projects.find((p) => !p.closed && !p.archived)
       return { projects, activeProjectId: nextOpen?.id ?? null }
     })
   },
@@ -75,7 +89,7 @@ export const useProjects = create<ProjectsState>((set, get) => ({
   async reopen(id: string) {
     await window.termsprawl.workspace.reopenProject(id)
     set((s) => ({
-      projects: s.projects.map((p) => (p.id === id ? { ...p, closed: false } : p)),
+      projects: s.projects.map((p) => (p.id === id ? { ...p, closed: false, archived: false } : p)),
       activeProjectId: id
     }))
   },
