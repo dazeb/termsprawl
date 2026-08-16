@@ -50,6 +50,9 @@ curl -s -o /dev/null -w "  Stop (valid)     -> HTTP %{http_code}\n" -X POST "$UR
 curl -s -o /dev/null -w "  PreToolUse       -> HTTP %{http_code}\n" -X POST "$URL" \
   -H 'content-type: application/json' \
   -d '{"hook_event_name":"PreToolUse","session_id":"test-node-1","tool_name":"Bash"}'
+curl -s -o /dev/null -w "  Stop w/transcript -> HTTP %{http_code}\n" -X POST "$URL" \
+  -H 'content-type: application/json' \
+  -d '{"hook_event_name":"Stop","session_id":"test-node-1","transcript_path":"/tmp/termsprawl-nonexistent.jsonl"}'
 curl -s -o /dev/null -w "  malformed json   -> HTTP %{http_code}\n" -X POST "$URL" -d 'not json'
 curl -s -o /dev/null -w "  GET method       -> HTTP %{http_code}\n" "$URL"
 
