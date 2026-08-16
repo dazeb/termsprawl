@@ -3,6 +3,8 @@
 export interface PtyCreateRequest {
   /** Stable per-node id; also the tmux session key (Phase 4). */
   id: string
+  /** Owning project, used to clean up live sessions before persistence settles. */
+  projectId?: string
   /** Shell to run; default: user's shell. */
   shell?: string
   /** Working directory; default: project cwd. */
@@ -57,7 +59,13 @@ export interface ProjectSettings {
 }
 
 export interface WorkspaceSnapshot {
-  index: { version: 1; projects: ProjectMeta[] }
+  index: {
+    version: 1
+    projects: ProjectMeta[]
+    pendingTerminalCleanup?: Array<{ projectId: string; terminalId: string }>
+    pendingTerminalNodeCleanup?: Array<{ projectId: string; terminalId: string }>
+    terminalTombstones?: Array<{ projectId: string; terminalId: string }>
+  }
   projects: Record<string, SerializedNode[]>
 }
 

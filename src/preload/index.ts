@@ -41,7 +41,9 @@ const api = {
     write: (id: string, data: string): void => ipcRenderer.send(IPC.ptyWrite, id, data),
     resize: (id: string, cols: number, rows: number): void =>
       ipcRenderer.send(IPC.ptyResize, id, cols, rows),
-    destroy: (id: string): void => ipcRenderer.send(IPC.ptyDestroy, id),
+    destroy: (id: string): Promise<void> => ipcRenderer.invoke(IPC.ptyDestroy, id),
+    closeNode: (projectId: string, id: string): Promise<void> =>
+      ipcRenderer.invoke(IPC.terminalClose, projectId, id),
     readScrollback: (id: string): Promise<string | null> =>
       ipcRenderer.invoke(IPC.ptyReadScrollback, id),
 

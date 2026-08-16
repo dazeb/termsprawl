@@ -18,6 +18,9 @@ interface ProjectsState {
   create(name: string, cwd: string | null): Promise<ProjectMeta>
   /** Persist the active project's nodes. */
   saveNodes(nodes: SerializedNode[]): Promise<void>
+  /** Persist nodes for an explicit project, even after the active tab changes. */
+  saveProjectNodes(id: string, nodes: SerializedNode[]): Promise<void>
+  dropCachedNode(projectId: string, nodeId: string): void
   /** Close any project by id (detach, keep sessions); updates local state. */
   close(id: string): Promise<void>
   /** Archive any project by id (close + hide); updates local state. */
@@ -63,8 +66,21 @@ export const useProjects = create<ProjectsState>((set, get) => ({
   async saveNodes(nodes: SerializedNode[]) {
     const id = get().activeProjectId
     if (!id) return
+    await get().saveProjectNodes(id, nodes)
+  },
+
+  async saveProjectNodes(id: string, nodes: SerializedNode[]) {
     await window.termsprawl.workspace.saveNodes(id, nodes)
     set((s) => ({ nodeCache: { ...s.nodeCache, [id]: nodes } }))
+  },
+
+  dropCachedNode(projectId: string, nodeId: string) {
+    set((s) => ({
+      nodeCache: {
+        ...s.nodeCache,
+        [projectId]: (s.nodeCache[projectId] ?? []).filter((node) => node.id !== nodeId)
+      }
+    }))
   },
 
   async close(id: string) {

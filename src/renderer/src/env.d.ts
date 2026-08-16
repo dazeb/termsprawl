@@ -32,7 +32,8 @@ declare global {
         create(req: PtyCreateRequest): Promise<PtyCreateResult>
         write(id: string, data: string): void
         resize(id: string, cols: number, rows: number): void
-        destroy(id: string): void
+        destroy(id: string): Promise<void>
+        closeNode(projectId: string, id: string): Promise<void>
         readScrollback(id: string): Promise<string | null>
         onData(id: string, cb: (data: string) => void): () => void
         onExit(id: string, cb: (info: PtyExitInfo) => void): () => void

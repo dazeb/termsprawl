@@ -43,6 +43,7 @@ export interface DiffNodeData {
 export type SprawlNodeData = TerminalNodeData | StickyNodeData | GroupNodeData | DiffNodeData
 
 let counter = 0
+const TERMINAL_DIMENSIONS = { width: 720, height: 420 } as const
 
 function nextId(): string {
   counter += 1
@@ -53,6 +54,7 @@ export function createTerminalNode(cwd?: string): Node<TerminalNodeData> {
   return {
     id: nextId(),
     type: 'terminal',
+    ...TERMINAL_DIMENSIONS,
     position: { x: 60 + Math.random() * 240, y: 60 + Math.random() * 160 },
     data: { kind: 'terminal', title: 'shell', cwd }
   }
@@ -65,6 +67,7 @@ export function createDrukNode(cwd?: string): Node<TerminalNodeData> {
   return {
     id: nextId(),
     type: 'terminal',
+    ...TERMINAL_DIMENSIONS,
     position: { x: 60 + Math.random() * 240, y: 60 + Math.random() * 160 },
     data: {
       kind: 'terminal',
@@ -94,6 +97,7 @@ export function createAgentNode(agentId: AgentId, cwd?: string): Node<TerminalNo
   return {
     id,
     type: 'terminal',
+    ...TERMINAL_DIMENSIONS,
     position: { x: 60 + Math.random() * 240, y: 60 + Math.random() * 160 },
     data: {
       kind: 'terminal',
@@ -117,6 +121,7 @@ export function createResumeAgentNode(
   return {
     id: nextId(),
     type: 'terminal',
+    ...TERMINAL_DIMENSIONS,
     position: { x: 60 + Math.random() * 240, y: 60 + Math.random() * 160 },
     data: {
       kind: 'terminal',
@@ -296,6 +301,7 @@ export function deserializeNodes(serialized: SerializedNode[]): Node<SprawlNodeD
     }
     return {
       ...base,
+      ...TERMINAL_DIMENSIONS,
       data: { kind: 'terminal', title: 'shell', ...data } as TerminalNodeData
     }
   })

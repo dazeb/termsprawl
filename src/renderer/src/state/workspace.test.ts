@@ -47,6 +47,8 @@ describe('sticky nodes', () => {
     const node = createTerminalNode('/tmp')
     const restored = deserializeNodes(serializeNodes([node]))[0]
     expect(restored.type).toBe('terminal')
+    expect(restored.width).toBe(720)
+    expect(restored.height).toBe(420)
     if (restored.data.kind !== 'terminal') throw new Error('expected terminal node')
     expect(restored.data.cwd).toBe('/tmp')
   })

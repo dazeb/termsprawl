@@ -9,6 +9,7 @@ import { PtyManager } from '../core/pty-manager'
 import { shouldNotify, type AgentStatus } from '../shared/agent-status'
 import { WorkspaceStore } from '../core/workspace-store'
 import type { ProjectMeta } from '../core/workspace-files'
+import { deleteProjectAndDestroyTerminals } from '../core/project-deletion'
 import { HookServer } from './agents/hook-server'
 import { claudeSettingsPath, installClaudeHooks } from './agents/hook-installer'
 import { SessionNameTracker } from '../core/session-name'
@@ -92,16 +93,21 @@ function registerWorkspaceIpc(): void {
     workspaceStore.renameProject(id, name)
   )
   ipcMain.handle(IPC.projectDelete, (_event, id: string) => {
-    // Destroy every terminal session that belonged to the project — delete is
-    // permanent, unlike close/archive which keep tmux sessions alive.
-    const project = workspaceStore.snapshot().index.projects.find((p) => p.id === id)
-    if (project) {
-      const nodes = workspaceStore.snapshot().projects[id] ?? []
-      for (const node of nodes) {
-        if (node.type === 'terminal') ptyManager.destroy(node.id)
-      }
+    const failures = deleteProjectAndDestroyTerminals(
+      workspaceStore,
+      (terminalId) => ptyManager.destroy(terminalId),
+      id,
+      ptyManager.sessionIdsForProject(id)
+    )
+    for (const failure of failures) {
+      console.error(`[project-delete] failed to clean up terminal ${failure.id}:`, failure.error)
     }
-    workspaceStore.deleteProject(id)
+    if (failures.length > 0) {
+      throw new AggregateError(
+        failures.map((failure) => failure.error),
+        `Project removed, but ${failures.length} terminal session(s) still need cleanup. Retry delete.`
+      )
+    }
   })
   ipcMain.handle(IPC.dialogSelectFolder, async () => {
     const win = BrowserWindow.getFocusedWindow()
@@ -157,7 +163,13 @@ function registerPtyIpc(): void {
   ipcMain.on(IPC.ptyResize, (_event, id: string, cols: number, rows: number) =>
     ptyManager.resize(id, cols, rows)
   )
-  ipcMain.on(IPC.ptyDestroy, (_event, id: string) => ptyManager.destroy(id))
+  ipcMain.handle(IPC.ptyDestroy, (_event, id: string) => ptyManager.destroy(id))
+  ipcMain.handle(IPC.terminalClose, (_event, projectId: string, id: string) => {
+    workspaceStore.stageTerminalNodeClose(projectId, id)
+    workspaceStore.removeTerminalNode(projectId, id)
+    ptyManager.destroy(id)
+    workspaceStore.completeTerminalNodeClose(projectId, id)
+  })
   ipcMain.handle(IPC.ptyReadScrollback, (_event, id: string) => ptyManager.readScrollback(id))
 }
 
@@ -166,6 +178,32 @@ void app.whenReady().then(async () => {
   registerPtyIpc()
   registerWorkspaceIpc()
   registerDiffIpc()
+
+  for (const entry of workspaceStore.pendingTerminalNodeCleanup()) {
+    try {
+      workspaceStore.removeTerminalNode(entry.projectId, entry.terminalId)
+      ptyManager.destroy(entry.terminalId)
+      workspaceStore.completeTerminalNodeClose(entry.projectId, entry.terminalId)
+    } catch (error) {
+      console.error(`[terminal] startup node cleanup failed: ${entry.terminalId}`, error)
+    }
+  }
+
+  // Project deletion records terminal ids before cleanup begins. Retry any
+  // sessions left by a prior failed cleanup or process interruption.
+  const pendingProjectIds = new Set(
+    workspaceStore.pendingTerminalCleanup().map((entry) => entry.projectId)
+  )
+  for (const projectId of pendingProjectIds) {
+    const failures = deleteProjectAndDestroyTerminals(
+      workspaceStore,
+      (terminalId) => ptyManager.destroy(terminalId),
+      projectId
+    )
+    for (const failure of failures) {
+      console.error(`[project] startup terminal cleanup failed: ${failure.id}`, failure.error)
+    }
+  }
 
   // Start the hook server and point Claude Code's URL hooks at it, so agent
   // nodes can show RUNNING / NEEDS YOU badges.

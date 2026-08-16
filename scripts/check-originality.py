@@ -62,36 +62,25 @@ def main():
     prior_files = code_files(prior_dir)
     our_files = code_files(source_dir)
 
-    # Index: line -> set of prior-file indices containing it.
-    index = {}
+    # Index exact consecutive blocks, not merely lines that happen to appear
+    # somewhere in the same file. Ordering is part of copied expression.
+    block_index = {}
     for i, pf in enumerate(prior_files):
-        for line in meaningful_lines(pf):
-            index.setdefault(line, set()).add(i)
+        lines = meaningful_lines(pf)
+        for start in range(len(lines) - MIN_BLOCK + 1):
+            block = tuple(lines[start:start + MIN_BLOCK])
+            block_index.setdefault(block, i)
 
     failures = []
     for our_file in our_files:
         lines = meaningful_lines(our_file)
         if not lines:
             continue
-        run_candidates = None  # prior-file indices matching the current run
-        run_len = 0
         found_in = None
-        for line in lines:
-            containing = index.get(line)
-            if not containing:
-                run_candidates = None
-                run_len = 0
-                continue
-            if run_len == 0 or run_candidates is None:
-                run_candidates = set(containing)
-            else:
-                run_candidates &= containing
-            run_len += 1
-            if run_candidates and run_len >= MIN_BLOCK:
-                found_in = next(iter(run_candidates))
+        for start in range(len(lines) - MIN_BLOCK + 1):
+            found_in = block_index.get(tuple(lines[start:start + MIN_BLOCK]))
+            if found_in is not None:
                 break
-            if not run_candidates:
-                run_len = 0
         if found_in is not None:
             rel = os.path.relpath(our_file, source_dir)
             prior = os.path.relpath(prior_files[found_in], prior_dir)

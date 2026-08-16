@@ -7,11 +7,12 @@
 import type { CorePlatform } from './platform'
 import {
   folderHasProject,
+  isSafeProjectId,
   loadIndex,
   loadProjectFile,
-  removeProjectFile,
   saveIndex,
   saveProjectFile,
+  stageProjectFileRemoval,
   type ProjectMeta,
   type ProjectSettings,
   type SerializedNode,
@@ -98,23 +99,140 @@ export class WorkspaceStore {
     this.persistIndex()
   }
 
-  deleteProject(id: string): void {
+  deleteProject(id: string, pendingTerminalIds: string[] = []): void {
     const project = this.index.projects.find((p) => p.id === id)
-    this.index.projects = this.index.projects.filter((p) => p.id !== id)
+    const originalIndex = this.index
+    const nodeCleanupIds = (this.index.pendingTerminalNodeCleanup ?? [])
+      .filter((entry) => entry.projectId === id)
+      .map((entry) => entry.terminalId)
+    const allPendingTerminalIds = [...new Set([...pendingTerminalIds, ...nodeCleanupIds])]
+    const nextIndex: WorkspaceIndex = {
+      ...this.index,
+      projects: this.index.projects.filter((p) => p.id !== id),
+      pendingTerminalCleanup: [
+        ...(this.index.pendingTerminalCleanup ?? []),
+        ...allPendingTerminalIds
+          .filter((terminalId) => !(this.index.pendingTerminalCleanup ?? []).some(
+            (entry) => entry.projectId === id && entry.terminalId === terminalId
+          ))
+          .map((terminalId) => ({ projectId: id, terminalId }))
+      ],
+      pendingTerminalNodeCleanup: (this.index.pendingTerminalNodeCleanup ?? []).filter(
+        (entry) => entry.projectId !== id
+      ),
+      terminalTombstones: (this.index.terminalTombstones ?? []).filter(
+        (entry) => entry.projectId !== id
+      )
+    }
+    const stagedRemoval = project
+      ? stageProjectFileRemoval(this.platform.userDataPath, project)
+      : null
+    let indexSaved = false
+    try {
+      saveIndex(this.platform.userDataPath, nextIndex)
+      indexSaved = true
+      stagedRemoval?.commit()
+    } catch (error) {
+      const rollbackErrors: unknown[] = []
+      if (indexSaved) {
+        try {
+          saveIndex(this.platform.userDataPath, originalIndex)
+        } catch (rollbackError) {
+          rollbackErrors.push(rollbackError)
+        }
+      }
+      try {
+        stagedRemoval?.rollback()
+      } catch (rollbackError) {
+        rollbackErrors.push(rollbackError)
+      }
+      if (rollbackErrors.length > 0) {
+        throw new AggregateError([error, ...rollbackErrors], 'Project deletion and rollback failed')
+      }
+      throw error
+    }
+    this.index = nextIndex
     this.revs.delete(id)
-    this.persistIndex()
-    // Remove the project file so a deleted project never comes back.
-    if (project) removeProjectFile(this.platform.userDataPath, project)
+  }
+
+  pendingTerminalIdsForProject(projectId: string): string[] {
+    return (this.index.pendingTerminalCleanup ?? [])
+      .filter((entry) => entry.projectId === projectId)
+      .map((entry) => entry.terminalId)
+  }
+
+  pendingTerminalCleanup(): Array<{ projectId: string; terminalId: string }> {
+    return [...(this.index.pendingTerminalCleanup ?? [])]
+  }
+
+  completeTerminalCleanup(terminalIds: string[]): void {
+    if (terminalIds.length === 0) return
+    const completed = new Set(terminalIds)
+    const nextIndex: WorkspaceIndex = {
+      ...this.index,
+      pendingTerminalCleanup: (this.index.pendingTerminalCleanup ?? []).filter(
+        (entry) => !completed.has(entry.terminalId)
+      )
+    }
+    saveIndex(this.platform.userDataPath, nextIndex)
+    this.index = nextIndex
+  }
+
+  stageTerminalNodeClose(projectId: string, terminalId: string): void {
+    if (!isSafeProjectId(terminalId)) throw new Error(`Invalid terminal id: ${terminalId}`)
+    if (!this.index.projects.some((project) => project.id === projectId)) {
+      throw new Error(`Unknown project: ${projectId}`)
+    }
+    const entry = { projectId, terminalId }
+    const hasEntry = (entries: Array<{ projectId: string; terminalId: string }> | undefined): boolean =>
+      (entries ?? []).some((item) => item.projectId === projectId && item.terminalId === terminalId)
+    const nextIndex: WorkspaceIndex = {
+      ...this.index,
+      pendingTerminalNodeCleanup: hasEntry(this.index.pendingTerminalNodeCleanup)
+        ? this.index.pendingTerminalNodeCleanup
+        : [...(this.index.pendingTerminalNodeCleanup ?? []), entry],
+      terminalTombstones: hasEntry(this.index.terminalTombstones)
+        ? this.index.terminalTombstones
+        : [...(this.index.terminalTombstones ?? []), entry]
+    }
+    saveIndex(this.platform.userDataPath, nextIndex)
+    this.index = nextIndex
+  }
+
+  pendingTerminalNodeCleanup(): Array<{ projectId: string; terminalId: string }> {
+    return [...(this.index.pendingTerminalNodeCleanup ?? [])]
+  }
+
+  removeTerminalNode(projectId: string, terminalId: string): void {
+    const current = this.snapshot().projects[projectId] ?? []
+    this.saveNodes(projectId, current.filter((node) => node.id !== terminalId))
+  }
+
+  completeTerminalNodeClose(projectId: string, terminalId: string): void {
+    const nextIndex: WorkspaceIndex = {
+      ...this.index,
+      pendingTerminalNodeCleanup: (this.index.pendingTerminalNodeCleanup ?? []).filter(
+        (entry) => entry.projectId !== projectId || entry.terminalId !== terminalId
+      )
+    }
+    saveIndex(this.platform.userDataPath, nextIndex)
+    this.index = nextIndex
   }
 
   /** Save nodes for a project; returns the new monotonic rev. */
   saveNodes(id: string, nodes: SerializedNode[]): number {
     const project = this.index.projects.find((p) => p.id === id)
     if (!project) return 0
+    const tombstones = new Set(
+      (this.index.terminalTombstones ?? [])
+        .filter((entry) => entry.projectId === id)
+        .map((entry) => entry.terminalId)
+    )
+    const filteredNodes = nodes.filter((node) => !tombstones.has(node.id))
     const rev = saveProjectFile(
       this.platform.userDataPath,
       project,
-      nodes,
+      filteredNodes,
       this.revs.get(id) ?? 0
     )
     this.revs.set(id, rev)

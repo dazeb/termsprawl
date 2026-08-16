@@ -6,7 +6,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { PtyManager } from './pty-manager'
+import { isMissingTmuxSessionError, PtyManager } from './pty-manager'
 import type { CorePlatform } from './platform'
 
 interface Captured {
@@ -43,6 +43,13 @@ function waitFor(predicate: () => boolean, timeoutMs = 12000): Promise<void> {
 }
 
 describe('PtyManager', () => {
+  it('only treats tmux missing-session errors as idempotent destroy success', () => {
+    expect(isMissingTmuxSessionError({ stderr: Buffer.from("can't find session: ts-missing\n") })).toBe(true)
+    expect(isMissingTmuxSessionError({ stderr: Buffer.from('error connecting to /tmp/tmux.sock (No such file or directory)\n') })).toBe(true)
+    expect(isMissingTmuxSessionError({ stderr: Buffer.from('server timed out\n') })).toBe(false)
+    expect(isMissingTmuxSessionError(new Error('tmux failed'))).toBe(false)
+  })
+
   const managers: PtyManager[] = []
   const platforms: StubPlatform[] = []
 
@@ -88,6 +95,25 @@ describe('PtyManager', () => {
     expect(platform.captured.some((c) => c.data.includes('COMMAND_MARK'))).toBe(true)
   })
 
+  it('does not write a preset command into its no-tmux fallback process', async () => {
+    const platform = new StubPlatform()
+    const manager = new PtyManager(platform, null)
+    managers.push(manager)
+    platforms.push(platform)
+
+    manager.create({
+      id: 'fallback-command',
+      cols: 80,
+      rows: 24,
+      cwd: process.cwd(),
+      shell: '/bin/bash',
+      command: '/bin/cat'
+    })
+    await new Promise((resolve) => setTimeout(resolve, 250))
+
+    expect(platform.captured.some((item) => item.data.includes('exec /bin/cat'))).toBe(false)
+  })
+
   it('emits an exit event when the session is destroyed', async () => {
     const { manager, platform } = makeManager()
 
@@ -107,6 +133,40 @@ describe('PtyManager', () => {
       manager.resize('nope', 10, 10)
       manager.destroy('nope')
     }).not.toThrow()
+  })
+
+  it('tracks live terminal sessions by owning project', () => {
+    const { manager } = makeManager()
+    manager.create({
+      id: 'owned-terminal',
+      projectId: 'project-a',
+      cols: 80,
+      rows: 24,
+      cwd: process.cwd()
+    })
+
+    expect(manager.sessionIdsForProject('project-a')).toEqual(['owned-terminal'])
+    manager.destroy('owned-terminal')
+    expect(manager.sessionIdsForProject('project-a')).toEqual([])
+  })
+
+  it('keeps replacement session ownership when the superseded PTY exits', async () => {
+    const { manager } = makeManager()
+    const request = { id: 'replacement', cols: 80, rows: 24, cwd: process.cwd() }
+
+    manager.create({ ...request, projectId: 'project-a' })
+    manager.create({ ...request, projectId: 'project-b' })
+    await new Promise((resolve) => setTimeout(resolve, 500))
+
+    expect(manager.has('replacement')).toBe(true)
+    expect(manager.sessionIdsForProject('project-b')).toEqual(['replacement'])
+  })
+
+  it('rejects terminal ids that could escape the scrollback directory', () => {
+    const { manager } = makeManager()
+
+    expect(() => manager.destroy('../../outside')).toThrow('Invalid terminal id')
+    expect(() => manager.readScrollback('../../outside')).toThrow('Invalid terminal id')
   })
 
   it('tmux: session survives killAll and reattaches warm', async () => {

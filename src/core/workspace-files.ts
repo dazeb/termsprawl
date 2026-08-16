@@ -8,8 +8,8 @@
 // The renderer's React Flow state is the single live source of truth; these
 // files are the serialization layer.
 
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { basename, dirname, join } from 'node:path'
 
 export interface SerializedNode {
   id: string
@@ -37,6 +37,14 @@ export interface ProjectSettings {
 export interface WorkspaceIndex {
   version: 1
   projects: ProjectMeta[]
+  pendingTerminalCleanup?: PendingTerminalCleanup[]
+  pendingTerminalNodeCleanup?: PendingTerminalCleanup[]
+  terminalTombstones?: PendingTerminalCleanup[]
+}
+
+export interface PendingTerminalCleanup {
+  projectId: string
+  terminalId: string
 }
 
 export interface ProjectFile {
@@ -49,12 +57,18 @@ const INDEX_FILE = 'workspace.json'
 const PROJECT_DIR = 'projects'
 const PROJECT_FILE_NAME = 'project.json'
 const PROJECT_FILE_DIR = '.termsprawl'
+const PROJECT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/
+
+export function isSafeProjectId(id: unknown): id is string {
+  return typeof id === 'string' && PROJECT_ID_PATTERN.test(id)
+}
 
 export function indexPath(userDataPath: string): string {
   return join(userDataPath, INDEX_FILE)
 }
 
 export function inlineProjectPath(userDataPath: string, projectId: string): string {
+  if (!isSafeProjectId(projectId)) throw new Error(`Invalid project id: ${projectId}`)
   return join(userDataPath, PROJECT_DIR, `${projectId}.json`)
 }
 
@@ -69,21 +83,81 @@ export function loadIndex(userDataPath: string): WorkspaceIndex {
     const raw = readFileSync(indexPath(userDataPath), 'utf8')
     const parsed = JSON.parse(raw) as WorkspaceIndex
     if (parsed.version !== 1 || !Array.isArray(parsed.projects)) throw new Error('bad index')
-    return parsed
+    return {
+      ...parsed,
+      projects: parsed.projects.filter((project) => isSafeProjectId(project?.id)),
+      pendingTerminalCleanup: (parsed.pendingTerminalCleanup ?? []).filter(
+        (entry) => isSafeProjectId(entry?.projectId) && isSafeProjectId(entry?.terminalId)
+      ),
+      pendingTerminalNodeCleanup: (parsed.pendingTerminalNodeCleanup ?? []).filter(
+        (entry) => isSafeProjectId(entry?.projectId) && isSafeProjectId(entry?.terminalId)
+      ),
+      terminalTombstones: (parsed.terminalTombstones ?? []).filter(
+        (entry) => isSafeProjectId(entry?.projectId) && isSafeProjectId(entry?.terminalId)
+      )
+    }
   } catch {
     return { version: 1, projects: [] }
   }
 }
 
 export function saveIndex(userDataPath: string, index: WorkspaceIndex): void {
+  if (index.projects.some((project) => !isSafeProjectId(project.id))) {
+    throw new Error('Workspace index contains an invalid project id')
+  }
+  if ((index.pendingTerminalCleanup ?? []).some(
+    (entry) => !isSafeProjectId(entry.projectId) || !isSafeProjectId(entry.terminalId)
+  )) {
+    throw new Error('Workspace index contains an invalid pending terminal cleanup id')
+  }
+  for (const entries of [index.pendingTerminalNodeCleanup ?? [], index.terminalTombstones ?? []]) {
+    if (entries.some((entry) => !isSafeProjectId(entry.projectId) || !isSafeProjectId(entry.terminalId))) {
+      throw new Error('Workspace index contains an invalid terminal node cleanup id')
+    }
+  }
   mkdirSync(userDataPath, { recursive: true })
-  writeFileSync(indexPath(userDataPath), JSON.stringify(index, null, 2), 'utf8')
+  const path = indexPath(userDataPath)
+  atomicWriteFile(path, JSON.stringify(index, null, 2))
+}
+
+export type AtomicTempWriter = (temporaryPath: string, contents: string) => void
+
+/** Replace a file with a fully-written sibling so partial writes never touch the live path. */
+export function atomicWriteFile(
+  path: string,
+  contents: string,
+  writeTemporary: AtomicTempWriter = (temporaryPath, value) =>
+    writeFileSync(temporaryPath, value, 'utf8')
+): void {
+  const temporaryPath = `${path}.${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.tmp`
+  try {
+    writeTemporary(temporaryPath, contents)
+    renameSync(temporaryPath, path)
+  } catch (error) {
+    try {
+      rmSync(temporaryPath, { force: true })
+    } catch {
+      // Preserve the original write/rename error.
+    }
+    throw error
+  }
 }
 
 /** Read a project's nodes; returns null when the file is missing. */
 export function loadProjectFile(userDataPath: string, project: ProjectMeta): ProjectFile | null {
   const path = project.cwd ? folderProjectPath(project.cwd) : inlineProjectPath(userDataPath, project.id)
   try {
+    if (!existsSync(path)) {
+      // A crash can occur after metadata is staged but before workspace.json is
+      // committed. If the index still references this project, restore that
+      // staged file so the project never appears empty on the next launch.
+      const prefix = `${basename(path)}.`
+      const stagedName = readdirSync(dirname(path))
+        .filter((name) => name.startsWith(prefix) && name.endsWith('.delete'))
+        .sort()
+        .at(-1)
+      if (stagedName) renameSync(join(dirname(path), stagedName), path)
+    }
     const raw = readFileSync(path, 'utf8')
     const parsed = JSON.parse(raw) as ProjectFile
     if (parsed.version !== 1 || !Array.isArray(parsed.nodes)) throw new Error('bad project file')
@@ -102,13 +176,14 @@ export function saveProjectFile(
 ): number {
   const rev = baseRev + 1
   const file: ProjectFile = { version: 1, rev, nodes }
+  const contents = JSON.stringify(file, null, 2)
   if (project.cwd) {
     mkdirSync(join(project.cwd, PROJECT_FILE_DIR), { recursive: true })
-    writeFileSync(folderProjectPath(project.cwd), JSON.stringify(file, null, 2), 'utf8')
+    atomicWriteFile(folderProjectPath(project.cwd), contents)
   } else {
     const path = inlineProjectPath(userDataPath, project.id)
     mkdirSync(dirname(path), { recursive: true })
-    writeFileSync(path, JSON.stringify(file, null, 2), 'utf8')
+    atomicWriteFile(path, contents)
   }
   return rev
 }
@@ -118,13 +193,28 @@ export function folderHasProject(cwd: string): boolean {
   return existsSync(folderProjectPath(cwd))
 }
 
-/** Delete a project's file (inline project file, or the folder's project.json
- * for folder projects). Best-effort: missing files are fine. */
-export function removeProjectFile(userDataPath: string, project: ProjectMeta): void {
+export interface StagedProjectFileRemoval {
+  commit(): void
+  rollback(): void
+}
+
+/** Atomically move project metadata aside before the workspace index commits.
+ * The caller must commit or roll back the staged removal. */
+export function stageProjectFileRemoval(
+  userDataPath: string,
+  project: ProjectMeta
+): StagedProjectFileRemoval | null {
   const path = project.cwd ? folderProjectPath(project.cwd) : inlineProjectPath(userDataPath, project.id)
-  try {
-    rmSync(path, { force: true })
-  } catch {
-    // already gone — fine
+  if (!existsSync(path)) return null
+
+  const stagedPath = `${path}.${process.pid}-${Date.now()}.delete`
+  renameSync(path, stagedPath)
+  return {
+    commit(): void {
+      rmSync(stagedPath, { force: true })
+    },
+    rollback(): void {
+      if (existsSync(stagedPath)) renameSync(stagedPath, path)
+    }
   }
 }
