@@ -20,6 +20,7 @@ export function TabBar(): React.JSX.Element {
 
   const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null)
   const [settingsId, setSettingsId] = useState<string | null>(null)
+  const [confirmId, setConfirmId] = useState<string | null>(null)
   const [storedOpen, setStoredOpen] = useState(false)
   const storedRef = useRef<HTMLDivElement>(null)
   const settingsRef = useRef<HTMLDivElement>(null)
@@ -54,14 +55,16 @@ export function TabBar(): React.JSX.Element {
     closeMenu()
   }
 
-  const doDelete = async (id: string): Promise<void> => {
-    const name = projects.find((p) => p.id === id)?.name ?? 'project'
-    if (!window.confirm(`Delete project "${name}" permanently? Terminals in it will be destroyed.`)) {
-      closeMenu()
-      return
-    }
-    await del(id)
+  // window.confirm() is not implemented in Electron (it silently returns
+  // false), so delete uses an in-app confirm dialog instead.
+  const requestDelete = (id: string): void => {
     closeMenu()
+    setConfirmId(id)
+  }
+
+  const doDelete = async (id: string): Promise<void> => {
+    setConfirmId(null)
+    await del(id)
     if (settingsId === id) setSettingsId(null)
   }
 
@@ -124,7 +127,7 @@ export function TabBar(): React.JSX.Element {
                   </button>
                   <button
                     className="stored-delete"
-                    onClick={() => void doDelete(p.id)}
+                    onClick={() => void requestDelete(p.id)}
                     title="Delete permanently"
                   >
                     🗑
@@ -152,7 +155,7 @@ export function TabBar(): React.JSX.Element {
           >
             Settings
           </button>
-          <button className="danger" onClick={() => void doDelete(menu.id)}>
+          <button className="danger" onClick={() => void requestDelete(menu.id)}>
             Delete…
           </button>
         </div>
@@ -190,6 +193,26 @@ export function TabBar(): React.JSX.Element {
           <button className="project-settings-done" onClick={() => setSettingsId(null)}>
             done
           </button>
+        </div>
+      )}
+
+      {confirmId && (
+        <div className="confirm-overlay" onClick={() => setConfirmId(null)}>
+          <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-title">Delete project?</div>
+            <div className="confirm-body">
+              <span className="confirm-name">
+                {projects.find((p) => p.id === confirmId)?.name ?? 'project'}
+              </span>
+              will be removed permanently. Terminals inside it are destroyed.
+            </div>
+            <div className="confirm-actions">
+              <button onClick={() => setConfirmId(null)}>Cancel</button>
+              <button className="danger" onClick={() => void doDelete(confirmId)}>
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
