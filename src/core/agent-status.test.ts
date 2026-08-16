@@ -20,8 +20,26 @@ describe('normalizeClaudeHook', () => {
       status: 'working',
       kind: 'session',
       tool: 'Bash',
+      transcriptPath: '/tmp/t.json',
       ts: expect.any(Number)
     })
+  })
+
+  it('passes transcript_path through so main can read the session name', () => {
+    const event = normalizeClaudeHook({
+      hook_event_name: 'Stop',
+      session_id: 'sess-1',
+      transcript_path: '/home/u/.claude/projects/p/sess-1.jsonl'
+    })
+    expect(event?.transcriptPath).toBe('/home/u/.claude/projects/p/sess-1.jsonl')
+  })
+
+  it('omits transcriptPath when the payload has no transcript_path', () => {
+    const event = normalizeClaudeHook({
+      hook_event_name: 'Notification',
+      session_id: 'sess-1'
+    })
+    expect(event?.transcriptPath).toBeUndefined()
   })
 
   it('maps PostToolUse to working', () => {

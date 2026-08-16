@@ -104,6 +104,29 @@ export function createAgentNode(agentId: AgentId, cwd?: string): Node<TerminalNo
   }
 }
 
+/** A NEW node that resumes an OLD agent session (Phase 7, Task 7.4). Claude
+ * keeps its session id stable across spawns, so `claude --resume <sessionId>`
+ * reattaches to the exact conversation. Other agents get the plain CLI — no
+ * resume flag is known yet, so the node is just a fresh spawn. */
+export function createResumeAgentNode(
+  agentId: AgentId,
+  sessionId: string,
+  cwd?: string
+): Node<TerminalNodeData> {
+  const command = agentId === 'claude' ? `claude --resume ${sessionId}` : agentCommand(agentId)
+  return {
+    id: nextId(),
+    type: 'terminal',
+    position: { x: 60 + Math.random() * 240, y: 60 + Math.random() * 160 },
+    data: {
+      kind: 'terminal',
+      title: agentTitle(agentId),
+      cwd,
+      command
+    }
+  }
+}
+
 export function createStickyNode(): Node<StickyNodeData> {
   return {
     id: nextId(),

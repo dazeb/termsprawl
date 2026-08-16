@@ -277,6 +277,17 @@ extension, one feature at a time.**
 ### Task 7.4: Session name sync + branch
 - Session name ⇄ node title (transcript reader, not OSC title); manual rename
   pushes `/rename`. Branch: `/branch` + new node resuming old session.
+- **Status: DONE (v0.3.0).** `core/transcript.ts` reads the latest non-null
+  `session_name` from a Claude JSONL transcript (fail-open); the normalizer now
+  carries `transcript_path` through `AgentStatusEvent`; `core/session-name.ts`
+  throttles reads (5s) and only reports changes. Main broadcasts
+  `agent:session-name:<id>` → the terminal node title mirrors the agent's
+  session name. Terminal titles are double-click editable; renaming a claude
+  node pushes `/rename <name>` into the live PTY. Agent context menu: "Branch
+  session" writes `/branch`, "Resume session in new node" spawns
+  `claude --resume <nodeId>` (createResumeAgentNode factory). TDD: transcript
+  (5), session-name tracker (5), normalizer passthrough (2), resume factory
+  (2) — 107 tests green.
 
 ### Task 7.5: Context links
 - Link file per node pair; CLI that parses transcript formats to print linked

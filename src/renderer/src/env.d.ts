@@ -45,6 +45,10 @@ declare global {
       }
       agent: {
         onStatus(sessionId: string, cb: (event: AgentStatusEvent) => void): () => void
+        onSessionName(
+          sessionId: string,
+          cb: (info: { sessionId: string; name: string }) => void
+        ): () => void
       }
     }
   }

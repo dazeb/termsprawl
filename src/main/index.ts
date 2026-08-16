@@ -11,6 +11,8 @@ import { WorkspaceStore } from '../core/workspace-store'
 import type { ProjectMeta } from '../core/workspace-files'
 import { HookServer } from './agents/hook-server'
 import { claudeSettingsPath, installClaudeHooks } from './agents/hook-installer'
+import { SessionNameTracker } from '../core/session-name'
+import { agentSessionNameChannel } from '../shared/ipc'
 
 // The Electron implementation of the core's platform seam.
 const platform: CorePlatform = {
@@ -30,8 +32,19 @@ const workspaceStore = new WorkspaceStore(platform)
 // notifications when a node's agent goes busy→idle while the window is
 // unfocused. Fail-open — an agent keeps working even if this never fires.
 const prevStatus = new Map<string, AgentStatus>()
+const sessionNames = new SessionNameTracker()
 const hookServer = new HookServer((event) => {
   platform.broadcast(`${IPC.agentStatus}:${event.sessionId}`, event)
+
+  // Session-name sync (Task 7.4): when the agent's transcript reveals a
+  // (possibly renamed) session name, broadcast it so the node title follows.
+  const sessionName = sessionNames.note(event.sessionId, event.transcriptPath)
+  if (sessionName) {
+    platform.broadcast(agentSessionNameChannel(event.sessionId), {
+      sessionId: event.sessionId,
+      name: sessionName
+    })
+  }
 
   const prev = prevStatus.get(event.sessionId)
   prevStatus.set(event.sessionId, event.status)

@@ -5,6 +5,7 @@ import {
   createDiffNode,
   createDrukNode,
   createGroup,
+  createResumeAgentNode,
   createStickyNode,
   createTerminalNode,
   deserializeNodes,
@@ -95,6 +96,22 @@ describe('sticky nodes', () => {
     const node = createAgentNode('claude', '/repo')
     if (node.data.kind !== 'terminal') throw new Error('expected terminal node')
     expect(node.data.command).toBe(`claude --session-id ${node.id}`)
+  })
+
+  it('resume node resumes an old claude session in a new node', () => {
+    const node = createResumeAgentNode('claude', 'nOldSession', '/repo')
+    expect(node.type).toBe('terminal')
+    expect(node.id).not.toBe('nOldSession')
+    if (node.data.kind !== 'terminal') throw new Error('expected terminal node')
+    expect(node.data.title).toBe('claude')
+    expect(node.data.command).toBe('claude --resume nOldSession')
+    expect(node.data.cwd).toBe('/repo')
+  })
+
+  it('resume node for a non-claude agent uses the plain CLI (no resume flag known)', () => {
+    const node = createResumeAgentNode('codex', 'nOldSession', '/repo')
+    if (node.data.kind !== 'terminal') throw new Error('expected terminal node')
+    expect(node.data.command).toBe('codex')
   })
 
   it('topZ returns one above the highest existing node zIndex', () => {

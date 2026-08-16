@@ -20,6 +20,7 @@ import {
   createDiffNode,
   createDrukNode,
   createGroup,
+  createResumeAgentNode,
   createStickyNode,
   createTerminalNode,
   removeNode,
@@ -271,6 +272,28 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
     setMenu(null)
   }, [menu, closeNode])
 
+  // Agent-node actions (Phase 7, Task 7.4). An agent node is a terminal whose
+  // command launches a CLI (claude/codex/gemini/grok/druk). Branching pushes
+  // Claude's /branch into the live PTY; resuming spawns a NEW node that
+  // reattaches to the old session (`claude --resume <nodeId>` — node id IS the
+  // session id for claude).
+  const branchAgentSession = useCallback(() => {
+    if (!menu?.nodeId) return
+    window.termsprawl.pty.write(menu.nodeId, '/branch\r')
+    setMenu(null)
+  }, [menu])
+
+  const resumeAgentSession = useCallback(() => {
+    if (!menu?.nodeId) return
+    const node = createResumeAgentNode('claude', menu.nodeId, cwd)
+    if (menu && wrapperRef.current) {
+      node.position = screenToFlowPosition({ x: menu.x, y: menu.y })
+    }
+    appendOnTop(node)
+    push()
+    setMenu(null)
+  }, [menu, cwd, push, screenToFlowPosition, appendOnTop])
+
   // Deleting a group ungroups its children instead of destroying them —
   // terminals inside keep their tmux sessions. Intercepted in onNodesChange
   // (React Flow v11's onNodesDelete can't veto the cascade removal).
@@ -278,6 +301,11 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
   const menuNode = menu?.nodeId ? nodes.find((n) => n.id === menu.nodeId) : undefined
   const menuIsGroup = menuNode?.type === 'group'
   const canGroup = menuNode !== undefined && menuNode.type !== 'group'
+  // A claude agent node = terminal node whose command launches the claude CLI.
+  const menuIsClaudeAgent =
+    menuNode?.type === 'terminal' &&
+    typeof (menuNode.data as { command?: string }).command === 'string' &&
+    (menuNode.data as { command?: string }).command?.startsWith('claude') === true
 
   // Persist the active project's nodes (debounced) as the canvas settles.
   useEffect(() => {
@@ -348,6 +376,16 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
             canGroup && <button onClick={groupSelection}>Group selection</button>
           )}
           {menu?.nodeId && <button onClick={closeMenuNode}>Close</button>}
+          {menuIsClaudeAgent && (
+            <>
+              <button onClick={branchAgentSession} title="Send /branch to the agent">
+                Branch session
+              </button>
+              <button onClick={resumeAgentSession} title="New node resuming this session">
+                Resume session in new node
+              </button>
+            </>
+          )}
           <button onClick={addTerminal}>New terminal</button>
           <button onClick={addSticky}>New sticky note</button>
           <button onClick={addDiff}>New diff</button>

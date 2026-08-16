@@ -351,6 +351,24 @@ body {
   background: var(--accent);
 }
 
+/* Inline title rename (Phase 7, Task 7.4) — same look as the group label
+   editor: transparent field, accent outline while focused. */
+.terminal-title-input {
+  background: transparent;
+  border: none;
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: 999px;
+  padding: 0 8px;
+  margin: 0;
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 80px;
+  flex: 1;
+}
+
 /* Agent status badges (Phase 7) — lime = working (functional signal),
    amber = needs user, soft red = blocked, muted = done. */
 .agent-badge {

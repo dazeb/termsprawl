@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { IPC, ptyDataChannel, ptyExitChannel } from '../shared/ipc'
+import { IPC, agentSessionNameChannel, ptyDataChannel, ptyExitChannel } from '../shared/ipc'
 import type { AgentStatusEvent } from '../shared/agent-status'
 import type {
   DiffBase,
@@ -78,6 +78,21 @@ const api = {
     onStatus: (sessionId: string, cb: (event: AgentStatusEvent) => void): (() => void) => {
       const channel = `${IPC.agentStatus}:${sessionId}`
       const listener = (_event: Electron.IpcRendererEvent, e: AgentStatusEvent): void => cb(e)
+      ipcRenderer.on(channel, listener)
+      return () => {
+        ipcRenderer.removeListener(channel, listener)
+      }
+    },
+    /** Subscribe to session-name updates (agent transcript rename). */
+    onSessionName: (
+      sessionId: string,
+      cb: (info: { sessionId: string; name: string }) => void
+    ): (() => void) => {
+      const channel = agentSessionNameChannel(sessionId)
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        info: { sessionId: string; name: string }
+      ): void => cb(info)
       ipcRenderer.on(channel, listener)
       return () => {
         ipcRenderer.removeListener(channel, listener)

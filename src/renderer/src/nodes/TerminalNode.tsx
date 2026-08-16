@@ -23,13 +23,15 @@ const STATUS_LABEL: Record<string, string> = {
 // destroys its tmux session (unmount cleanup calls pty.destroy).
 export function TerminalNode({ id, data }: NodeProps<TerminalNodeData>): React.JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null)
-  const { closeNode } = useCanvas()
+  const { closeNode, updateNodeData } = useCanvas()
   const agentStatus = useAgentStatuses((s) => s.byId[id])
   const setAgentStatus = useAgentStatuses((s) => s.set)
   const clearAgentStatus = useAgentStatuses((s) => s.clear)
   const hasUnread = useAgentStatuses((s) => s.unread[id] === true)
   const clearUnread = useAgentStatuses((s) => s.clearUnread)
   const [agentHint, setAgentHint] = useState(false)
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleDraft, setTitleDraft] = useState(data.title)
 
   // Agent nodes (spawned with a command) subscribe to hook status. Only claude
   // pins session-id = node id today; others never receive events (fail-open).
@@ -44,6 +46,34 @@ export function TerminalNode({ id, data }: NodeProps<TerminalNodeData>): React.J
       clearAgentStatus(id)
     }
   }, [id, data.command, setAgentStatus, clearAgentStatus])
+
+  // Session-name sync (Task 7.4): when the agent's transcript reveals a
+  // (possibly /rename'd) session name, mirror it into the node title.
+  useEffect(() => {
+    if (!data.command) return
+    const off = window.termsprawl.agent.onSessionName(id, (info) => {
+      updateNodeData(id, { title: info.name })
+    })
+    return () => off()
+  }, [id, data.command, updateNodeData])
+
+  // Inline title rename: double-click the title edits it; Enter/blur commits.
+  // For claude agents the new name is pushed into the session via /rename so
+  // the agent's own transcript session_name matches the node.
+  const startTitleEdit = (): void => {
+    setTitleDraft(data.title)
+    setEditingTitle(true)
+  }
+
+  const commitTitleEdit = (): void => {
+    setEditingTitle(false)
+    const title = titleDraft.trim()
+    if (!title || title === data.title) return
+    updateNodeData(id, { title }, true)
+    if (data.command?.startsWith('claude ')) {
+      window.termsprawl.pty.write(id, `/rename ${title}\r`)
+    }
+  }
 
   useEffect(() => {
     const host = hostRef.current
@@ -116,7 +146,31 @@ export function TerminalNode({ id, data }: NodeProps<TerminalNodeData>): React.J
     <div className="terminal-node">
       <div className="terminal-node-header">
         <span className="terminal-node-dot" />
-        <span className="terminal-node-title">{data.title}</span>
+        {editingTitle ? (
+          <input
+            className="nodrag nowheel terminal-title-input"
+            value={titleDraft}
+            autoFocus
+            onChange={(e) => setTitleDraft(e.target.value)}
+            onBlur={commitTitleEdit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitTitleEdit()
+              if (e.key === 'Escape') setEditingTitle(false)
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <span
+            className="terminal-node-title"
+            title={data.command ? 'Double-click to rename' : undefined}
+            onDoubleClick={(e) => {
+              e.stopPropagation()
+              startTitleEdit()
+            }}
+          >
+            {data.title}
+          </span>
+        )}
         {agentHint && agentStatus && (
           <span className={`agent-badge agent-${agentStatus}`}>{STATUS_LABEL[agentStatus]}</span>
         )}

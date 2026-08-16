@@ -31,7 +31,8 @@ export const IPC = {
   dialogOpenFile: 'dialog:open-file',
 
   // Agent hooks (Phase 7)
-  agentStatus: 'agent:status' // suffixed ':<sessionId>' for the push channel
+  agentStatus: 'agent:status', // suffixed ':<sessionId>' for the push channel
+  agentSessionName: 'agent:session-name' // suffixed ':<sessionId>' for the push channel
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]
@@ -42,4 +43,8 @@ export function ptyDataChannel(sessionId: string): string {
 
 export function ptyExitChannel(sessionId: string): string {
   return `${IPC.ptyExit}:${sessionId}`
+}
+
+export function agentSessionNameChannel(sessionId: string): string {
+  return `${IPC.agentSessionName}:${sessionId}`
 }

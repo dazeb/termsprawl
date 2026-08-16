@@ -56,6 +56,7 @@ export function normalizeClaudeHook(body: unknown): AgentStatusEvent | null {
     status,
     kind,
     tool: typeof raw.tool_name === 'string' ? raw.tool_name : undefined,
+    transcriptPath: typeof raw.transcript_path === 'string' ? raw.transcript_path : undefined,
     ts: Date.now()
   }
 }

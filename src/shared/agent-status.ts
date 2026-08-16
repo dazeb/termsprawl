@@ -9,6 +9,9 @@ export interface AgentStatusEvent {
   status: AgentStatus
   kind: AgentSessionKind
   tool?: string
+  /** Path to the agent's transcript file (Claude: *.jsonl). Lets main read
+   * the session name so node titles can mirror the agent's own name. */
+  transcriptPath?: string
   ts: number
 }
 
