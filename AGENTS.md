@@ -104,6 +104,9 @@ touch build config, re-verify with a packaged boot test.
   loader at runtime.
 - **No React StrictMode** (`main.tsx` comment) — double-mount would spawn two
   PTYs per node.
+- **Never use `window.confirm`/`alert`/`prompt`** — Electron does not implement
+  them; they silently return falsy instead of showing a dialog. Any confirmation
+  must be an in-app dialog (see TabBar's `.confirm-overlay` delete confirm).
 - **Undo/redo** (`state/history.ts`): debounced snapshots of the nodes array,
   skipped while typing in inputs/terminals.
 - **Workspace persistence** (`core/workspace-files.ts` + `workspace-store.ts`):
