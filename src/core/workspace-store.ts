@@ -13,6 +13,7 @@ import {
   saveIndex,
   saveProjectFile,
   type ProjectMeta,
+  type ProjectSettings,
   type SerializedNode,
   type WorkspaceIndex
 } from './workspace-files'
@@ -77,6 +78,24 @@ export class WorkspaceStore {
       project.archived = false
       this.persistIndex()
     }
+  }
+
+  /** Merge new per-project settings into the index and persist. */
+  updateSettings(id: string, patch: ProjectSettings): void {
+    const project = this.index.projects.find((p) => p.id === id)
+    if (!project) return
+    project.settings = { ...(project.settings ?? {}), ...patch }
+    this.persistIndex()
+  }
+
+  /** Rename a project; persisted in the workspace index. */
+  renameProject(id: string, name: string): void {
+    const project = this.index.projects.find((p) => p.id === id)
+    if (!project) return
+    const trimmed = name.trim()
+    if (!trimmed) return
+    project.name = trimmed
+    this.persistIndex()
   }
 
   deleteProject(id: string): void {

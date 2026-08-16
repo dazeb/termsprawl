@@ -25,6 +25,7 @@ import {
   removeNode,
   serializeNodes,
   deserializeNodes,
+  topZ,
   ungroup
 } from '../state/workspace'
 import { agentIds, agentName, agentTitle } from '@shared/agents/config'
@@ -144,6 +145,16 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
     [updateNodeData, commit, closeNode]
   )
 
+  // Append a node with a z-index above everything else so it renders on top.
+  // Also select it (and deselect the rest) so React Flow doesn't leave an
+  // older node visually "active" over the new one.
+  const appendOnTop = useCallback((node: Node<SprawlNodeData>) => {
+    setNodes((nds) => [
+      ...nds.map((n) => ({ ...n, selected: false })),
+      { ...node, zIndex: topZ(nds), selected: true }
+    ])
+  }, [])
+
   const addTerminal = useCallback(() => {
     try {
       const node = createTerminalNode(cwd)
@@ -151,34 +162,34 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
         node.position = screenToFlowPosition({ x: menu.x, y: menu.y })
       }
       console.log('[canvas] addTerminal', node.id)
-      setNodes((nds) => [...nds, node])
+      appendOnTop(node)
       push()
       setMenu(null)
     } catch (err) {
       console.error('[canvas] addTerminal failed:', err)
       throw err
     }
-  }, [cwd, menu, push, screenToFlowPosition])
+  }, [cwd, menu, push, screenToFlowPosition, appendOnTop])
 
   const addSticky = useCallback(() => {
     const node = createStickyNode()
     if (menu && wrapperRef.current) {
       node.position = screenToFlowPosition({ x: menu.x, y: menu.y })
     }
-    setNodes((nds) => [...nds, node])
+    appendOnTop(node)
     push()
     setMenu(null)
-  }, [menu, push, screenToFlowPosition])
+  }, [menu, push, screenToFlowPosition, appendOnTop])
 
   const addDiff = useCallback(() => {
     const node = createDiffNode()
     if (menu && wrapperRef.current) {
       node.position = screenToFlowPosition({ x: menu.x, y: menu.y })
     }
-    setNodes((nds) => [...nds, node])
+    appendOnTop(node)
     push()
     setMenu(null)
-  }, [menu, push, screenToFlowPosition])
+  }, [menu, push, screenToFlowPosition, appendOnTop])
 
   // A druk terminal: launches the druk TUI code editor in the project cwd.
   const addDruk = useCallback(() => {
@@ -186,10 +197,10 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
     if (menu && wrapperRef.current) {
       node.position = screenToFlowPosition({ x: menu.x, y: menu.y })
     }
-    setNodes((nds) => [...nds, node])
+    appendOnTop(node)
     push()
     setMenu(null)
-  }, [cwd, menu, push, screenToFlowPosition])
+  }, [cwd, menu, push, screenToFlowPosition, appendOnTop])
 
   // An agent terminal: launches the agent CLI once in the project cwd.
   const addAgent = useCallback(
@@ -198,12 +209,12 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
       if (menu && wrapperRef.current) {
         node.position = screenToFlowPosition({ x: menu.x, y: menu.y })
       }
-      setNodes((nds) => [...nds, node])
+      appendOnTop(node)
       push()
       setMenu(null)
       setAgentMenuOpen(false)
     },
-    [cwd, menu, push, screenToFlowPosition]
+    [cwd, menu, push, screenToFlowPosition, appendOnTop]
   )
 
   const onPaneContextMenu = useCallback((event: React.MouseEvent) => {
@@ -317,6 +328,7 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
         zoomOnScroll={false}
         selectionOnDrag
         deleteKeyCode={['Delete', 'Backspace']}
+        elevateNodesOnSelect={false}
         fitView
       >
         <Background variant={BackgroundVariant.Dots} gap={24} size={1.5} color="#2a2a28" />

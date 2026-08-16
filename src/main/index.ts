@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, Notification } from 'electron'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { IPC } from '../shared/ipc'
-import type { DiffBase, DiffInfoResult, PtyCreateRequest, PtyExitInfo, SerializedNode } from '../shared/types'
+import type { DiffBase, DiffInfoResult, ProjectSettings, PtyCreateRequest, PtyExitInfo, SerializedNode } from '../shared/types'
 import type { CorePlatform } from '../core/platform'
 import { diffInfo } from '../core/git-service'
 import { PtyManager } from '../core/pty-manager'
@@ -72,6 +72,12 @@ function registerWorkspaceIpc(): void {
   ipcMain.handle(IPC.projectClose, (_event, id: string) => workspaceStore.closeProject(id))
   ipcMain.handle(IPC.projectArchive, (_event, id: string) => workspaceStore.archiveProject(id))
   ipcMain.handle(IPC.projectReopen, (_event, id: string) => workspaceStore.reopenProject(id))
+  ipcMain.handle(IPC.projectUpdateSettings, (_event, id: string, patch: ProjectSettings) =>
+    workspaceStore.updateSettings(id, patch)
+  )
+  ipcMain.handle(IPC.projectRename, (_event, id: string, name: string) =>
+    workspaceStore.renameProject(id, name)
+  )
   ipcMain.handle(IPC.projectDelete, (_event, id: string) => {
     // Destroy every terminal session that belonged to the project — delete is
     // permanent, unlike close/archive which keep tmux sessions alive.

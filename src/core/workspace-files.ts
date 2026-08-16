@@ -26,6 +26,12 @@ export interface ProjectMeta {
   closed: boolean
   /** Archived = hidden from the tab bar, preserved; reopen restores it. */
   archived?: boolean
+  /** Per-project settings (accent color, etc.), persisted in the index. */
+  settings?: ProjectSettings
+}
+
+export interface ProjectSettings {
+  accent?: string
 }
 
 export interface WorkspaceIndex {

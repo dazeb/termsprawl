@@ -12,6 +12,7 @@ export function App(): React.JSX.Element {
   const activeProjectId = useProjects((s) => s.activeProjectId)
   const projects = useProjects((s) => s.projects)
   const activeCwd = projects.find((p) => p.id === activeProjectId)?.cwd ?? undefined
+  const activeAccent = projects.find((p) => p.id === activeProjectId)?.settings?.accent
 
   useEffect(() => {
     void window.termsprawl?.appVersion().then(setVersion)
@@ -36,7 +37,7 @@ export function App(): React.JSX.Element {
   }, [])
 
   return (
-    <div className="shell">
+    <div className="shell" style={activeAccent ? ({ ['--accent']: activeAccent } as React.CSSProperties) : undefined}>
       <div className="toolbar">
         <span className="brand">termsprawl</span>
         <TabBar />

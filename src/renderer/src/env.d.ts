@@ -2,6 +2,7 @@ import type {
   DiffBase,
   DiffInfoResult,
   ProjectMeta,
+  ProjectSettings,
   PtyCreateRequest,
   PtyCreateResult,
   PtyExitInfo,
@@ -23,6 +24,8 @@ declare global {
         archiveProject(id: string): Promise<void>
         reopenProject(id: string): Promise<void>
         deleteProject(id: string): Promise<void>
+        updateSettings(id: string, patch: ProjectSettings): Promise<void>
+        renameProject(id: string, name: string): Promise<void>
         selectFolder(): Promise<string | null>
       }
       pty: {

@@ -3,27 +3,31 @@ import { useProjects } from '../state/projects'
 import { projectNameFromPath } from '../state/workspace'
 
 // Project tabs — the app's window chrome drag region. Right-click a tab for
-// Close / Archive / Delete; the ▾ menu lists closed/archived projects to
-// reopen (their tmux sessions survive close/archive — delete is permanent).
+// Close / Archive / Delete / Settings; the ▾ menu lists closed/archived
+// projects to reopen (their tmux sessions survive close/archive — delete is
+// permanent and drops the project from the workspace index).
 export function TabBar(): React.JSX.Element {
   const projects = useProjects((s) => s.projects)
   const activeProjectId = useProjects((s) => s.activeProjectId)
   const select = useProjects((s) => s.select)
   const create = useProjects((s) => s.create)
-  const closeActive = useProjects((s) => s.closeActive)
-  const archiveActive = useProjects((s) => s.archiveActive)
+  const close = useProjects((s) => s.close)
+  const archive = useProjects((s) => s.archive)
   const reopen = useProjects((s) => s.reopen)
   const del = useProjects((s) => s.delete)
+  const rename = useProjects((s) => s.rename)
+  const updateSettings = useProjects((s) => s.updateSettings)
 
   const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null)
+  const [settingsId, setSettingsId] = useState<string | null>(null)
   const [storedOpen, setStoredOpen] = useState(false)
   const storedRef = useRef<HTMLDivElement>(null)
+  const settingsRef = useRef<HTMLDivElement>(null)
 
   const openProjects = projects.filter((p) => !p.closed && !p.archived)
   const storedProjects = projects.filter((p) => p.closed || p.archived)
+  const settingsProject = projects.find((p) => p.id === settingsId)
 
-  // A project is tied to a folder: ask the user which one, then name the
-  // project after it. Cancel = no project created.
   const newProject = async (): Promise<void> => {
     const cwd = await window.termsprawl.workspace.selectFolder()
     if (!cwd) return
@@ -34,22 +38,19 @@ export function TabBar(): React.JSX.Element {
   const onTabContextMenu = (event: React.MouseEvent, id: string): void => {
     event.preventDefault()
     setStoredOpen(false)
+    setSettingsId(null)
     setMenu({ x: event.clientX, y: event.clientY, id })
   }
 
   const closeMenu = (): void => setMenu(null)
 
   const doClose = async (id: string): Promise<void> => {
-    if (id === activeProjectId) await closeActive()
-    else {
-      await window.termsprawl.workspace.closeProject(id)
-    }
+    await close(id)
     closeMenu()
   }
 
   const doArchive = async (id: string): Promise<void> => {
-    if (id === activeProjectId) await archiveActive()
-    else await window.termsprawl.workspace.archiveProject(id)
+    await archive(id)
     closeMenu()
   }
 
@@ -61,13 +62,14 @@ export function TabBar(): React.JSX.Element {
     }
     await del(id)
     closeMenu()
+    if (settingsId === id) setSettingsId(null)
   }
 
-  // Click outside closes the tab context menu / stored-projects panel.
   useEffect(() => {
     const onDown = (e: MouseEvent): void => {
       const t = e.target as HTMLElement
       if (storedRef.current?.contains(t)) return
+      if (settingsRef.current?.contains(t)) return
       setMenu(null)
       setStoredOpen(false)
     }
@@ -85,7 +87,7 @@ export function TabBar(): React.JSX.Element {
           onContextMenu={(e) => onTabContextMenu(e, p.id)}
           title={p.cwd ?? p.name}
         >
-          <span className="tab-dot" />
+          <span className="tab-dot" style={p.settings?.accent ? { background: p.settings.accent } : undefined} />
           {p.name}
         </button>
       ))}
@@ -98,6 +100,7 @@ export function TabBar(): React.JSX.Element {
             className="tab tab-stored"
             onClick={() => {
               setMenu(null)
+              setSettingsId(null)
               setStoredOpen((v) => !v)
             }}
             title="Closed / archived projects"
@@ -117,7 +120,7 @@ export function TabBar(): React.JSX.Element {
                     }}
                     title={p.cwd ?? p.name}
                   >
-                    {p.archived ? '🗄' : '○'} {p.name}
+                    {p.archived ? 'archived' : 'closed'} · {p.name}
                   </button>
                   <button
                     className="stored-delete"
@@ -141,8 +144,51 @@ export function TabBar(): React.JSX.Element {
         >
           <button onClick={() => void doClose(menu.id)}>Close</button>
           <button onClick={() => void doArchive(menu.id)}>Archive</button>
+          <button
+            onClick={() => {
+              setSettingsId(menu.id)
+              closeMenu()
+            }}
+          >
+            Settings
+          </button>
           <button className="danger" onClick={() => void doDelete(menu.id)}>
             Delete…
+          </button>
+        </div>
+      )}
+
+      {settingsProject && (
+        <div className="project-settings" ref={settingsRef}>
+          <div className="project-settings-title">project settings</div>
+          <label className="project-settings-field">
+            name
+            <input
+              type="text"
+              defaultValue={settingsProject.name}
+              key={settingsProject.id + settingsProject.name}
+              onBlur={(e) => {
+                const next = e.target.value.trim()
+                if (next && next !== settingsProject.name) void rename(settingsProject.id, next)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+              }}
+            />
+          </label>
+          <label className="project-settings-field">
+            accent
+            <input
+              type="color"
+              value={settingsProject.settings?.accent ?? '#c6f135'}
+              onChange={(e) => void updateSettings(settingsProject.id, { accent: e.target.value })}
+            />
+          </label>
+          <div className="project-settings-cwd" title={settingsProject.cwd ?? 'no folder'}>
+            {settingsProject.cwd ?? 'no folder'}
+          </div>
+          <button className="project-settings-done" onClick={() => setSettingsId(null)}>
+            done
           </button>
         </div>
       )}

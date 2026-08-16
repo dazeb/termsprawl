@@ -113,4 +113,29 @@ describe('WorkspaceStore', () => {
     expect(store2.snapshot().index.projects).toEqual([])
     expect(store2.snapshot().projects).toEqual({})
   })
+
+  it('updateSettings persists an accent per project across relaunch', () => {
+    const project = store.addProject('accent', null)
+    store.updateSettings(project.id, { accent: '#ff0000' })
+
+    const store2 = new WorkspaceStore(platform)
+    const meta = store2.snapshot().index.projects[0]
+    expect(meta.settings?.accent).toBe('#ff0000')
+  })
+
+  it('updateSettings merges without clobbering existing settings', () => {
+    const project = store.addProject('merge', null)
+    store.updateSettings(project.id, { accent: '#ff0000' })
+    store.updateSettings(project.id, { accent: '#00ff00' })
+    expect(store.snapshot().index.projects.find((p) => p.id === project.id)?.settings?.accent).toBe(
+      '#00ff00'
+    )
+  })
+
+  it('rename persists the project name across relaunch', () => {
+    const project = store.addProject('old-name', null)
+    store.renameProject(project.id, 'new-name')
+    const store2 = new WorkspaceStore(platform)
+    expect(store2.snapshot().index.projects[0].name).toBe('new-name')
+  })
 })

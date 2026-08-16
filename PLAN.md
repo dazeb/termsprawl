@@ -259,6 +259,14 @@ extension, one feature at a time.**
 ### Task 7.3: Notifications + unread
 - Unread dot on busy→idle while unfocused; OS notification; focus-node click.
 - Verify: background agent completion → dot + notification.
+- **Status: DONE (commit 02a1e71).** `shared/agent-status.ts` now owns the
+  status model + `shouldNotify()` (pure, TDD — notify only on transition into
+  done/waiting/blocked, only for known sessions, only while unfocused). Main
+  fires an Electron `Notification` (click focuses the window) on those
+  transitions; renderer sets a pulsing amber unread dot on the node (click
+  clears). Consolidated the status types into shared/agent-status.ts (removed
+  the duplicate from shared/types.ts). Fixed a flaky pty test (raised timeout
+  under parallel tmux load). 87 tests.
 
 ### Task 7.4: Session name sync + branch
 - Session name ⇄ node title (transcript reader, not OSC title); manual rename

@@ -75,6 +75,14 @@ export function createDrukNode(cwd?: string): Node<TerminalNodeData> {
   }
 }
 
+/** One above the highest existing node z-index, so a newly added node renders
+ * on top (React Flow's elevateNodesOnSelect would otherwise leave interacted
+ * nodes above fresh ones). */
+export function topZ(nodes: Node[]): number {
+  const max = nodes.reduce((m, n) => Math.max(m, (n as Node & { zIndex?: number }).zIndex ?? 0), 0)
+  return max + 1
+}
+
 /** A terminal node preset that launches an agent CLI once (Phase 7, Task 7.1).
  * The command resolves to an absolute path at spawn time (GUI apps lack the
  * shell PATH where agent CLIs like codex/claude live). Claude gets

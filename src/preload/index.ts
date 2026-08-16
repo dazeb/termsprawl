@@ -5,6 +5,7 @@ import type {
   DiffBase,
   DiffInfoResult,
   ProjectMeta,
+  ProjectSettings,
   PtyCreateRequest,
   PtyCreateResult,
   PtyExitInfo,
@@ -27,6 +28,10 @@ const api = {
     archiveProject: (id: string): Promise<void> => ipcRenderer.invoke(IPC.projectArchive, id),
     reopenProject: (id: string): Promise<void> => ipcRenderer.invoke(IPC.projectReopen, id),
     deleteProject: (id: string): Promise<void> => ipcRenderer.invoke(IPC.projectDelete, id),
+    updateSettings: (id: string, patch: ProjectSettings): Promise<void> =>
+      ipcRenderer.invoke(IPC.projectUpdateSettings, id, patch),
+    renameProject: (id: string, name: string): Promise<void> =>
+      ipcRenderer.invoke(IPC.projectRename, id, name),
     selectFolder: (): Promise<string | null> => ipcRenderer.invoke(IPC.dialogSelectFolder)
   },
 

@@ -1,6 +1,6 @@
 {
   "name": "termsprawl",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "description": "A spatial terminal manager for Linux — terminals, editors, and agents sprawled across one infinite canvas",
   "main": "out/main/index.js",
   "type": "module",

@@ -12,6 +12,7 @@ import {
   projectNameFromPath,
   removeNode,
   serializeNodes,
+  topZ,
   ungroup
 } from './workspace'
 import type { SprawlNodeData } from './workspace'
@@ -85,6 +86,21 @@ describe('sticky nodes', () => {
     const node = createAgentNode('claude', '/repo')
     if (node.data.kind !== 'terminal') throw new Error('expected terminal node')
     expect(node.data.command).toBe(`claude --session-id ${node.id}`)
+  })
+
+  it('topZ returns one above the highest existing node zIndex', () => {
+    const a = createTerminalNode('/tmp') as Node & { zIndex?: number }
+    a.zIndex = 3
+    const b = createStickyNode() as Node & { zIndex?: number }
+    b.zIndex = 1000
+    const c = createStickyNode()
+    expect(topZ([a, b, c])).toBe(1001)
+  })
+
+  it('topZ starts at 1 when no node has an explicit zIndex', () => {
+    const a = createTerminalNode('/tmp')
+    expect(topZ([a])).toBe(1)
+    expect(topZ([])).toBe(1)
   })
 
   it('titles sticky notes with their first line', () => {

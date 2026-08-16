@@ -3,7 +3,7 @@
 // ACTIVE project's nodes; this store holds the list and the disk contract.
 
 import { create } from 'zustand'
-import type { ProjectMeta, SerializedNode } from '@shared/types'
+import type { ProjectMeta, ProjectSettings, SerializedNode } from '@shared/types'
 
 interface ProjectsState {
   projects: ProjectMeta[]
@@ -18,10 +18,15 @@ interface ProjectsState {
   create(name: string, cwd: string | null): Promise<ProjectMeta>
   /** Persist the active project's nodes. */
   saveNodes(nodes: SerializedNode[]): Promise<void>
-  closeActive(): Promise<void>
-  archiveActive(): Promise<void>
+  /** Close any project by id (detach, keep sessions); updates local state. */
+  close(id: string): Promise<void>
+  /** Archive any project by id (close + hide); updates local state. */
+  archive(id: string): Promise<void>
   reopen(id: string): Promise<void>
   delete(id: string): Promise<void>
+  /** Merge per-project settings (accent, etc.). */
+  updateSettings(id: string, patch: ProjectSettings): Promise<void>
+  rename(id: string, name: string): Promise<void>
 }
 
 export const useProjects = create<ProjectsState>((set, get) => ({
@@ -62,27 +67,25 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     set((s) => ({ nodeCache: { ...s.nodeCache, [id]: nodes } }))
   },
 
-  async closeActive() {
-    const id = get().activeProjectId
-    if (!id) return
+  async close(id: string) {
     await window.termsprawl.workspace.closeProject(id)
     set((s) => {
       const projects = s.projects.map((p) => (p.id === id ? { ...p, closed: true } : p))
+      const wasActive = s.activeProjectId === id
       const nextOpen = projects.find((p) => !p.closed && !p.archived)
-      return { projects, activeProjectId: nextOpen?.id ?? null }
+      return { projects, activeProjectId: wasActive ? (nextOpen?.id ?? null) : s.activeProjectId }
     })
   },
 
-  async archiveActive() {
-    const id = get().activeProjectId
-    if (!id) return
+  async archive(id: string) {
     await window.termsprawl.workspace.archiveProject(id)
     set((s) => {
       const projects = s.projects.map((p) =>
         p.id === id ? { ...p, closed: true, archived: true } : p
       )
+      const wasActive = s.activeProjectId === id
       const nextOpen = projects.find((p) => !p.closed && !p.archived)
-      return { projects, activeProjectId: nextOpen?.id ?? null }
+      return { projects, activeProjectId: wasActive ? (nextOpen?.id ?? null) : s.activeProjectId }
     })
   },
 
@@ -96,9 +99,30 @@ export const useProjects = create<ProjectsState>((set, get) => ({
 
   async delete(id: string) {
     await window.termsprawl.workspace.deleteProject(id)
+    set((s) => {
+      const projects = s.projects.filter((p) => p.id !== id)
+      const wasActive = s.activeProjectId === id
+      const nextOpen = projects.find((p) => !p.closed && !p.archived)
+      const { [id]: _dropped, ...nodeCache } = s.nodeCache
+      return { projects, nodeCache, activeProjectId: wasActive ? (nextOpen?.id ?? null) : s.activeProjectId }
+    })
+  },
+
+  async updateSettings(id: string, patch: ProjectSettings) {
+    await window.termsprawl.workspace.updateSettings(id, patch)
     set((s) => ({
-      projects: s.projects.filter((p) => p.id !== id),
-      activeProjectId: s.activeProjectId === id ? null : s.activeProjectId
+      projects: s.projects.map((p) =>
+        p.id === id ? { ...p, settings: { ...(p.settings ?? {}), ...patch } } : p
+      )
+    }))
+  },
+
+  async rename(id: string, name: string) {
+    await window.termsprawl.workspace.renameProject(id, name)
+    const trimmed = name.trim()
+    if (!trimmed) return
+    set((s) => ({
+      projects: s.projects.map((p) => (p.id === id ? { ...p, name: trimmed } : p))
     }))
   }
 }))

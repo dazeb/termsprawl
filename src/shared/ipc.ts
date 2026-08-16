@@ -13,6 +13,8 @@ export const IPC = {
   projectArchive: 'project:archive',
   projectReopen: 'project:reopen',
   projectDelete: 'project:delete',
+  projectUpdateSettings: 'project:update-settings',
+  projectRename: 'project:rename',
   dialogSelectFolder: 'dialog:select-folder',
 
   // Terminal sessions (Phase 2)

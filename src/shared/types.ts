@@ -47,6 +47,13 @@ export interface ProjectMeta {
   closed: boolean
   /** Archived = hidden from the tab bar, preserved; reopen restores it. */
   archived?: boolean
+  /** Per-project settings (accent color, etc.), persisted in the index. */
+  settings?: ProjectSettings
+}
+
+/** Per-project settings. Accent is a hex color used for the node accent dot. */
+export interface ProjectSettings {
+  accent?: string
 }
 
 export interface WorkspaceSnapshot {
