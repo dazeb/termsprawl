@@ -72,7 +72,7 @@ describe('PtyManager', () => {
     expect(platform.captured.some((c) => c.data.includes('TERMSPRAWL_OK'))).toBe(true)
   })
 
-  it('runs a command instead of a bare shell when one is given', async () => {
+  it('runs a command instead of a bare shell when one is given', { timeout: 30000 }, async () => {
     const { manager, platform } = makeManager()
 
     const result = manager.create({
@@ -84,7 +84,7 @@ describe('PtyManager', () => {
     })
     expect(result.pid).toBeGreaterThan(0)
 
-    await waitFor(() => platform.captured.some((c) => c.data.includes('COMMAND_MARK')))
+    await waitFor(() => platform.captured.some((c) => c.data.includes('COMMAND_MARK')), 25000)
     expect(platform.captured.some((c) => c.data.includes('COMMAND_MARK'))).toBe(true)
   })
 

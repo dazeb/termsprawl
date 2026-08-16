@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Notification } from 'electron'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { IPC } from '../shared/ipc'
@@ -6,6 +6,7 @@ import type { DiffBase, DiffInfoResult, PtyCreateRequest, PtyExitInfo, Serialize
 import type { CorePlatform } from '../core/platform'
 import { diffInfo } from '../core/git-service'
 import { PtyManager } from '../core/pty-manager'
+import { shouldNotify, type AgentStatus } from '../shared/agent-status'
 import { WorkspaceStore } from '../core/workspace-store'
 import type { ProjectMeta } from '../core/workspace-files'
 import { HookServer } from './agents/hook-server'
@@ -24,11 +25,36 @@ const platform: CorePlatform = {
 const ptyManager = new PtyManager(platform)
 const workspaceStore = new WorkspaceStore(platform)
 
-// Agent hook server (Phase 7): receives lifecycle POSTs from agent CLIs and
-// broadcasts normalized status events to the renderer. Fail-open — an agent
-// keeps working even if this never fires.
+// Agent hook server (Phase 7): receives lifecycle POSTs from agent CLIs,
+// broadcasts normalized status events to the renderer, and fires OS
+// notifications when a node's agent goes busy→idle while the window is
+// unfocused. Fail-open — an agent keeps working even if this never fires.
+const prevStatus = new Map<string, AgentStatus>()
 const hookServer = new HookServer((event) => {
   platform.broadcast(`${IPC.agentStatus}:${event.sessionId}`, event)
+
+  const prev = prevStatus.get(event.sessionId)
+  prevStatus.set(event.sessionId, event.status)
+
+  const focused = BrowserWindow.getFocusedWindow()?.isFocused() ?? false
+  const knownSession = ptyManager.has(event.sessionId)
+  if (!shouldNotify(prev, event.status, { knownSession, windowFocused: focused })) return
+
+  if (Notification.isSupported()) {
+    const label = event.status === 'done' ? 'finished' : event.status === 'waiting' ? 'needs you' : 'blocked'
+    const notification = new Notification({
+      title: 'termsprawl',
+      body: `agent ${label}${event.tool ? ` (${event.tool})` : ''}`
+    })
+    notification.on('click', () => {
+      const win = BrowserWindow.getAllWindows()[0]
+      if (win) {
+        if (win.isMinimized()) win.restore()
+        win.focus()
+      }
+    })
+    notification.show()
+  }
 })
 
 function registerWorkspaceIpc(): void {

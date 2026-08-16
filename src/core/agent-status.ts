@@ -5,16 +5,9 @@
 // Status model: working / waiting / blocked / done
 // Kinds: session / subagent / recurring
 
-export type AgentStatus = 'working' | 'waiting' | 'blocked' | 'done'
-export type AgentSessionKind = 'session' | 'subagent' | 'recurring'
+import type { AgentSessionKind, AgentStatus, AgentStatusEvent } from '../shared/agent-status'
 
-export interface AgentStatusEvent {
-  sessionId: string
-  status: AgentStatus
-  kind: AgentSessionKind
-  tool?: string
-  ts: number
-}
+export type { AgentSessionKind, AgentStatus, AgentStatusEvent } from '../shared/agent-status'
 
 interface RawHookPayload {
   hook_event_name?: unknown

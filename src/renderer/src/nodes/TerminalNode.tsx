@@ -27,6 +27,8 @@ export function TerminalNode({ id, data }: NodeProps<TerminalNodeData>): React.J
   const agentStatus = useAgentStatuses((s) => s.byId[id])
   const setAgentStatus = useAgentStatuses((s) => s.set)
   const clearAgentStatus = useAgentStatuses((s) => s.clear)
+  const hasUnread = useAgentStatuses((s) => s.unread[id] === true)
+  const clearUnread = useAgentStatuses((s) => s.clearUnread)
   const [agentHint, setAgentHint] = useState(false)
 
   // Agent nodes (spawned with a command) subscribe to hook status. Only claude
@@ -117,6 +119,18 @@ export function TerminalNode({ id, data }: NodeProps<TerminalNodeData>): React.J
         <span className="terminal-node-title">{data.title}</span>
         {agentHint && agentStatus && (
           <span className={`agent-badge agent-${agentStatus}`}>{STATUS_LABEL[agentStatus]}</span>
+        )}
+        {hasUnread && (
+          <button
+            className="unread-dot"
+            title="Agent needs attention — click to focus"
+            aria-label="Agent needs attention"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation()
+              clearUnread(id)
+            }}
+          />
         )}
         <button
           className="node-close"

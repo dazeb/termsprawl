@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC, ptyDataChannel, ptyExitChannel } from '../shared/ipc'
+import type { AgentStatusEvent } from '../shared/agent-status'
 import type {
-  AgentStatusEvent,
   DiffBase,
   DiffInfoResult,
   ProjectMeta,

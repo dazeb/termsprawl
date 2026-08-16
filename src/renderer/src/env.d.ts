@@ -1,5 +1,4 @@
 import type {
-  AgentStatusEvent,
   DiffBase,
   DiffInfoResult,
   ProjectMeta,
@@ -9,6 +8,7 @@ import type {
   SerializedNode,
   WorkspaceSnapshot
 } from '@shared/types'
+import type { AgentStatusEvent } from '@shared/agent-status'
 
 // The shape of window.termsprawl as exposed by the preload bridge.
 declare global {
