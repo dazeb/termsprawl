@@ -12,6 +12,7 @@ import {
   nodeTitle,
   projectNameFromPath,
   removeNode,
+  resumedSessionId,
   serializeNodes,
   topZ,
   ungroup
@@ -112,6 +113,13 @@ describe('sticky nodes', () => {
     const node = createResumeAgentNode('codex', 'nOldSession', '/repo')
     if (node.data.kind !== 'terminal') throw new Error('expected terminal node')
     expect(node.data.command).toBe('codex')
+  })
+
+  it('resumedSessionId extracts the session id from a resume command', () => {
+    expect(resumedSessionId('claude --resume nOldSession')).toBe('nOldSession')
+    expect(resumedSessionId('claude --session-id nNew')).toBeNull()
+    expect(resumedSessionId('codex')).toBeNull()
+    expect(resumedSessionId(undefined)).toBeNull()
   })
 
   it('topZ returns one above the highest existing node zIndex', () => {

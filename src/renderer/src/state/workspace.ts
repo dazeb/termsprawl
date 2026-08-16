@@ -127,6 +127,15 @@ export function createResumeAgentNode(
   }
 }
 
+/** The old session id a resume command reattaches to, or null for normal
+ * spawns. Hook events for a resumed session carry the ORIGINAL session id, so
+ * a resume node must also subscribe to that id to keep its status badge. */
+export function resumedSessionId(command: string | undefined): string | null {
+  if (!command) return null
+  const match = /--resume\s+(\S+)/.exec(command)
+  return match ? match[1] : null
+}
+
 export function createStickyNode(): Node<StickyNodeData> {
   return {
     id: nextId(),

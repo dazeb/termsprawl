@@ -4,6 +4,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import type { TerminalNodeData } from '../state/workspace'
+import { resumedSessionId } from '../state/workspace'
 import { useCanvas } from '../canvas/Canvas'
 import { useAgentStatuses } from '../state/agents'
 
@@ -35,15 +36,22 @@ export function TerminalNode({ id, data }: NodeProps<TerminalNodeData>): React.J
 
   // Agent nodes (spawned with a command) subscribe to hook status. Only claude
   // pins session-id = node id today; others never receive events (fail-open).
+  // A resume node additionally subscribes to the ORIGINAL session id — hook
+  // events for a resumed conversation carry the old session id.
   useEffect(() => {
     if (!data.command) return
     setAgentHint(true)
-    const off = window.termsprawl.agent.onStatus(id, (event) => {
-      setAgentStatus(id, event.status)
-    })
+    const resumed = resumedSessionId(data.command)
+    const ids = resumed ? [id, resumed] : [id]
+    const offs = ids.map((sid) =>
+      window.termsprawl.agent.onStatus(sid, (event) => {
+        setAgentStatus(sid, event.status)
+      })
+    )
     return () => {
-      off()
+      offs.forEach((off) => off())
       clearAgentStatus(id)
+      if (resumed) clearAgentStatus(resumed)
     }
   }, [id, data.command, setAgentStatus, clearAgentStatus])
 
@@ -51,10 +59,14 @@ export function TerminalNode({ id, data }: NodeProps<TerminalNodeData>): React.J
   // (possibly /rename'd) session name, mirror it into the node title.
   useEffect(() => {
     if (!data.command) return
-    const off = window.termsprawl.agent.onSessionName(id, (info) => {
-      updateNodeData(id, { title: info.name })
-    })
-    return () => off()
+    const resumed = resumedSessionId(data.command)
+    const ids = resumed ? [id, resumed] : [id]
+    const offs = ids.map((sid) =>
+      window.termsprawl.agent.onSessionName(sid, (info) => {
+        updateNodeData(id, { title: info.name })
+      })
+    )
+    return () => offs.forEach((off) => off())
   }, [id, data.command, updateNodeData])
 
   // Inline title rename: double-click the title edits it; Enter/blur commits.
