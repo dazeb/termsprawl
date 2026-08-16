@@ -230,8 +230,8 @@ extension, one feature at a time.**
 
 ### Task 7.1: Agent registry + spawn
 - Create: `src/shared/agents/config.ts` — agent config keyed by open id
-  (claude/codex/gemini/custom), capability lists, helpers. Agent node spawns
-  CLI once via initialCommand.
+  (claude/codex/gemini/grok/custom), capability lists, helpers. Agent node
+  spawns CLI once via initialCommand.
 - **Status: DONE (commit 50e6bb2→…, v0.2.5+).** Registry (claude/codex/
   gemini/custom with capability lists), `createAgentNode()` factory, context
   menu "Open agent ▸" submenu. Spawn reuses the command-preset mechanism from
@@ -239,6 +239,12 @@ extension, one feature at a time.**
   agent CLIs in ~/.local/bin). Fixed a latent gap: `@shared/*` value imports
   never resolved at bundle/test time (only type imports were erased) — added
   aliases to electron.vite.config.ts + vitest.config.ts. 62 tests green.
+- **Grok added** on `feature/grok-agent` (worktree
+  `/home/dazeb/workspace/projects/active/termsprawl-grok`). Registry id
+  `grok`, command `grok`, enabled. Capabilities match the Grok CLI
+  (hooks/resume/subagents/recurring/branch/usage/chat/permissionMode). No
+  `--session-id` pin — Grok requires a UUID, and node ids are not UUIDs.
+  Hook installer / normalizer still Claude-only (Task 7.2).
 
 ### Task 7.2: Hook server + status
 - Create: `src/main/agents/hook-server.ts` (loopback HTTP, per-session token,

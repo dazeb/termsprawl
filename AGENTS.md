@@ -131,18 +131,23 @@ each other:
   (SSH alias in `~/.ssh/config`; key `~/.ssh/hermes-box_ed25519`). Working
   remote for the parallel-agent loop (fast, no auth churn). Both remotes get
   every push (`git push origin main && git push github main`).
-- **Hermes (this session)**: works in the main checkout
+- **Hermes**: works in the main checkout
   (`/home/dazeb/workspace/projects/active/termsprawl`) on `main`. Owns
   checkpoint builds (AppImage → files.hermes.v0cl.one → Telegram) and
   phase status updates in PLAN.md.
 - **Local agent (codex/opencode)**: works in the worktree
   `/home/dazeb/workspace/projects/active/termsprawl-agent` on
   `feature/editor-node` (Phase 6 Commit 3). Owns the feature branch.
+- **Grok**: works in the worktree
+  `/home/dazeb/workspace/projects/active/termsprawl-grok` on
+  `feature/grok-agent`. Owns that feature branch. In-app preset is `grok`
+  (Open agent ▸ grok); hook-server mapping is not wired yet — spawn is a
+  plain CLI launch like codex/gemini.
 - Protocol: pull before starting; commit per task; push when a unit of work
   is done; never edit files in the other's checkout. Main stays
   release-ready (gates must pass before pushing to main). Feature branches
   get merged to main by Hermes after verification.
-- Checkout plumbing (`git worktree list`): two linked worktrees share one
+- Checkout plumbing (`git worktree list`): three linked worktrees share one
   object database — a remote is only for cross-checkout/backup sync.
 
 ## Tests

@@ -4,7 +4,7 @@
 // declared shape; Task 7.2+ normalizes each CLI's hooks/status into the
 // shared state model (working/waiting/blocked/done).
 
-export type AgentId = 'claude' | 'codex' | 'gemini' | 'custom'
+export type AgentId = 'claude' | 'codex' | 'gemini' | 'grok' | 'custom'
 
 export interface AgentCapabilities {
   /** Hooks/status integration (7.2 hook server). */
@@ -92,6 +92,24 @@ export const AGENT_REGISTRY: Record<AgentId, AgentConfig> = {
       contextLink: false,
       usage: true,
       chat: false,
+      permissionMode: true
+    }
+  },
+  grok: {
+    id: 'grok',
+    name: 'Grok',
+    title: 'grok',
+    command: 'grok',
+    enabled: true,
+    capabilities: {
+      hooks: true,
+      resume: true,
+      subagents: true,
+      recurring: true,
+      branch: true,
+      contextLink: false,
+      usage: true,
+      chat: true,
       permissionMode: true
     }
   },

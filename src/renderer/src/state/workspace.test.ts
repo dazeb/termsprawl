@@ -82,6 +82,15 @@ describe('sticky nodes', () => {
     expect(restored.data.command).toBe('codex')
   })
 
+  it('grok agent launches the grok CLI with its title', () => {
+    const node = createAgentNode('grok', '/repo')
+    expect(node.type).toBe('terminal')
+    if (node.data.kind !== 'terminal') throw new Error('expected terminal node')
+    expect(node.data.title).toBe('grok')
+    expect(node.data.command).toBe('grok')
+    expect(node.data.cwd).toBe('/repo')
+  })
+
   it('claude agent pins its session id to the node id for hook mapping', () => {
     const node = createAgentNode('claude', '/repo')
     if (node.data.kind !== 'terminal') throw new Error('expected terminal node')

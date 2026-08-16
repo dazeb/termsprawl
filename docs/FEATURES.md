@@ -34,7 +34,7 @@ macOS-specific features are in scope, ever.
 - Closing a project detaches terminals; tmux sessions keep running.
 - Reopen restores nodes and reattaches sessions.
 
-## 4. Agents (Claude / Codex / Gemini / custom)
+## 4. Agents (Claude / Codex / Gemini / Grok / custom)
 
 - Agent node = terminal preset that launches an agent CLI once.
 - Registry of agents + capability lists (hooks, resume, subagents, recurring,

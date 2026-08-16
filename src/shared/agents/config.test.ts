@@ -6,8 +6,8 @@ import { AGENT_REGISTRY, agentCommand, agentIds, agentName, agentTitle } from '.
 // each CLI's real hooks/status behaviour.
 
 describe('agent registry', () => {
-  it('exposes the four agent ids', () => {
-    expect(agentIds()).toEqual(['claude', 'codex', 'gemini', 'custom'])
+  it('exposes the five agent ids', () => {
+    expect(agentIds()).toEqual(['claude', 'codex', 'gemini', 'grok', 'custom'])
   })
 
   it('every agent has a command, name, and title', () => {
@@ -38,10 +38,11 @@ describe('agent registry', () => {
     }
   })
 
-  it('claude and codex are installed and enabled by default', () => {
+  it('built-in CLIs are enabled by default', () => {
     expect(AGENT_REGISTRY.claude.enabled).toBe(true)
     expect(AGENT_REGISTRY.codex.enabled).toBe(true)
     expect(AGENT_REGISTRY.gemini.enabled).toBe(true)
+    expect(AGENT_REGISTRY.grok.enabled).toBe(true)
     // custom is a template — not auto-enabled until configured.
     expect(AGENT_REGISTRY.custom.enabled).toBe(false)
   })
@@ -50,5 +51,8 @@ describe('agent registry', () => {
     expect(agentTitle('claude')).toBe('claude')
     expect(agentCommand('codex')).toBe('codex')
     expect(agentName('gemini')).toBe('Gemini CLI')
+    expect(agentTitle('grok')).toBe('grok')
+    expect(agentCommand('grok')).toBe('grok')
+    expect(agentName('grok')).toBe('Grok')
   })
 })

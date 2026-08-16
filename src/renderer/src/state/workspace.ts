@@ -85,7 +85,7 @@ export function topZ(nodes: Node[]): number {
 
 /** A terminal node preset that launches an agent CLI once (Phase 7, Task 7.1).
  * The command resolves to an absolute path at spawn time (GUI apps lack the
- * shell PATH where agent CLIs like codex/claude live). Claude gets
+ * shell PATH where agent CLIs like codex/claude/grok live). Claude gets
  * `--session-id <nodeId>` so hook events map back to this exact node. */
 export function createAgentNode(agentId: AgentId, cwd?: string): Node<TerminalNodeData> {
   const id = nextId()
