@@ -150,6 +150,11 @@ describe('PtyManager', () => {
     const { manager, platform } = makeManager()
 
     manager.create({ id: 'scroll', cols: 80, rows: 24, cwd: process.cwd() })
+
+    // Wait for the shell prompt before writing: input sent to the tmux client
+    // before it finishes attaching can be swallowed (it echoes on the broadcast
+    // but never reaches the pane), which would leave the snapshot blank.
+    await waitFor(() => platform.captured.some((c) => c.data.length > 0))
     manager.write('scroll', 'echo SCROLLBACK_MARK\r')
     await waitFor(() => platform.captured.some((c) => c.data.includes('SCROLLBACK_MARK')))
 
