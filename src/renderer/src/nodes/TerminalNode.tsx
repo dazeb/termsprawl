@@ -233,7 +233,18 @@ export function TerminalNode({ id, data }: NodeProps<TerminalNodeData>): React.J
           ×
         </button>
       </div>
-      <div className="terminal-node-host nodrag nowheel" ref={hostRef} />
+      <div
+        className="terminal-node-host nodrag nowheel"
+        ref={hostRef}
+        onContextMenu={(e) => {
+          // Right-click inside the terminal belongs to tmux (its mouse menu,
+          // copy/paste). Swallow the contextmenu event so React Flow's canvas
+          // menu never opens over the terminal, and the browser's native menu
+          // stays suppressed too.
+          e.preventDefault()
+          e.stopPropagation()
+        }}
+      />
     </div>
   )
 }
