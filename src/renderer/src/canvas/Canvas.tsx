@@ -91,6 +91,10 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProjectId])
 
+  // Undo/redo: debounced snapshots of the nodes array. Permanent terminal
+  // closes invalidate that id in every snapshot so undo cannot revive it.
+  const { push, undo, redo, invalidate, canUndo, canRedo } = useHistory(nodes, setNodes)
+
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
       const removes = changes.filter(
@@ -146,21 +150,29 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
         terminalIds.map((id) => window.termsprawl.pty.closeNode(originProjectId, id))
       )
         .then((results) => {
-          const successful = new Set(
+          const committed = new Set(
             terminalIds.filter((_id, index) => results[index].status === 'fulfilled')
           )
           const failed = terminalIds.filter((_id, index) => results[index].status === 'rejected')
-          for (const id of successful) dropCachedNode(originProjectId, id)
+          const cleanupPending = results.flatMap((result) =>
+            result.status === 'fulfilled' ? result.value.cleanupPendingIds : []
+          )
+          invalidate(committed)
+          for (const id of committed) dropCachedNode(originProjectId, id)
           if (useProjects.getState().activeProjectId === originProjectId) {
-            setNodes((current) => applyChanges(current, successful))
+            setNodes((current) => applyChanges(current, committed))
           }
-          if (failed.length > 0) setCleanupError(`Could not close terminal: ${failed.join(', ')}`)
+          if (failed.length > 0) {
+            setCleanupError(`Could not commit terminal close: ${failed.join(', ')}`)
+          } else if (cleanupPending.length > 0) {
+            setCleanupError(`Terminal closed; session cleanup will retry: ${cleanupPending.join(', ')}`)
+          }
         })
         .catch((error: unknown) => {
           setCleanupError(`Could not close terminal: ${error instanceof Error ? error.message : String(error)}`)
         })
     },
-    [activeProjectId, dropCachedNode, nodes, selectedIds]
+    [activeProjectId, dropCachedNode, invalidate, nodes, selectedIds]
   )
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) => setEdges((eds) => applyEdgeChanges(changes, eds)),
@@ -171,8 +183,6 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
     []
   )
 
-  // Undo/redo: debounced snapshots of the nodes array.
-  const { push, undo, redo, canUndo, canRedo } = useHistory(nodes, setNodes)
 
   // Custom-node updates (sticky/editor/diff): patch node data, optionally
   // record a history snapshot (e.g. collapse toggles, blur commits).
@@ -202,18 +212,21 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
       setCleanupError(null)
       if (!originProjectId) return
       void window.termsprawl.pty.closeNode(originProjectId, id)
-        .then(() => {
+        .then((result) => {
+          invalidate([id])
           dropCachedNode(originProjectId, id)
           if (useProjects.getState().activeProjectId === originProjectId) {
             setNodes((current) => removeNode(current, id))
-            push()
+          }
+          if (result.cleanupPendingIds.length > 0) {
+            setCleanupError(`Terminal closed; session cleanup will retry: ${id}`)
           }
         })
         .catch((error: unknown) => {
           setCleanupError(`Could not close terminal: ${error instanceof Error ? error.message : String(error)}`)
         })
     },
-    [activeProjectId, dropCachedNode, nodes, push]
+    [activeProjectId, dropCachedNode, invalidate, nodes, push]
   )
   const canvasApi = useMemo(
     () => ({ updateNodeData, commit, closeNode }),

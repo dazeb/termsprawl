@@ -219,6 +219,25 @@ export class WorkspaceStore {
     this.index = nextIndex
   }
 
+  /**
+   * A fresh process cannot have delayed renderer saves from the prior run.
+   * Retire only tombstones whose node/session cleanup is no longer pending.
+   */
+  retireCompletedTerminalTombstones(): void {
+    const pending = new Set(
+      (this.index.pendingTerminalNodeCleanup ?? []).map(
+        (entry) => `${entry.projectId}\0${entry.terminalId}`
+      )
+    )
+    const terminalTombstones = (this.index.terminalTombstones ?? []).filter((entry) =>
+      pending.has(`${entry.projectId}\0${entry.terminalId}`)
+    )
+    if (terminalTombstones.length === (this.index.terminalTombstones ?? []).length) return
+    const nextIndex: WorkspaceIndex = { ...this.index, terminalTombstones }
+    saveIndex(this.platform.userDataPath, nextIndex)
+    this.index = nextIndex
+  }
+
   /** Save nodes for a project; returns the new monotonic rev. */
   saveNodes(id: string, nodes: SerializedNode[]): number {
     const project = this.index.projects.find((p) => p.id === id)

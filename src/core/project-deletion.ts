@@ -1,4 +1,5 @@
 import type { WorkspaceStore } from './workspace-store'
+import type { DurableCleanupResult } from '../shared/types'
 
 interface ProjectDeletionStore extends Pick<
   WorkspaceStore,
@@ -16,7 +17,7 @@ export function deleteProjectAndDestroyTerminals(
   destroyTerminal: (id: string) => void,
   projectId: string,
   liveTerminalIds: Iterable<string> = []
-): TerminalCleanupFailure[] {
+): DurableCleanupResult {
   const snapshot = store.snapshot()
   const terminalIds = new Set<string>()
   for (const node of snapshot.projects[projectId] ?? []) {
@@ -36,6 +37,10 @@ export function deleteProjectAndDestroyTerminals(
       failures.push({ id, error })
     }
   }
-  store.completeTerminalCleanup(completed)
-  return failures
+  try {
+    store.completeTerminalCleanup(completed)
+  } catch {
+    return { committed: true, cleanupPendingIds: [...terminalIds] }
+  }
+  return { committed: true, cleanupPendingIds: failures.map((failure) => failure.id) }
 }

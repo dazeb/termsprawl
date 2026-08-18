@@ -7,6 +7,13 @@ import type { SprawlNodeData } from './workspace'
 
 const SNAPSHOT_DEBOUNCE_MS = 400
 
+export function pruneHistorySnapshots(
+  snapshots: Node<SprawlNodeData>[][],
+  removedIds: ReadonlySet<string>
+): Node<SprawlNodeData>[][] {
+  return snapshots.map((snapshot) => snapshot.filter((node) => !removedIds.has(node.id)))
+}
+
 export function useHistory(
   nodes: Node<SprawlNodeData>[],
   setNodes: (updater: Node<SprawlNodeData>[] | ((prev: Node<SprawlNodeData>[]) => Node<SprawlNodeData>[])) => void
@@ -14,6 +21,7 @@ export function useHistory(
   push: () => void
   undo: () => void
   redo: () => void
+  invalidate: (ids: Iterable<string>) => void
   canUndo: boolean
   canRedo: boolean
 } {
@@ -62,5 +70,12 @@ export function useHistory(
     })
   }, [nodes, setNodes])
 
-  return { push, undo, redo, canUndo: past.length > 0, canRedo: future.length > 0 }
+  const invalidate = useCallback((ids: Iterable<string>) => {
+    const removedIds = new Set(ids)
+    if (timerRef.current) clearTimeout(timerRef.current)
+    setPast((snapshots) => pruneHistorySnapshots(snapshots, removedIds))
+    setFuture((snapshots) => pruneHistorySnapshots(snapshots, removedIds))
+  }, [])
+
+  return { push, undo, redo, invalidate, canUndo: past.length > 0, canRedo: future.length > 0 }
 }

@@ -48,7 +48,8 @@ describe('deleteProjectAndDestroyTerminals', () => {
       if (id === 't1') throw new Error('session already disconnected')
     })
 
-    expect(() => deleteProjectAndDestroyTerminals(store, destroyTerminal, 'p1')).not.toThrow()
+    const result = deleteProjectAndDestroyTerminals(store, destroyTerminal, 'p1')
+    expect(result).toEqual({ committed: true, cleanupPendingIds: ['t1'] })
     expect(store.deleteProject).toHaveBeenCalledWith('p1', ['t1', 't2'])
     expect(store.completeTerminalCleanup).toHaveBeenCalledWith(['t2'])
     expect(destroyTerminal).toHaveBeenCalledTimes(2)
@@ -72,5 +73,20 @@ describe('deleteProjectAndDestroyTerminals', () => {
     expect(store.deleteProject).toHaveBeenCalledWith('p1', ['t1', 'just-created', 'from-previous-run'])
     expect(store.completeTerminalCleanup).toHaveBeenCalledWith(['t1', 'just-created', 'from-previous-run'])
     expect(destroyTerminal).toHaveBeenCalledTimes(3)
+  })
+
+  it('reports cleanup as pending when clearing the durable retry record fails', () => {
+    const store = {
+      snapshot: vi.fn(snapshotWithTerminals),
+      pendingTerminalIdsForProject: vi.fn(() => ['t1']),
+      completeTerminalCleanup: vi.fn(() => {
+        throw new Error('EIO: workspace.json')
+      }),
+      deleteProject: vi.fn()
+    }
+
+    const result = deleteProjectAndDestroyTerminals(store, vi.fn(), 'p1')
+
+    expect(result).toEqual({ committed: true, cleanupPendingIds: ['t1'] })
   })
 })

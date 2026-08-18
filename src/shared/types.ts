@@ -30,6 +30,12 @@ export interface PtyExitInfo {
   signal?: number
 }
 
+/** A destructive metadata operation committed; listed sessions still need retry cleanup. */
+export interface DurableCleanupResult {
+  committed: true
+  cleanupPendingIds: string[]
+}
+
 // Serialized node shape for workspace persistence (mirrors core's
 // SerializedNode so the renderer never imports core).
 export interface SerializedNode {

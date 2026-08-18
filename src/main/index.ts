@@ -10,6 +10,7 @@ import { shouldNotify, type AgentStatus } from '../shared/agent-status'
 import { WorkspaceStore } from '../core/workspace-store'
 import type { ProjectMeta } from '../core/workspace-files'
 import { deleteProjectAndDestroyTerminals } from '../core/project-deletion'
+import { closeTerminalNode } from '../core/terminal-close'
 import { HookServer } from './agents/hook-server'
 import { claudeSettingsPath, installClaudeHooks } from './agents/hook-installer'
 import { SessionNameTracker } from '../core/session-name'
@@ -93,21 +94,16 @@ function registerWorkspaceIpc(): void {
     workspaceStore.renameProject(id, name)
   )
   ipcMain.handle(IPC.projectDelete, (_event, id: string) => {
-    const failures = deleteProjectAndDestroyTerminals(
+    const result = deleteProjectAndDestroyTerminals(
       workspaceStore,
       (terminalId) => ptyManager.destroy(terminalId),
       id,
       ptyManager.sessionIdsForProject(id)
     )
-    for (const failure of failures) {
-      console.error(`[project-delete] failed to clean up terminal ${failure.id}:`, failure.error)
+    for (const terminalId of result.cleanupPendingIds) {
+      console.error(`[project-delete] terminal cleanup pending: ${terminalId}`)
     }
-    if (failures.length > 0) {
-      throw new AggregateError(
-        failures.map((failure) => failure.error),
-        `Project removed, but ${failures.length} terminal session(s) still need cleanup. Retry delete.`
-      )
-    }
+    return result
   })
   ipcMain.handle(IPC.dialogSelectFolder, async () => {
     const win = BrowserWindow.getFocusedWindow()
@@ -165,10 +161,12 @@ function registerPtyIpc(): void {
   )
   ipcMain.handle(IPC.ptyDestroy, (_event, id: string) => ptyManager.destroy(id))
   ipcMain.handle(IPC.terminalClose, (_event, projectId: string, id: string) => {
-    workspaceStore.stageTerminalNodeClose(projectId, id)
-    workspaceStore.removeTerminalNode(projectId, id)
-    ptyManager.destroy(id)
-    workspaceStore.completeTerminalNodeClose(projectId, id)
+    return closeTerminalNode(
+      workspaceStore,
+      (terminalId) => ptyManager.destroy(terminalId),
+      projectId,
+      id
+    )
   })
   ipcMain.handle(IPC.ptyReadScrollback, (_event, id: string) => ptyManager.readScrollback(id))
 }
@@ -188,6 +186,7 @@ void app.whenReady().then(async () => {
       console.error(`[terminal] startup node cleanup failed: ${entry.terminalId}`, error)
     }
   }
+  workspaceStore.retireCompletedTerminalTombstones()
 
   // Project deletion records terminal ids before cleanup begins. Retry any
   // sessions left by a prior failed cleanup or process interruption.
@@ -195,13 +194,13 @@ void app.whenReady().then(async () => {
     workspaceStore.pendingTerminalCleanup().map((entry) => entry.projectId)
   )
   for (const projectId of pendingProjectIds) {
-    const failures = deleteProjectAndDestroyTerminals(
+    const result = deleteProjectAndDestroyTerminals(
       workspaceStore,
       (terminalId) => ptyManager.destroy(terminalId),
       projectId
     )
-    for (const failure of failures) {
-      console.error(`[project] startup terminal cleanup failed: ${failure.id}`, failure.error)
+    for (const terminalId of result.cleanupPendingIds) {
+      console.error(`[project] startup terminal cleanup still pending: ${terminalId}`)
     }
   }
 

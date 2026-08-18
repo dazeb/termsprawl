@@ -67,9 +67,14 @@ export function TabBar(): React.JSX.Element {
   const doDelete = async (id: string): Promise<void> => {
     setDeleteError(null)
     try {
-      await del(id)
+      const result = await del(id)
       setConfirmId(null)
       if (settingsId === id) setSettingsId(null)
+      if (result.cleanupPendingIds.length > 0) {
+        setDeleteError(
+          `Project deleted. Terminal cleanup will retry: ${result.cleanupPendingIds.join(', ')}`
+        )
+      }
     } catch (error) {
       setDeleteError(String(error))
     }
@@ -204,6 +209,15 @@ export function TabBar(): React.JSX.Element {
         </div>
       )}
 
+      {deleteError && !confirmId && (
+        <div className="tab-delete-notice" role="status">
+          <span>{deleteError}</span>
+          <button onClick={() => setDeleteError(null)} aria-label="Dismiss notification">
+            ×
+          </button>
+        </div>
+      )}
+
       {confirmId && (
         <div className="confirm-overlay" onClick={() => setConfirmId(null)}>
           <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
@@ -214,7 +228,7 @@ export function TabBar(): React.JSX.Element {
               </span>
               will be removed permanently. Terminals inside it are destroyed.
             </div>
-            {deleteError && <div className="confirm-body">Delete incomplete: {deleteError}</div>}
+            {deleteError && <div className="confirm-body">Delete failed: {deleteError}</div>}
             <div className="confirm-actions">
               <button onClick={() => setConfirmId(null)}>Cancel</button>
               <button className="danger" onClick={() => void doDelete(confirmId)}>

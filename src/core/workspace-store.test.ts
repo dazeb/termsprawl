@@ -139,6 +139,20 @@ describe('WorkspaceStore', () => {
     expect(restarted.pendingTerminalNodeCleanup()).toEqual([])
   })
 
+  it('retires completed terminal tombstones at the next clean startup boundary', () => {
+    const project = store.addProject('retire-tombstone', null)
+    const terminal = makeNode('retired-terminal', 1, 1)
+    store.saveNodes(project.id, [terminal])
+    store.stageTerminalNodeClose(project.id, terminal.id)
+    store.removeTerminalNode(project.id, terminal.id)
+    store.completeTerminalNodeClose(project.id, terminal.id)
+
+    const restarted = new WorkspaceStore(platform)
+    restarted.retireCompletedTerminalTombstones()
+
+    expect(new WorkspaceStore(platform).snapshot().index.terminalTombstones).toEqual([])
+  })
+
   it('preserves the live file when an atomic write fails', () => {
     const target = join(platform.userDataPath, 'atomic.json')
     writeFileSync(target, 'original', 'utf8')

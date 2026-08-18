@@ -3,13 +3,15 @@
 // ACTIVE project's nodes; this store holds the list and the disk contract.
 
 import { create } from 'zustand'
-import type { ProjectMeta, ProjectSettings, SerializedNode } from '@shared/types'
+import type { DurableCleanupResult, ProjectMeta, ProjectSettings, SerializedNode } from '@shared/types'
 
 interface ProjectsState {
   projects: ProjectMeta[]
   activeProjectId: string | null
   /** Per-project serialized nodes, loaded from disk. */
   nodeCache: Record<string, SerializedNode[]>
+  /** Current-process invalidations that late async saves must not re-cache. */
+  tombstonedNodeIds: Record<string, string[]>
   loaded: boolean
 
   load(): Promise<void>
@@ -26,7 +28,7 @@ interface ProjectsState {
   /** Archive any project by id (close + hide); updates local state. */
   archive(id: string): Promise<void>
   reopen(id: string): Promise<void>
-  delete(id: string): Promise<void>
+  delete(id: string): Promise<DurableCleanupResult>
   /** Merge per-project settings (accent, etc.). */
   updateSettings(id: string, patch: ProjectSettings): Promise<void>
   rename(id: string, name: string): Promise<void>
@@ -36,14 +38,29 @@ export const useProjects = create<ProjectsState>((set, get) => ({
   projects: [],
   activeProjectId: null,
   nodeCache: {},
+  tombstonedNodeIds: {},
   loaded: false,
 
   async load() {
     const snap = await window.termsprawl.workspace.snapshot()
     const open = snap.index.projects.filter((p) => !p.closed)
+    const tombstonedNodeIds = (snap.index.terminalTombstones ?? []).reduce<Record<string, string[]>>(
+      (byProject, entry) => ({
+        ...byProject,
+        [entry.projectId]: [...(byProject[entry.projectId] ?? []), entry.terminalId]
+      }),
+      {}
+    )
+    const nodeCache = Object.fromEntries(
+      Object.entries(snap.projects).map(([projectId, nodes]) => {
+        const tombstones = new Set(tombstonedNodeIds[projectId] ?? [])
+        return [projectId, nodes.filter((node) => !tombstones.has(node.id))]
+      })
+    )
     set({
       projects: snap.index.projects,
-      nodeCache: snap.projects,
+      nodeCache,
+      tombstonedNodeIds,
       activeProjectId: open[0]?.id ?? null,
       loaded: true
     })
@@ -58,6 +75,7 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     set((s) => ({
       projects: [...s.projects.filter((p) => p.id !== project.id), project],
       nodeCache: { ...s.nodeCache, [project.id]: [] },
+      tombstonedNodeIds: { ...s.tombstonedNodeIds, [project.id]: [] },
       activeProjectId: project.id
     }))
     return project
@@ -70,12 +88,28 @@ export const useProjects = create<ProjectsState>((set, get) => ({
   },
 
   async saveProjectNodes(id: string, nodes: SerializedNode[]) {
-    await window.termsprawl.workspace.saveNodes(id, nodes)
-    set((s) => ({ nodeCache: { ...s.nodeCache, [id]: nodes } }))
+    const beforeSave = new Set(get().tombstonedNodeIds[id] ?? [])
+    await window.termsprawl.workspace.saveNodes(
+      id,
+      nodes.filter((node) => !beforeSave.has(node.id))
+    )
+    set((s) => {
+      const tombstones = new Set(s.tombstonedNodeIds[id] ?? [])
+      return {
+        nodeCache: {
+          ...s.nodeCache,
+          [id]: nodes.filter((node) => !tombstones.has(node.id))
+        }
+      }
+    })
   },
 
   dropCachedNode(projectId: string, nodeId: string) {
     set((s) => ({
+      tombstonedNodeIds: {
+        ...s.tombstonedNodeIds,
+        [projectId]: [...new Set([...(s.tombstonedNodeIds[projectId] ?? []), nodeId])]
+      },
       nodeCache: {
         ...s.nodeCache,
         [projectId]: (s.nodeCache[projectId] ?? []).filter((node) => node.id !== nodeId)
@@ -114,14 +148,21 @@ export const useProjects = create<ProjectsState>((set, get) => ({
   },
 
   async delete(id: string) {
-    await window.termsprawl.workspace.deleteProject(id)
+    const result = await window.termsprawl.workspace.deleteProject(id)
     set((s) => {
       const projects = s.projects.filter((p) => p.id !== id)
       const wasActive = s.activeProjectId === id
       const nextOpen = projects.find((p) => !p.closed && !p.archived)
       const { [id]: _dropped, ...nodeCache } = s.nodeCache
-      return { projects, nodeCache, activeProjectId: wasActive ? (nextOpen?.id ?? null) : s.activeProjectId }
+      const { [id]: _droppedTombstones, ...tombstonedNodeIds } = s.tombstonedNodeIds
+      return {
+        projects,
+        nodeCache,
+        tombstonedNodeIds,
+        activeProjectId: wasActive ? (nextOpen?.id ?? null) : s.activeProjectId
+      }
     })
+    return result
   },
 
   async updateSettings(id: string, patch: ProjectSettings) {
