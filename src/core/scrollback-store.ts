@@ -54,7 +54,11 @@ export class ScrollbackStore {
       (err, out) => {
         if (err) return // session gone or tmux busy — keep the last good snapshot
         const capped = out.length > MAX_BYTES ? out.slice(out.length - MAX_BYTES) : out
-        writeFileSync(this.fileFor(nodeId), capped, 'utf8')
+        try {
+          writeFileSync(this.fileFor(nodeId), capped, 'utf8')
+        } catch {
+          // Shutdown/test cleanup can remove userData while capture-pane is in flight.
+        }
       }
     )
   }

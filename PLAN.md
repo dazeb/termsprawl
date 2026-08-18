@@ -165,8 +165,11 @@ everything else hangs off.
 - Verify: switch projects; terminals detach/reattach via tmux.
 
 ### Task 5.3: Close vs delete
-- Close = detach + keep; delete (only from closed list) = destroy sessions.
+- Close = detach + keep; delete (active tab or stored list) = destroy sessions.
 - Verify: closed project reopens with live sessions.
+- Delete removes Termsprawl's project metadata and terminal sessions, never the
+  selected project folder or its contents. Active-tab and stored-project delete
+  flows are covered by real-input Electron verification.
 
 ### Task 5.4: Commit
 - `git commit -m "feat: projects and persistence"`

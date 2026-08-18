@@ -50,6 +50,31 @@ body {
   -webkit-app-region: no-drag;
 }
 
+.tab-delete-notice {
+  position: fixed;
+  top: 46px;
+  right: 12px;
+  z-index: 450;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(560px, calc(100vw - 24px));
+  padding: 10px 12px;
+  border: 1px solid #c6f13566;
+  background: #10110d;
+  color: #d7ddb9;
+  font: 12px/1.4 'Geist Mono', monospace;
+  box-shadow: 0 8px 30px #000a;
+}
+
+.tab-delete-notice button {
+  border: 0;
+  background: transparent;
+  color: #c6f135;
+  cursor: pointer;
+  font-size: 16px;
+}
+
 .tab {
   display: flex;
   align-items: center;
@@ -560,10 +585,10 @@ body {
 }
 
 .sticky-node-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  border: none;
+  inline-size: 12px;
+  block-size: 12px;
+  border: 0;
+  border-radius: 999px;
   cursor: pointer;
   padding: 0;
   flex-shrink: 0;

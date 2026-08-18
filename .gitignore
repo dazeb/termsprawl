@@ -5,7 +5,9 @@ node_modules/
 out/
 dist/
 release/
-build/
+build/*
+!build/icon.png
+!build/AGENTS.md
 
 # tsbuildinfo (incremental compiler caches)
 *.tsbuildinfo

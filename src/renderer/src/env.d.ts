@@ -1,6 +1,7 @@
 import type {
   DiffBase,
   DiffInfoResult,
+  DurableCleanupResult,
   ProjectMeta,
   ProjectSettings,
   PtyCreateRequest,
@@ -23,7 +24,7 @@ declare global {
         closeProject(id: string): Promise<void>
         archiveProject(id: string): Promise<void>
         reopenProject(id: string): Promise<void>
-        deleteProject(id: string): Promise<void>
+        deleteProject(id: string): Promise<DurableCleanupResult>
         updateSettings(id: string, patch: ProjectSettings): Promise<void>
         renameProject(id: string, name: string): Promise<void>
         selectFolder(): Promise<string | null>
@@ -32,7 +33,8 @@ declare global {
         create(req: PtyCreateRequest): Promise<PtyCreateResult>
         write(id: string, data: string): void
         resize(id: string, cols: number, rows: number): void
-        destroy(id: string): void
+        destroy(id: string): Promise<void>
+        closeNode(projectId: string, id: string): Promise<DurableCleanupResult>
         readScrollback(id: string): Promise<string | null>
         onData(id: string, cb: (data: string) => void): () => void
         onExit(id: string, cb: (info: PtyExitInfo) => void): () => void

@@ -4,6 +4,7 @@ import type { AgentStatusEvent } from '../shared/agent-status'
 import type {
   DiffBase,
   DiffInfoResult,
+  DurableCleanupResult,
   ProjectMeta,
   ProjectSettings,
   PtyCreateRequest,
@@ -27,7 +28,7 @@ const api = {
     closeProject: (id: string): Promise<void> => ipcRenderer.invoke(IPC.projectClose, id),
     archiveProject: (id: string): Promise<void> => ipcRenderer.invoke(IPC.projectArchive, id),
     reopenProject: (id: string): Promise<void> => ipcRenderer.invoke(IPC.projectReopen, id),
-    deleteProject: (id: string): Promise<void> => ipcRenderer.invoke(IPC.projectDelete, id),
+    deleteProject: (id: string): Promise<DurableCleanupResult> => ipcRenderer.invoke(IPC.projectDelete, id),
     updateSettings: (id: string, patch: ProjectSettings): Promise<void> =>
       ipcRenderer.invoke(IPC.projectUpdateSettings, id, patch),
     renameProject: (id: string, name: string): Promise<void> =>
@@ -41,7 +42,9 @@ const api = {
     write: (id: string, data: string): void => ipcRenderer.send(IPC.ptyWrite, id, data),
     resize: (id: string, cols: number, rows: number): void =>
       ipcRenderer.send(IPC.ptyResize, id, cols, rows),
-    destroy: (id: string): void => ipcRenderer.send(IPC.ptyDestroy, id),
+    destroy: (id: string): Promise<void> => ipcRenderer.invoke(IPC.ptyDestroy, id),
+    closeNode: (projectId: string, id: string): Promise<DurableCleanupResult> =>
+      ipcRenderer.invoke(IPC.terminalClose, projectId, id),
     readScrollback: (id: string): Promise<string | null> =>
       ipcRenderer.invoke(IPC.ptyReadScrollback, id),
 

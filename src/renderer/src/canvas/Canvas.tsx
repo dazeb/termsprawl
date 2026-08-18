@@ -61,15 +61,20 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
   const activeProjectId = useProjects((s) => s.activeProjectId)
   const nodeCache = useProjects((s) => s.nodeCache)
   const saveNodes = useProjects((s) => s.saveNodes)
+  const saveProjectNodes = useProjects((s) => s.saveProjectNodes)
+  const dropCachedNode = useProjects((s) => s.dropCachedNode)
 
   const [nodes, setNodes] = useState<Node<SprawlNodeData>[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
   const [menu, setMenu] = useState<{ x: number; y: number; nodeId?: string } | null>(null)
   const [agentMenuOpen, setAgentMenuOpen] = useState(false)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [cleanupError, setCleanupError] = useState<string | null>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const { screenToFlowPosition } = useReactFlow()
   const loadingRef = useRef(false)
+  const latestNodesRef = useRef(nodes)
+  latestNodesRef.current = nodes
 
   // Load the active project's serialized nodes into React Flow.
   // keyed on activeProjectId — switching projects swaps the canvas.
@@ -77,7 +82,7 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
     loadingRef.current = true
     const serialized = activeProjectId ? nodeCache[activeProjectId] ?? [] : []
     const initial = deserializeNodes(serialized)
-    setNodes(initial.length > 0 ? initial : [createTerminalNode(cwd)])
+    setNodes(activeProjectId ? (initial.length > 0 ? initial : [createTerminalNode(cwd)]) : [])
     setEdges([])
     // let React Flow settle before clearing the loading flag
     setTimeout(() => {
@@ -86,29 +91,88 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProjectId])
 
+  // Undo/redo: debounced snapshots of the nodes array. Permanent terminal
+  // closes invalidate that id in every snapshot so undo cannot revive it.
+  const { push, undo, redo, invalidate, canUndo, canRedo } = useHistory(nodes, setNodes)
+
   const onNodesChange = useCallback(
-    (changes: NodeChange[]) =>
-      setNodes((nds) => {
-        const removes = changes.filter((c): c is NodeChange & { id: string; type: 'remove' } => c.type === 'remove')
-        if (removes.length === 0) return applyNodeChanges(changes, nds)
-
-        // Intercept group deletion: React Flow cascades removal to children
-        // (parentId). We ungroup them instead — terminals inside keep their
-        // tmux sessions. Only groups and explicitly-selected nodes are removed.
-        const removedIds = new Set(removes.map((c) => c.id))
+    (changes: NodeChange[]) => {
+      const removes = changes.filter(
+        (change): change is NodeChange & { id: string; type: 'remove' } => change.type === 'remove'
+      )
+      const permanentRemovalIds = (source: Node<SprawlNodeData>[]): Set<string> => {
+        const removedIds = new Set(removes.map((change) => change.id))
         const groupIds = removes
-          .map((c) => c.id)
-          .filter((id) => nds.find((n) => n.id === id)?.type === 'group')
-        if (groupIds.length === 0) return applyNodeChanges(changes, nds)
-
-        let result = nds
-        for (const gid of groupIds) result = ungroup(gid, result)
-        const toRemove = new Set(
-          [...removedIds].filter((id) => groupIds.includes(id) || selectedIds.includes(id))
+          .map((change) => change.id)
+          .filter((id) => source.find((node) => node.id === id)?.type === 'group')
+        return groupIds.length === 0
+          ? removedIds
+          : new Set([...removedIds].filter((id) => groupIds.includes(id) || selectedIds.includes(id)))
+      }
+      const applyChanges = (
+        source: Node<SprawlNodeData>[],
+        successfulTerminalIds?: Set<string>
+      ): Node<SprawlNodeData>[] => {
+        if (removes.length === 0) return applyNodeChanges(changes, source)
+        const allowedRemovalIds = permanentRemovalIds(source)
+        const effectiveChanges = changes.filter((change) => {
+          if (change.type !== 'remove') return true
+          const node = source.find((item) => item.id === change.id)
+          return node?.type !== 'terminal' || successfulTerminalIds?.has(change.id) === true
+        })
+        const effectiveRemoves = effectiveChanges.filter(
+          (change): change is NodeChange & { id: string; type: 'remove' } => change.type === 'remove'
         )
-        return result.filter((n) => !toRemove.has(n.id))
-      }),
-    [selectedIds]
+        const groupIds = removes
+          .map((change) => change.id)
+          .filter((id) => source.find((node) => node.id === id)?.type === 'group')
+        if (groupIds.length === 0) return applyNodeChanges(effectiveChanges, source)
+        let result = source
+        for (const groupId of groupIds) result = ungroup(groupId, result)
+        const toRemove = new Set(
+          effectiveRemoves.map((change) => change.id).filter((id) => allowedRemovalIds.has(id))
+        )
+        return result.filter((node) => !toRemove.has(node.id))
+      }
+
+      const terminalIds = [...permanentRemovalIds(nodes)].filter(
+        (id) => nodes.find((node) => node.id === id)?.type === 'terminal'
+      )
+      if (terminalIds.length === 0) {
+        setNodes((current) => applyChanges(current))
+        return
+      }
+
+      const originProjectId = activeProjectId
+      setCleanupError(null)
+      if (!originProjectId) return
+      void Promise.allSettled(
+        terminalIds.map((id) => window.termsprawl.pty.closeNode(originProjectId, id))
+      )
+        .then((results) => {
+          const committed = new Set(
+            terminalIds.filter((_id, index) => results[index].status === 'fulfilled')
+          )
+          const failed = terminalIds.filter((_id, index) => results[index].status === 'rejected')
+          const cleanupPending = results.flatMap((result) =>
+            result.status === 'fulfilled' ? result.value.cleanupPendingIds : []
+          )
+          invalidate(committed)
+          for (const id of committed) dropCachedNode(originProjectId, id)
+          if (useProjects.getState().activeProjectId === originProjectId) {
+            setNodes((current) => applyChanges(current, committed))
+          }
+          if (failed.length > 0) {
+            setCleanupError(`Could not commit terminal close: ${failed.join(', ')}`)
+          } else if (cleanupPending.length > 0) {
+            setCleanupError(`Terminal closed; session cleanup will retry: ${cleanupPending.join(', ')}`)
+          }
+        })
+        .catch((error: unknown) => {
+          setCleanupError(`Could not close terminal: ${error instanceof Error ? error.message : String(error)}`)
+        })
+    },
+    [activeProjectId, dropCachedNode, invalidate, nodes, selectedIds]
   )
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) => setEdges((eds) => applyEdgeChanges(changes, eds)),
@@ -119,8 +183,6 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
     []
   )
 
-  // Undo/redo: debounced snapshots of the nodes array.
-  const { push, undo, redo, canUndo, canRedo } = useHistory(nodes, setNodes)
 
   // Custom-node updates (sticky/editor/diff): patch node data, optionally
   // record a history snapshot (e.g. collapse toggles, blur commits).
@@ -136,10 +198,35 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
   const commit = useCallback(() => push(), [push])
   const closeNode = useCallback(
     (id: string) => {
-      setNodes((nds) => removeNode(nds, id))
-      push()
+      const target = nodes.find((node) => node.id === id)
+      if (!target) return
+      if (target.type !== 'terminal') {
+        setNodes((current) => removeNode(current, id))
+        push()
+        return
+      }
+
+      // Explicit node close is permanent. Component unmount alone is not: it
+      // also happens while switching projects, where the tmux session must live.
+      const originProjectId = activeProjectId
+      setCleanupError(null)
+      if (!originProjectId) return
+      void window.termsprawl.pty.closeNode(originProjectId, id)
+        .then((result) => {
+          invalidate([id])
+          dropCachedNode(originProjectId, id)
+          if (useProjects.getState().activeProjectId === originProjectId) {
+            setNodes((current) => removeNode(current, id))
+          }
+          if (result.cleanupPendingIds.length > 0) {
+            setCleanupError(`Terminal closed; session cleanup will retry: ${id}`)
+          }
+        })
+        .catch((error: unknown) => {
+          setCleanupError(`Could not close terminal: ${error instanceof Error ? error.message : String(error)}`)
+        })
     },
-    [push]
+    [activeProjectId, dropCachedNode, invalidate, nodes, push]
   )
   const canvasApi = useMemo(
     () => ({ updateNodeData, commit, closeNode }),
@@ -317,6 +404,16 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
     return () => clearTimeout(timer)
   }, [nodes, activeProjectId, saveNodes])
 
+  // A project switch cancels the debounce above. Flush the outgoing canvas
+  // explicitly so rapid edits are not replaced by its older cached snapshot.
+  useEffect(() => {
+    if (!activeProjectId) return
+    const projectId = activeProjectId
+    return () => {
+      void saveProjectNodes(projectId, serializeNodes(latestNodesRef.current))
+    }
+  }, [activeProjectId, saveProjectNodes])
+
   // Ctrl+Z / Ctrl+Shift+Z undo/redo — skip while typing in inputs/terminals.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -341,7 +438,12 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
   return (
     <CanvasContext.Provider value={canvasApi}>
       <div className="canvas" ref={wrapperRef}>
-      <ReactFlow
+        {cleanupError && (
+          <div className="error-banner" role="alert" onClick={() => setCleanupError(null)}>
+            {cleanupError}
+          </div>
+        )}
+        <ReactFlow
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypesMemo}

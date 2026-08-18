@@ -3,6 +3,8 @@
 export interface PtyCreateRequest {
   /** Stable per-node id; also the tmux session key (Phase 4). */
   id: string
+  /** Owning project, used to clean up live sessions before persistence settles. */
+  projectId?: string
   /** Shell to run; default: user's shell. */
   shell?: string
   /** Working directory; default: project cwd. */
@@ -26,6 +28,12 @@ export interface PtyExitInfo {
   id: string
   exitCode: number
   signal?: number
+}
+
+/** A destructive metadata operation committed; listed sessions still need retry cleanup. */
+export interface DurableCleanupResult {
+  committed: true
+  cleanupPendingIds: string[]
 }
 
 // Serialized node shape for workspace persistence (mirrors core's
@@ -57,7 +65,13 @@ export interface ProjectSettings {
 }
 
 export interface WorkspaceSnapshot {
-  index: { version: 1; projects: ProjectMeta[] }
+  index: {
+    version: 1
+    projects: ProjectMeta[]
+    pendingTerminalCleanup?: Array<{ projectId: string; terminalId: string }>
+    pendingTerminalNodeCleanup?: Array<{ projectId: string; terminalId: string }>
+    terminalTombstones?: Array<{ projectId: string; terminalId: string }>
+  }
   projects: Record<string, SerializedNode[]>
 }
 

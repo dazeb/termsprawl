@@ -7,6 +7,7 @@ import type { TerminalNodeData } from '../state/workspace'
 import { resumedSessionId } from '../state/workspace'
 import { useCanvas } from '../canvas/Canvas'
 import { useAgentStatuses } from '../state/agents'
+import { useProjects } from '../state/projects'
 
 // Status badge labels for agent nodes (Phase 7). Only nodes spawned with a
 // command (agent presets like claude/codex, druk) can carry a status.
@@ -20,11 +21,16 @@ const STATUS_LABEL: Record<string, string> = {
 // One terminal session, rendered with xterm, as a React Flow custom node.
 // The PTY session id IS the React Flow node id — keep ids stable or the
 // session respawns. The body is nodrag so xterm owns mouse input; dragging
-// happens via the header (the drag handle). The × button closes the node and
-// destroys its tmux session (unmount cleanup calls pty.destroy).
+// happens via the header (the drag handle). The × button asks Canvas to
+// destroy the tmux session; ordinary React unmount only detaches the view.
 export function TerminalNode({ id, data }: NodeProps<TerminalNodeData>): React.JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null)
   const { closeNode, updateNodeData } = useCanvas()
+  const projectId = useProjects((s) => s.activeProjectId)
+  // Capture ownership for this mount. During a project switch Zustand updates
+  // before Canvas replaces its old nodes; reacting to that transient value
+  // would destroy and recreate the outgoing project's PTYs under the new id.
+  const ownerProjectIdRef = useRef(projectId)
   const agentStatus = useAgentStatuses((s) => s.byId[id])
   const setAgentStatus = useAgentStatuses((s) => s.set)
   const clearAgentStatus = useAgentStatuses((s) => s.clear)
@@ -106,29 +112,40 @@ export function TerminalNode({ id, data }: NodeProps<TerminalNodeData>): React.J
     term.loadAddon(fit)
     term.open(host)
     fit.fit()
+    let active = true
 
     // Subscribe to output BEFORE creating the session so no early data is lost.
-    const offData = window.termsprawl.pty.onData(id, (chunk) => term.write(chunk))
+    const offData = window.termsprawl.pty.onData(id, (chunk) => {
+      if (active) term.write(chunk)
+    })
     const offExit = window.termsprawl.pty.onExit(id, () => {
-      term.write('\r\n\x1b[90m[session ended]\x1b[0m\r\n')
+      if (active) term.write('\r\n\x1b[90m[session ended]\x1b[0m\r\n')
     })
 
     void window.termsprawl.pty
-      .create({ id, cols: term.cols, rows: term.rows, cwd: data.cwd, command: data.command })
+      .create({
+        id,
+        projectId: ownerProjectIdRef.current ?? undefined,
+        cols: term.cols,
+        rows: term.rows,
+        cwd: data.cwd,
+        command: data.command
+      })
       .then(async (result) => {
+        if (!active) return
         // Cold start (first open or post-reboot): the tmux session is gone, so
         // replay the persisted scrollback snapshot. Warm reattach skips it —
         // tmux already redraws.
         if (result.fresh) {
           const scrollback = await window.termsprawl.pty.readScrollback(id)
-          if (scrollback) {
+          if (active && scrollback) {
             term.write(`\x1b[2J\x1b[H${scrollback}`)
             term.write('\r\n\x1b[90m── session restored ──\x1b[0m\r\n')
           }
         }
       })
       .catch((err: unknown) => {
-        term.write(`\r\n\x1b[91m[spawn failed: ${String(err)}]\x1b[0m\r\n`)
+        if (active) term.write(`\r\n\x1b[91m[spawn failed: ${String(err)}]\x1b[0m\r\n`)
       })
 
     const disposeInput = term.onData((chunk) => window.termsprawl.pty.write(id, chunk))
@@ -144,15 +161,20 @@ export function TerminalNode({ id, data }: NodeProps<TerminalNodeData>): React.J
     observer.observe(host)
 
     return () => {
+      active = false
       observer.disconnect()
       disposeInput.dispose()
       disposeResize.dispose()
       offData()
       offExit()
-      window.termsprawl.pty.destroy(id)
-      term.dispose()
+      // xterm parses writes and refreshes its viewport asynchronously. Wait
+      // until queued writes and two render frames have drained before disposal;
+      // otherwise a pending viewport refresh can read already-disposed services.
+      term.write('', () => {
+        requestAnimationFrame(() => requestAnimationFrame(() => term.dispose()))
+      })
     }
-  }, [id, data.cwd])
+  }, [id, data.cwd, data.command])
 
   return (
     <div className="terminal-node">
@@ -211,7 +233,18 @@ export function TerminalNode({ id, data }: NodeProps<TerminalNodeData>): React.J
           ×
         </button>
       </div>
-      <div className="terminal-node-host nodrag nowheel" ref={hostRef} />
+      <div
+        className="terminal-node-host nodrag nowheel"
+        ref={hostRef}
+        onContextMenu={(e) => {
+          // Right-click inside the terminal belongs to tmux (its mouse menu,
+          // copy/paste). Swallow the contextmenu event so React Flow's canvas
+          // menu never opens over the terminal, and the browser's native menu
+          // stays suppressed too.
+          e.preventDefault()
+          e.stopPropagation()
+        }}
+      />
     </div>
   )
 }

@@ -21,6 +21,7 @@ export function TabBar(): React.JSX.Element {
   const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null)
   const [settingsId, setSettingsId] = useState<string | null>(null)
   const [confirmId, setConfirmId] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const [storedOpen, setStoredOpen] = useState(false)
   const storedRef = useRef<HTMLDivElement>(null)
   const settingsRef = useRef<HTMLDivElement>(null)
@@ -59,13 +60,24 @@ export function TabBar(): React.JSX.Element {
   // false), so delete uses an in-app confirm dialog instead.
   const requestDelete = (id: string): void => {
     closeMenu()
+    setDeleteError(null)
     setConfirmId(id)
   }
 
   const doDelete = async (id: string): Promise<void> => {
-    setConfirmId(null)
-    await del(id)
-    if (settingsId === id) setSettingsId(null)
+    setDeleteError(null)
+    try {
+      const result = await del(id)
+      setConfirmId(null)
+      if (settingsId === id) setSettingsId(null)
+      if (result.cleanupPendingIds.length > 0) {
+        setDeleteError(
+          `Project deleted. Terminal cleanup will retry: ${result.cleanupPendingIds.join(', ')}`
+        )
+      }
+    } catch (error) {
+      setDeleteError(String(error))
+    }
   }
 
   useEffect(() => {
@@ -143,6 +155,7 @@ export function TabBar(): React.JSX.Element {
         <div
           className="tab-context-menu"
           style={{ left: menu.x, top: menu.y }}
+          onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
           <button onClick={() => void doClose(menu.id)}>Close</button>
@@ -196,6 +209,15 @@ export function TabBar(): React.JSX.Element {
         </div>
       )}
 
+      {deleteError && !confirmId && (
+        <div className="tab-delete-notice" role="status">
+          <span>{deleteError}</span>
+          <button onClick={() => setDeleteError(null)} aria-label="Dismiss notification">
+            ×
+          </button>
+        </div>
+      )}
+
       {confirmId && (
         <div className="confirm-overlay" onClick={() => setConfirmId(null)}>
           <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
@@ -206,6 +228,7 @@ export function TabBar(): React.JSX.Element {
               </span>
               will be removed permanently. Terminals inside it are destroyed.
             </div>
+            {deleteError && <div className="confirm-body">Delete failed: {deleteError}</div>}
             <div className="confirm-actions">
               <button onClick={() => setConfirmId(null)}>Cancel</button>
               <button className="danger" onClick={() => void doDelete(confirmId)}>
