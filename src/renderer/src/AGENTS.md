@@ -11,7 +11,7 @@ React application source.
 - `styles.css` — global styles: dark, lime `#c6f135` functional-only, Geist.
 - `canvas/` — the React Flow canvas (single live source of truth for node state).
 - `components/` — shared UI (TabBar).
-- `nodes/` — node kinds: terminal, sticky, group, diff.
+- `nodes/` — node kinds: terminal, sticky, group, diff, editor.
 - `state/` — renderer state: workspace helpers, history (undo/redo),
   projects store, agents store.
 

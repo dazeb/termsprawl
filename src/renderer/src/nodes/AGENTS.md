@@ -10,6 +10,8 @@ union (src/shared/types.ts) when adding a new kind.
 - `StickyNode.tsx` — note/scratchpad node.
 - `GroupNode.tsx` — group frame node (Phase 6).
 - `DiffNode.tsx` — Monaco-based diff viewer node (Phase 6).
+- `EditorNode.tsx` — Monaco editor: open/save via file-service IPC, dirty
+  dot, markdown preview (`marked`), image preview via `termsprawl-file://`.
 
 ## Rules
 

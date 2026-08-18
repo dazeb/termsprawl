@@ -5,6 +5,8 @@ import type {
   DiffBase,
   DiffInfoResult,
   DurableCleanupResult,
+  FileReadResult,
+  FileWriteResult,
   ProjectMeta,
   ProjectSettings,
   PtyCreateRequest,
@@ -73,7 +75,10 @@ const api = {
   },
 
   files: {
-    openDialog: (): Promise<string | null> => ipcRenderer.invoke(IPC.dialogOpenFile)
+    openDialog: (): Promise<string | null> => ipcRenderer.invoke(IPC.dialogOpenFile),
+    read: (path: string): Promise<FileReadResult> => ipcRenderer.invoke(IPC.fileRead, path),
+    write: (path: string, content: string): Promise<FileWriteResult> =>
+      ipcRenderer.invoke(IPC.fileWrite, path, content)
   },
 
   agent: {

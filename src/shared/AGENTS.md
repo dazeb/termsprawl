@@ -7,6 +7,7 @@ Types + IPC channel names shared across processes.
 - `ipc.ts` — the single source of truth for IPC channel strings. Never
   hardcode a channel elsewhere.
 - `types.ts` — shared type definitions (node kinds, workspace shapes).
+- `file-url.ts` — `termsprawl-file://local/...` preview URL helpers.
 - `agent-status.ts` — agent status/notification types (shared with hook server).
 - `agents/config.ts` — agent registry/preset config (Claude/Codex/Gemini/Grok).
 

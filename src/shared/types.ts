@@ -84,4 +84,15 @@ export interface DiffInfoResult {
   error?: { code: 'NO_REPO' | 'MISSING' | 'IO'; message: string }
 }
 
+// Editor node (Phase 6): read/write a local file through core/file-service.
+export type FileErrorCode = 'MISSING' | 'IO' | 'UNSUPPORTED'
+
+export type FileReadResult =
+  | { kind: 'text'; content: string }
+  | { kind: 'markdown'; content: string }
+  | { kind: 'image' }
+  | { error: { code: FileErrorCode; message: string } }
+
+export type FileWriteResult = { ok: true } | { error: { code: FileErrorCode; message: string } }
+
 // Agent status lives in shared/agent-status.ts (types + shouldNotify).

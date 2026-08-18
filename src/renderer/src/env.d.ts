@@ -2,6 +2,8 @@ import type {
   DiffBase,
   DiffInfoResult,
   DurableCleanupResult,
+  FileReadResult,
+  FileWriteResult,
   ProjectMeta,
   ProjectSettings,
   PtyCreateRequest,
@@ -44,6 +46,8 @@ declare global {
       }
       files: {
         openDialog(): Promise<string | null>
+        read(path: string): Promise<FileReadResult>
+        write(path: string, content: string): Promise<FileWriteResult>
       }
       agent: {
         onStatus(sessionId: string, cb: (event: AgentStatusEvent) => void): () => void
