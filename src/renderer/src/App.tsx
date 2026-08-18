@@ -2,11 +2,14 @@ import { useEffect, useState } from 'react'
 import { ReactFlowProvider } from 'reactflow'
 import { Canvas } from './canvas/Canvas'
 import { TabBar } from './components/TabBar'
+import { UpdateToast } from './components/UpdateToast'
+import { AppSettingsPanel } from './components/AppSettingsPanel'
 import { useProjects } from './state/projects'
 
 export function App(): React.JSX.Element {
   const [version, setVersion] = useState<string>('…')
   const [error, setError] = useState<string | null>(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const loaded = useProjects((s) => s.loaded)
   const load = useProjects((s) => s.load)
   const activeProjectId = useProjects((s) => s.activeProjectId)
@@ -41,8 +44,18 @@ export function App(): React.JSX.Element {
       <div className="toolbar">
         <span className="brand">termsprawl</span>
         <TabBar />
+        <button
+          type="button"
+          className="app-settings-toggle-btn"
+          onClick={() => setSettingsOpen((open) => !open)}
+          title="App settings"
+        >
+          settings
+        </button>
         <span className="version">v{version}</span>
       </div>
+      {settingsOpen && <AppSettingsPanel onClose={() => setSettingsOpen(false)} />}
+      <UpdateToast />
       {error && (
         <div className="error-banner" onClick={() => setError(null)} title="Click to dismiss">
           ⚠ {error}

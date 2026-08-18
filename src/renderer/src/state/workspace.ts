@@ -172,12 +172,12 @@ export function createDiffNode(): Node<DiffNodeData> {
   }
 }
 
-export function createEditorNode(): Node<EditorNodeData> {
+export function createEditorNode(path: string | null = null): Node<EditorNodeData> {
   return {
     id: nextId(),
     type: 'editor',
     position: { x: 60 + Math.random() * 240, y: 60 + Math.random() * 160 },
-    data: { kind: 'editor', path: null, preview: false }
+    data: { kind: 'editor', path, preview: false }
   }
 }
 

@@ -389,6 +389,93 @@ body {
   font-size: 12px;
 }
 
+.app-settings-toggle-btn {
+  -webkit-app-region: no-drag;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.app-settings-toggle-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.app-settings {
+  position: absolute;
+  top: 46px;
+  right: 12px;
+  z-index: 460;
+  width: 280px;
+  padding: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
+}
+
+.app-settings-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--fg);
+  margin: 8px 0;
+}
+
+.app-settings-toggle input {
+  margin-top: 2px;
+}
+
+.app-settings-hint {
+  margin: 0 0 10px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.update-toast {
+  position: fixed;
+  top: 46px;
+  right: 12px;
+  z-index: 470;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(520px, calc(100vw - 24px));
+  padding: 10px 12px;
+  border: 1px solid #c6f13566;
+  background: #10110d;
+  color: #d7ddb9;
+  font: 12px/1.4 'Geist Mono', monospace;
+  box-shadow: 0 8px 30px #000a;
+}
+
+.update-toast-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.update-toast-actions button {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: #c6f135;
+  cursor: pointer;
+  font: 11px/1 'Geist Mono', monospace;
+  padding: 3px 8px;
+  border-radius: 5px;
+}
+
+.update-toast-dismiss {
+  border: 0 !important;
+  font-size: 16px !important;
+}
+
 .error-banner {
   position: fixed;
   top: 44px;
@@ -1079,4 +1166,134 @@ body {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
+}
+
+/* ---- project file tree (edge hover) ---- */
+
+.file-tree-hot {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  z-index: 35;
+}
+
+.file-tree-hot-left {
+  left: 0;
+}
+
+.file-tree-hot-right {
+  right: 0;
+}
+
+.file-tree-hot:hover {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.file-tree {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  pointer-events: none;
+  transition: transform 160ms ease;
+}
+
+.file-tree-left {
+  left: 0;
+  transform: translateX(-100%);
+  border-left: 0;
+}
+
+.file-tree-right {
+  right: 0;
+  transform: translateX(100%);
+  border-right: 0;
+}
+
+.file-tree.is-open {
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+.file-tree-left.is-open {
+  box-shadow: 10px 0 28px rgba(0, 0, 0, 0.45);
+}
+
+.file-tree-right.is-open {
+  box-shadow: -10px 0 28px rgba(0, 0, 0, 0.45);
+}
+
+.file-tree-head {
+  flex-shrink: 0;
+  padding: 10px 12px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-tree-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.file-tree-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0 12px;
+}
+
+.file-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--fg);
+  font: 12px/1.4 'Geist Mono', 'JetBrains Mono', monospace;
+  text-align: left;
+  padding: 3px 10px 3px 8px;
+  cursor: pointer;
+}
+
+.file-tree-row:hover {
+  background: rgba(198, 241, 53, 0.08);
+}
+
+.file-tree-mark {
+  width: 10px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.file-tree-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-tree-dir .file-tree-name {
+  color: var(--fg);
+}
+
+.file-tree-file .file-tree-name {
+  color: var(--muted);
+}
+
+.file-tree-empty {
+  padding: 16px 12px;
+  color: var(--muted);
+  font-size: 12px;
 }

@@ -95,4 +95,20 @@ export type FileReadResult =
 
 export type FileWriteResult = { ok: true } | { error: { code: FileErrorCode; message: string } }
 
+export interface AppSettings {
+  autoDownloadUpdates: boolean
+}
+
+export type DirEntryKind = 'dir' | 'file'
+
+export interface DirEntry {
+  name: string
+  path: string
+  kind: DirEntryKind
+}
+
+export type DirListResult =
+  | { entries: DirEntry[] }
+  | { error: { code: 'MISSING' | 'IO' | 'OUTSIDE'; message: string } }
+
 // Agent status lives in shared/agent-status.ts (types + shouldNotify).

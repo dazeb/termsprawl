@@ -12,6 +12,7 @@ import ReactFlow, {
 import 'reactflow/dist/style.css'
 import type { Connection, Edge, EdgeChange, Node, NodeChange } from 'reactflow'
 import { TerminalNode } from '../nodes/TerminalNode'
+import { FileTree } from '../components/FileTree'
 import { StickyNode } from '../nodes/StickyNode'
 import { GroupNode } from '../nodes/GroupNode'
 import { DiffNode } from '../nodes/DiffNode'
@@ -250,6 +251,36 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
       { ...node, zIndex: topZ(nds), selected: true }
     ])
   }, [])
+
+  const openFileFromTree = useCallback(
+    (path: string) => {
+      const current = latestNodesRef.current
+      const existing = current.find(
+        (node) => node.data.kind === 'editor' && node.data.path === path
+      )
+      if (existing) {
+        setNodes((nds) =>
+          nds.map((node) => ({
+            ...node,
+            selected: node.id === existing.id,
+            zIndex: node.id === existing.id ? topZ(nds) : node.zIndex
+          }))
+        )
+        return
+      }
+      const node = createEditorNode(path)
+      if (wrapperRef.current) {
+        const box = wrapperRef.current.getBoundingClientRect()
+        node.position = screenToFlowPosition({
+          x: box.left + box.width / 2,
+          y: box.top + box.height / 2
+        })
+      }
+      appendOnTop(node)
+      push()
+    },
+    [appendOnTop, push, screenToFlowPosition]
+  )
 
   const addTerminal = useCallback(() => {
     try {
@@ -537,6 +568,7 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
           ↪
         </button>
       </div>
+      <FileTree cwd={cwd} onOpenFile={openFileFromTree} />
       </div>
     </CanvasContext.Provider>
   )

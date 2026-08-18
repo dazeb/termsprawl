@@ -17,8 +17,10 @@ Server Edition boots from.
   `saveNodes`.
 - `project-deletion.ts` / `terminal-close.ts` — lifecycle cleanup for projects
   and terminal nodes.
-- `file-service.ts` — editor-node read/write/classify (utf8 text, markdown,
-  image-by-extension; never throws).
+- `file-service.ts` — editor-node read/write/classify and project folder
+  listings (`listProjectDir` stays inside the root; skips dotfiles,
+  node_modules, .git).
+- `app-settings.ts` — app-wide settings.json (auto-download updates).
 - `git-service.ts` — git operations for source-control features.
 - `agent-status.ts`, `session-name.ts`, `command-resolver.ts`, `transcript.ts`
   — agent status aggregation, session-name sync, command resolution, transcripts.

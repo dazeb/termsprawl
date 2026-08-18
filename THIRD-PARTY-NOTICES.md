@@ -19,6 +19,7 @@ linked; full texts live in the respective package's `LICENSE` file under
 | monaco-editor | ^0.56.0 | MIT | Editor / diff rendering |
 | @monaco-editor/react | ^4.7.0 | MIT | React bindings for Monaco |
 | marked | ^18.0.9 | MIT | Markdown preview in editor nodes |
+| electron-updater | ^6.8.9 | MIT | GitHub Releases auto-update |
 
 ## Notes
 
