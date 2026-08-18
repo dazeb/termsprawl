@@ -4,6 +4,7 @@ import {
   createAgentNode,
   createDiffNode,
   createDrukNode,
+  createEditorNode,
   createGroup,
   createResumeAgentNode,
   createStickyNode,
@@ -284,6 +285,44 @@ describe('diff nodes', () => {
   it('titles diff nodes with the file basename, else "diff"', () => {
     const node = createDiffNode()
     expect(nodeTitle(node.data)).toBe('diff')
+    node.data.path = '/repo/src/app.ts'
+    expect(nodeTitle(node.data)).toBe('app.ts')
+  })
+})
+
+describe('editor nodes', () => {
+  it('creates an editor node with defaults', () => {
+    const node = createEditorNode()
+    expect(node.type).toBe('editor')
+    expect(node.data.kind).toBe('editor')
+    expect(node.data.path).toBeNull()
+    expect(node.data.preview).toBe(false)
+  })
+
+  it('round-trips editor data through serialize/deserialize', () => {
+    const node = createEditorNode()
+    node.data.path = '/repo/README.md'
+    node.data.preview = true
+
+    const restored = deserializeNodes(serializeNodes([node]))[0]
+    expect(restored.type).toBe('editor')
+    if (restored.data.kind !== 'editor') throw new Error('expected editor node')
+    expect(restored.data.path).toBe('/repo/README.md')
+    expect(restored.data.preview).toBe(true)
+  })
+
+  it('rehydrates legacy editor data with defaults when fields are missing', () => {
+    const restored = deserializeNodes([
+      { id: 'e1', type: 'editor', position: { x: 0, y: 0 }, data: { kind: 'editor' } }
+    ])[0]
+    if (restored.data.kind !== 'editor') throw new Error('expected editor node')
+    expect(restored.data.path).toBeNull()
+    expect(restored.data.preview).toBe(false)
+  })
+
+  it('titles editor nodes with the file basename, else editor', () => {
+    const node = createEditorNode()
+    expect(nodeTitle(node.data)).toBe('editor')
     node.data.path = '/repo/src/app.ts'
     expect(nodeTitle(node.data)).toBe('app.ts')
   })

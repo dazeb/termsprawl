@@ -1,10 +1,13 @@
-import { app, BrowserWindow, dialog, ipcMain, Notification } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Notification, protocol, net } from 'electron'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { IPC } from '../shared/ipc'
 import type { DiffBase, DiffInfoResult, ProjectSettings, PtyCreateRequest, PtyExitInfo, SerializedNode } from '../shared/types'
 import type { CorePlatform } from '../core/platform'
 import { diffInfo } from '../core/git-service'
+import { classifyFile, readProjectFile, writeProjectFile } from '../core/file-service'
+import { FILE_PROTOCOL, fromFilePreviewUrl } from '../shared/file-url'
 import { PtyManager } from '../core/pty-manager'
 import { shouldNotify, type AgentStatus } from '../shared/agent-status'
 import { WorkspaceStore } from '../core/workspace-store'
@@ -15,6 +18,21 @@ import { HookServer } from './agents/hook-server'
 import { claudeSettingsPath, installClaudeHooks } from './agents/hook-installer'
 import { SessionNameTracker } from '../core/session-name'
 import { agentSessionNameChannel } from '../shared/ipc'
+
+// Must run before app.ready so <img src="termsprawl-file://..."> is treated as
+// a secure custom scheme (otherwise Chromium blocks it under the CSP).
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: FILE_PROTOCOL,
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      stream: true,
+      corsEnabled: true
+    }
+  }
+])
 
 // The Electron implementation of the core's platform seam.
 const platform: CorePlatform = {
@@ -129,6 +147,23 @@ function registerDiffIpc(): void {
   })
 }
 
+function registerFileIpc(): void {
+  ipcMain.handle(IPC.fileRead, (_event, path: string) => readProjectFile(path))
+  ipcMain.handle(IPC.fileWrite, (_event, path: string, content: string) =>
+    writeProjectFile(path, content)
+  )
+}
+
+function registerFileProtocol(): void {
+  protocol.handle(FILE_PROTOCOL, (request) => {
+    const filePath = fromFilePreviewUrl(request.url)
+    if (!filePath || classifyFile(filePath) !== 'image') {
+      return new Response('forbidden', { status: 403, statusText: 'Forbidden' })
+    }
+    return net.fetch(pathToFileURL(filePath).href)
+  })
+}
+
 function createWindow(): void {
   const win = new BrowserWindow({
     width: 1440,
@@ -176,6 +211,8 @@ void app.whenReady().then(async () => {
   registerPtyIpc()
   registerWorkspaceIpc()
   registerDiffIpc()
+  registerFileIpc()
+  registerFileProtocol()
 
   for (const entry of workspaceStore.pendingTerminalNodeCleanup()) {
     try {

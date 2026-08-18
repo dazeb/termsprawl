@@ -208,10 +208,11 @@ extension, one feature at a time.**
   language detect by extension, Ctrl+S save, dirty dot, markdown preview
   (marked), image preview via `termsprawl-file://` custom protocol.
 - AppImage checkpoint 3.
-- **Status: IN AGENT WORKTREE** — lives on `feature/editor-node`
-  (`/home/dazeb/workspace/projects/active/termsprawl-agent`), not merged to
-  main. Diff node (6.4) added Monaco + `files.openDialog()` on main first;
-  expected merge reconciliation when the branch lands.
+- **Status: DONE (feat/phase6-editor-node on main, v0.3.3).** TDD: workspace
+  editor factory/round-trip, file-service classify/read/write, file-url
+  protocol helpers, markdown render (raw HTML dropped). Monaco reused from
+  the shared `monaco.ts` loader. Image preview is `termsprawl-file://local/…`
+  (privileged scheme; only image extensions are served).
 
 ### Task 6.4: Diff node
 - Monaco diff editor, read-only; `core/git-service.ts` (repoRoot +
@@ -225,9 +226,9 @@ extension, one feature at a time.**
 ### Task 6.5: Commit + status
 - Update PLAN.md status with checkpoint results.
 - `git commit -m "feat: sticky, group, editor, diff nodes"`
-- **Status: DONE on main (diff node; 5 commits 0f81c76→f584815).** Editor
-  node commits land from the worktree branch when merged; main's Phase 6
-  contribution = sticky + group + diff.
+- **Status: DONE.** Sticky + group + diff landed earlier (v0.2.4); editor
+  node closes Phase 6 (v0.3.3). Grok preset already on main — the old
+  `feature/editor-node` / `feature/grok-agent` worktrees are stale labels.
 
 ## Phase 7 — Agents
 

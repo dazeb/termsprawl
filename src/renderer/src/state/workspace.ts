@@ -6,7 +6,7 @@ import type { Node } from 'reactflow'
 import type { SerializedNode } from '@shared/types'
 import { agentTitle, agentCommand, type AgentId } from '@shared/agents/config'
 
-export const NODE_TYPES = ['terminal', 'sticky', 'group', 'diff'] as const
+export const NODE_TYPES = ['terminal', 'sticky', 'group', 'diff', 'editor'] as const
 export type NodeKind = (typeof NODE_TYPES)[number]
 
 export interface TerminalNodeData {
@@ -40,7 +40,20 @@ export interface DiffNodeData {
   base: 'staged' | 'HEAD'
 }
 
-export type SprawlNodeData = TerminalNodeData | StickyNodeData | GroupNodeData | DiffNodeData
+export interface EditorNodeData {
+  kind: 'editor'
+  /** Absolute path of the open file; null until one is chosen. */
+  path: string | null
+  /** Markdown preview pane (ignored for non-markdown files). */
+  preview: boolean
+}
+
+export type SprawlNodeData =
+  | TerminalNodeData
+  | StickyNodeData
+  | GroupNodeData
+  | DiffNodeData
+  | EditorNodeData
 
 let counter = 0
 const TERMINAL_DIMENSIONS = { width: 720, height: 420 } as const
@@ -159,6 +172,15 @@ export function createDiffNode(): Node<DiffNodeData> {
   }
 }
 
+export function createEditorNode(): Node<EditorNodeData> {
+  return {
+    id: nextId(),
+    type: 'editor',
+    position: { x: 60 + Math.random() * 240, y: 60 + Math.random() * 160 },
+    data: { kind: 'editor', path: null, preview: false }
+  }
+}
+
 /** Project name from a chosen folder path (basename), or the fallback when no
  * folder was picked (cwd-less inline project). */
 export function projectNameFromPath(cwd: string | null, fallback: string): string {
@@ -173,6 +195,7 @@ export function nodeTitle(data: SprawlNodeData): string {
   if (data.kind === 'terminal') return data.title
   if (data.kind === 'group') return data.title
   if (data.kind === 'diff') return data.path ? data.path.split('/').pop() ?? 'diff' : 'diff'
+  if (data.kind === 'editor') return data.path ? data.path.split('/').pop() ?? 'editor' : 'editor'
   const firstLine = data.text.split('\n')[0].trim()
   return firstLine || 'sticky note'
 }
@@ -195,7 +218,8 @@ const DEFAULT_SIZE: Record<string, { w: number; h: number }> = {
   terminal: { w: 720, h: 420 },
   sticky: { w: 200, h: 130 },
   group: { w: 200, h: 130 },
-  diff: { w: 560, h: 360 }
+  diff: { w: 560, h: 360 },
+  editor: { w: 640, h: 420 }
 }
 
 function nodeSize(n: Node<SprawlNodeData>): { w: number; h: number } {
@@ -297,6 +321,12 @@ export function deserializeNodes(serialized: SerializedNode[]): Node<SprawlNodeD
       return {
         ...base,
         data: { kind: 'diff', path: null, base: 'HEAD', ...data } as DiffNodeData
+      }
+    }
+    if (data.kind === 'editor') {
+      return {
+        ...base,
+        data: { kind: 'editor', path: null, preview: false, ...data } as EditorNodeData
       }
     }
     return {

@@ -116,11 +116,12 @@ touch build config, re-verify with a packaged boot test.
 
 ## Node kinds
 
-Only `terminal` is implemented today (Phase 5 = MVP cut). The plan
-(`PLAN.md`) adds sticky/group/editor/diff/chat, agents, source control, SSH
-remote, Server Edition, then rebuilds our own extras from scratch (Telegram,
-relay, chat driver — concepts only, never ported). Extend `NODE_TYPES` and
-the `data.kind` union in `state/workspace.ts` when adding kinds.
+Implemented: `terminal`, `sticky`, `group`, `diff`, `editor` (Phase 6).
+Agent sessions reuse the terminal node with a CLI preset (Phase 7). The plan
+(`PLAN.md`) still adds chat, source control, SSH remote, Server Edition, then
+rebuilds our own extras from scratch (Telegram, relay, chat driver — concepts
+only, never ported). Extend `NODE_TYPES` and the `data.kind` union in
+`state/workspace.ts` when adding kinds.
 
 ## Remote & parallel-agent workflow (worktrees)
 

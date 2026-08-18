@@ -30,6 +30,8 @@ export const IPC = {
   // Node services (Phase 6)
   diffInfo: 'diff:info',
   dialogOpenFile: 'dialog:open-file',
+  fileRead: 'file:read',
+  fileWrite: 'file:write',
 
   // Agent hooks (Phase 7)
   agentStatus: 'agent:status', // suffixed ':<sessionId>' for the push channel

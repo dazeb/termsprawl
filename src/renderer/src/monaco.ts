@@ -1,4 +1,4 @@
-// Monaco loader setup — shared by the diff node now, the editor node later.
+// Monaco loader setup — shared by editor + diff nodes.
 // Monaco must load from node_modules (no CDN — this is a desktop app); vite
 // bundles the editor worker via the `?worker` import. The renderer CSP allows
 // `worker-src 'self' blob:` for exactly this.

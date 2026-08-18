@@ -15,10 +15,12 @@ import { TerminalNode } from '../nodes/TerminalNode'
 import { StickyNode } from '../nodes/StickyNode'
 import { GroupNode } from '../nodes/GroupNode'
 import { DiffNode } from '../nodes/DiffNode'
+import { EditorNode } from '../nodes/EditorNode'
 import {
   createAgentNode,
   createDiffNode,
   createDrukNode,
+  createEditorNode,
   createGroup,
   createResumeAgentNode,
   createStickyNode,
@@ -35,7 +37,13 @@ import { useHistory } from '../state/history'
 import { useProjects } from '../state/projects'
 import type { SprawlNodeData } from '../state/workspace'
 
-const nodeTypes = { terminal: TerminalNode, sticky: StickyNode, group: GroupNode, diff: DiffNode }
+const nodeTypes = {
+  terminal: TerminalNode,
+  sticky: StickyNode,
+  group: GroupNode,
+  diff: DiffNode,
+  editor: EditorNode
+}
 
 // Canvas context: lets custom nodes update their own data and record undo
 // snapshots without polluting serialized node data with callbacks.
@@ -279,6 +287,16 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
     setMenu(null)
   }, [menu, push, screenToFlowPosition, appendOnTop])
 
+  const addEditor = useCallback(() => {
+    const node = createEditorNode()
+    if (menu && wrapperRef.current) {
+      node.position = screenToFlowPosition({ x: menu.x, y: menu.y })
+    }
+    appendOnTop(node)
+    push()
+    setMenu(null)
+  }, [menu, push, screenToFlowPosition, appendOnTop])
+
   // A druk terminal: launches the druk TUI code editor in the project cwd.
   const addDruk = useCallback(() => {
     const node = createDrukNode(cwd)
@@ -491,6 +509,7 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
           <button onClick={addTerminal}>New terminal</button>
           <button onClick={addSticky}>New sticky note</button>
           <button onClick={addDiff}>New diff</button>
+          <button onClick={addEditor}>New editor</button>
           <button onClick={addDruk}>Open druk</button>
           <button
             className="context-submenu-toggle"
