@@ -4,21 +4,35 @@ import type {
   DurableCleanupResult,
   FileReadResult,
   FileWriteResult,
+  DirListResult,
   ProjectMeta,
   ProjectSettings,
   PtyCreateRequest,
   PtyCreateResult,
   PtyExitInfo,
   SerializedNode,
-  WorkspaceSnapshot
+  WorkspaceSnapshot,
+  AppSettings
 } from '@shared/types'
 import type { AgentStatusEvent } from '@shared/agent-status'
+import type { UpdateStatus } from '@shared/update-status'
 
 // The shape of window.termsprawl as exposed by the preload bridge.
 declare global {
   interface Window {
     termsprawl: {
       appVersion(): Promise<string>
+      settings: {
+        get(): Promise<AppSettings>
+        set(patch: Partial<AppSettings>): Promise<AppSettings>
+      }
+      updates: {
+        check(): Promise<UpdateStatus>
+        download(): Promise<UpdateStatus>
+        install(): Promise<void>
+        dismiss(): Promise<UpdateStatus>
+        onStatus(cb: (status: UpdateStatus) => void): () => void
+      }
       workspace: {
         snapshot(): Promise<WorkspaceSnapshot>
         saveNodes(id: string, nodes: SerializedNode[]): Promise<number>
@@ -48,6 +62,7 @@ declare global {
         openDialog(): Promise<string | null>
         read(path: string): Promise<FileReadResult>
         write(path: string, content: string): Promise<FileWriteResult>
+        list(root: string, rel?: string): Promise<DirListResult>
       }
       agent: {
         onStatus(sessionId: string, cb: (event: AgentStatusEvent) => void): () => void

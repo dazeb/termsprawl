@@ -4,6 +4,13 @@
 export const IPC = {
   // App metadata
   appVersion: 'app:version',
+  appSettingsGet: 'app:settings-get',
+  appSettingsSet: 'app:settings-set',
+  updateStatus: 'update:status',
+  updateCheck: 'update:check',
+  updateDownload: 'update:download',
+  updateInstall: 'update:install',
+  updateDismiss: 'update:dismiss',
 
   // Workspace / projects (Phase 5)
   workspaceSnapshot: 'workspace:snapshot',
@@ -32,6 +39,7 @@ export const IPC = {
   dialogOpenFile: 'dialog:open-file',
   fileRead: 'file:read',
   fileWrite: 'file:write',
+  fileList: 'file:list',
 
   // Agent hooks (Phase 7)
   agentStatus: 'agent:status', // suffixed ':<sessionId>' for the push channel

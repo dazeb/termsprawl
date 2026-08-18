@@ -7,19 +7,42 @@ import type {
   DurableCleanupResult,
   FileReadResult,
   FileWriteResult,
+  DirListResult,
   ProjectMeta,
   ProjectSettings,
   PtyCreateRequest,
   PtyCreateResult,
   PtyExitInfo,
   SerializedNode,
-  WorkspaceSnapshot
+  WorkspaceSnapshot,
+  AppSettings
 } from '../shared/types'
+import type { UpdateStatus } from '../shared/update-status'
 
 // The narrow API surface exposed to the renderer as window.termsprawl.
 // Grows per phase; the renderer must never touch ipcRenderer directly.
 const api = {
   appVersion: (): Promise<string> => ipcRenderer.invoke(IPC.appVersion),
+
+  settings: {
+    get: (): Promise<AppSettings> => ipcRenderer.invoke(IPC.appSettingsGet),
+    set: (patch: Partial<AppSettings>): Promise<AppSettings> =>
+      ipcRenderer.invoke(IPC.appSettingsSet, patch)
+  },
+
+  updates: {
+    check: (): Promise<UpdateStatus> => ipcRenderer.invoke(IPC.updateCheck),
+    download: (): Promise<UpdateStatus> => ipcRenderer.invoke(IPC.updateDownload),
+    install: (): Promise<void> => ipcRenderer.invoke(IPC.updateInstall),
+    dismiss: (): Promise<UpdateStatus> => ipcRenderer.invoke(IPC.updateDismiss),
+    onStatus: (cb: (status: UpdateStatus) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, status: UpdateStatus): void => cb(status)
+      ipcRenderer.on(IPC.updateStatus, listener)
+      return () => {
+        ipcRenderer.removeListener(IPC.updateStatus, listener)
+      }
+    }
+  },
 
   workspace: {
     snapshot: (): Promise<WorkspaceSnapshot> => ipcRenderer.invoke(IPC.workspaceSnapshot),
@@ -78,7 +101,9 @@ const api = {
     openDialog: (): Promise<string | null> => ipcRenderer.invoke(IPC.dialogOpenFile),
     read: (path: string): Promise<FileReadResult> => ipcRenderer.invoke(IPC.fileRead, path),
     write: (path: string, content: string): Promise<FileWriteResult> =>
-      ipcRenderer.invoke(IPC.fileWrite, path, content)
+      ipcRenderer.invoke(IPC.fileWrite, path, content),
+    list: (root: string, rel?: string): Promise<DirListResult> =>
+      ipcRenderer.invoke(IPC.fileList, root, rel)
   },
 
   agent: {

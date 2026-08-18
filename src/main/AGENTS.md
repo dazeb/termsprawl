@@ -6,6 +6,7 @@ Electron main process.
 
 - `index.ts` — window creation, IPC wiring, dialogs, app lifecycle, and the
   `CorePlatform` implementation (the concrete side of the seam in src/core).
+- `updates.ts` — electron-updater wrapper (GitHub Releases; no-op in dev).
 - `agents/` — agent hook infrastructure (see its AGENTS.md).
 
 ## Rules

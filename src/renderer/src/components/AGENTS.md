@@ -7,6 +7,10 @@ Shared UI components (non-node chrome).
 - `TabBar.tsx` — project tabs (one project per tab) and the in-app delete
   confirmation overlay. Confirmation dialogs live here — never
   `window.confirm` (Electron silently no-ops it).
+- `FileTree.tsx` — hover the left or right canvas edge to slide out a
+  simple project file tree. Click a file to open (or focus) an editor node.
+- `UpdateToast.tsx` — packaged-app update notice (download / restart).
+- `AppSettingsPanel.tsx` — app-wide settings (auto-download updates).
 
 ## Rules
 

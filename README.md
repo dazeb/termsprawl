@@ -29,7 +29,7 @@ sprawls, nothing hides in tabs.
 
 Actively developed. Phases 0–6 of [PLAN.md](PLAN.md) are shipped (scaffold,
 terminal nodes, canvas, tmux continuity, projects/persistence, sticky/group/
-editor/diff nodes); Phase 7 (agents) is in progress. Current version: **0.3.3**.
+editor/diff nodes); Phase 7 (agents) is in progress. Current version: **0.3.4**.
 
 Linux only — AppImage and `.deb` artifacts. No macOS support, by design.
 

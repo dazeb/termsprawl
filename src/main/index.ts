@@ -6,7 +6,7 @@ import { IPC } from '../shared/ipc'
 import type { DiffBase, DiffInfoResult, ProjectSettings, PtyCreateRequest, PtyExitInfo, SerializedNode } from '../shared/types'
 import type { CorePlatform } from '../core/platform'
 import { diffInfo } from '../core/git-service'
-import { classifyFile, readProjectFile, writeProjectFile } from '../core/file-service'
+import { classifyFile, listProjectDir, readProjectFile, writeProjectFile } from '../core/file-service'
 import { FILE_PROTOCOL, fromFilePreviewUrl } from '../shared/file-url'
 import { PtyManager } from '../core/pty-manager'
 import { shouldNotify, type AgentStatus } from '../shared/agent-status'
@@ -14,6 +14,8 @@ import { WorkspaceStore } from '../core/workspace-store'
 import type { ProjectMeta } from '../core/workspace-files'
 import { deleteProjectAndDestroyTerminals } from '../core/project-deletion'
 import { closeTerminalNode } from '../core/terminal-close'
+import { loadAppSettings, saveAppSettings } from '../core/app-settings'
+import { createUpdateBridge } from './updates'
 import { HookServer } from './agents/hook-server'
 import { claudeSettingsPath, installClaudeHooks } from './agents/hook-installer'
 import { SessionNameTracker } from '../core/session-name'
@@ -46,6 +48,12 @@ const platform: CorePlatform = {
 
 const ptyManager = new PtyManager(platform)
 const workspaceStore = new WorkspaceStore(platform)
+const appSettings = { current: loadAppSettings(platform.userDataPath) }
+const updateBridge = createUpdateBridge({
+  isPackaged: app.isPackaged,
+  autoDownload: appSettings.current.autoDownloadUpdates,
+  broadcast: (channel, payload) => platform.broadcast(channel, payload)
+})
 
 // Agent hook server (Phase 7): receives lifecycle POSTs from agent CLIs,
 // broadcasts normalized status events to the renderer, and fires OS
@@ -152,6 +160,9 @@ function registerFileIpc(): void {
   ipcMain.handle(IPC.fileWrite, (_event, path: string, content: string) =>
     writeProjectFile(path, content)
   )
+  ipcMain.handle(IPC.fileList, (_event, root: string, rel?: string) =>
+    listProjectDir(root, rel ?? '.')
+  )
 }
 
 function registerFileProtocol(): void {
@@ -162,6 +173,21 @@ function registerFileProtocol(): void {
     }
     return net.fetch(pathToFileURL(filePath).href)
   })
+}
+
+function registerUpdateIpc(): void {
+  ipcMain.handle(IPC.appSettingsGet, () => appSettings.current)
+  ipcMain.handle(IPC.appSettingsSet, (_event, patch: { autoDownloadUpdates?: boolean }) => {
+    appSettings.current = saveAppSettings(platform.userDataPath, patch)
+    updateBridge.setAutoDownload(appSettings.current.autoDownloadUpdates)
+    return appSettings.current
+  })
+  ipcMain.handle(IPC.updateCheck, () => updateBridge.check())
+  ipcMain.handle(IPC.updateDownload, () => updateBridge.download())
+  ipcMain.handle(IPC.updateInstall, () => {
+    updateBridge.install()
+  })
+  ipcMain.handle(IPC.updateDismiss, () => updateBridge.dismiss())
 }
 
 function createWindow(): void {
@@ -213,6 +239,7 @@ void app.whenReady().then(async () => {
   registerDiffIpc()
   registerFileIpc()
   registerFileProtocol()
+  registerUpdateIpc()
 
   for (const entry of workspaceStore.pendingTerminalNodeCleanup()) {
     try {
@@ -251,6 +278,10 @@ void app.whenReady().then(async () => {
   }
 
   createWindow()
+
+  setTimeout(() => {
+    void updateBridge.check()
+  }, 2500)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

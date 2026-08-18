@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { classifyFile, readProjectFile, writeProjectFile } from './file-service'
+import { classifyFile, listProjectDir, readProjectFile, writeProjectFile } from './file-service'
 
 describe('file-service', () => {
   const dirs: string[] = []
@@ -82,5 +82,55 @@ describe('file-service', () => {
     mkdirSync(join(dir, 'folder'))
     const result = writeProjectFile(join(dir, 'folder'), 'nope')
     expect(result).toMatchObject({ error: { code: 'IO' } })
+  })
+
+  it('lists directories first then files, alphabetically', () => {
+    const dir = scratch()
+    writeFileSync(join(dir, 'zeta.ts'), '')
+    writeFileSync(join(dir, 'alpha.ts'), '')
+    mkdirSync(join(dir, 'src'))
+    mkdirSync(join(dir, 'docs'))
+    const result = listProjectDir(dir)
+    expect(result).toEqual({
+      entries: [
+        { name: 'docs', path: join(dir, 'docs'), kind: 'dir' },
+        { name: 'src', path: join(dir, 'src'), kind: 'dir' },
+        { name: 'alpha.ts', path: join(dir, 'alpha.ts'), kind: 'file' },
+        { name: 'zeta.ts', path: join(dir, 'zeta.ts'), kind: 'file' }
+      ]
+    })
+  })
+
+  it('skips node_modules, .git, and other dot entries', () => {
+    const dir = scratch()
+    mkdirSync(join(dir, 'node_modules'))
+    mkdirSync(join(dir, '.git'))
+    mkdirSync(join(dir, '.hidden'))
+    writeFileSync(join(dir, 'keep.ts'), '')
+    const result = listProjectDir(dir)
+    expect(result).toEqual({
+      entries: [{ name: 'keep.ts', path: join(dir, 'keep.ts'), kind: 'file' }]
+    })
+  })
+
+  it('lists a nested folder relative to the project root', () => {
+    const dir = scratch()
+    mkdirSync(join(dir, 'src'))
+    writeFileSync(join(dir, 'src', 'app.ts'), '')
+    const result = listProjectDir(dir, 'src')
+    expect(result).toEqual({
+      entries: [{ name: 'app.ts', path: join(dir, 'src', 'app.ts'), kind: 'file' }]
+    })
+  })
+
+  it('refuses to walk outside the project root', () => {
+    const dir = scratch()
+    const result = listProjectDir(dir, '../outside')
+    expect(result).toMatchObject({ error: { code: 'OUTSIDE' } })
+  })
+
+  it('returns MISSING when the folder does not exist', () => {
+    const result = listProjectDir(join(scratch(), 'gone'))
+    expect(result).toMatchObject({ error: { code: 'MISSING' } })
   })
 })

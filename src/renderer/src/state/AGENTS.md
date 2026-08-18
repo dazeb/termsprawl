@@ -8,6 +8,8 @@ Renderer-side state helpers and stores.
   `deserializeNodes`. NOT a node-state mirror (the canvas owns live state).
 - `history.ts` — undo/redo: debounced snapshots of the nodes array, skipped
   while typing in inputs/terminals.
+- `edge-reveal.ts` — pure helpers for the edge-hover file tree (hot zone +
+  keep-open).
 - `projects.ts` — project store: tabs, per-project settings, deletion flow.
 - `agents.ts` — agent registry/status UI state.
 - `*.test.ts` — unit tests (history, projects, workspace).
