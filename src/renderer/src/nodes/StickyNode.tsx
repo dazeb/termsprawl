@@ -3,6 +3,7 @@ import type { NodeProps } from 'reactflow'
 import { STICKY_COLORS, nodeTitle } from '../state/workspace'
 import { useCanvas } from '../canvas/Canvas'
 import type { StickyNodeData } from '../state/workspace'
+import { HelpBadge } from '../components/HelpBadge'
 
 // A colored note on the canvas: header (drag handle) with color dot + title
 // + collapse toggle, and an always-editable textarea body. The body is
@@ -38,6 +39,10 @@ export function StickyNode({ id, data }: NodeProps<StickyNodeData>): React.JSX.E
           aria-label="Cycle color"
         />
         <span className="sticky-node-title">{nodeTitle(data)}</span>
+        <HelpBadge
+          label="about this note"
+          text="A scratch note on the canvas. Drag the header. The body is always editable — selection and scroll stay in the text. The color dot cycles slate / amber / lime / pink / cyan. Collapse hides the body. Saved with the project."
+        />
         <button
           className="node-close"
           title="Close note"

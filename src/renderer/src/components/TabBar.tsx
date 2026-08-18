@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useProjects } from '../state/projects'
 import { projectNameFromPath } from '../state/workspace'
+import { HelpBadge } from './HelpBadge'
 
 // Project tabs — the app's window chrome drag region. Right-click a tab for
 // Close / Archive / Delete / Settings; the ▾ menu lists closed/archived
@@ -176,7 +177,13 @@ export function TabBar(): React.JSX.Element {
 
       {settingsProject && (
         <div className="project-settings" ref={settingsRef}>
-          <div className="project-settings-title">project settings</div>
+          <div className="project-settings-title">
+            project settings
+            <HelpBadge
+              label="about project settings"
+              text="Name and accent are stored in the workspace index, not in the folder. The accent tints this project's chrome. The path below is the project root — terminals, the file tree, and editor opens are rooted here. Close/archive keep tmux sessions; delete does not."
+            />
+          </div>
           <label className="project-settings-field">
             name
             <input

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { edgeHotZone, shouldKeepTreeOpen } from './edge-reveal'
+import {
+  applyFileTreeChrome,
+  edgeHotZone,
+  initialFileTreeChrome,
+  shouldKeepTreeOpen
+} from './edge-reveal'
 
 describe('edgeHotZone', () => {
   it('returns left when the pointer is in the left strip', () => {
@@ -39,5 +44,41 @@ describe('shouldKeepTreeOpen', () => {
     expect(
       shouldKeepTreeOpen({ x: 400, width: 800, side: 'right', panelWidth: 240 })
     ).toBe(false)
+  })
+})
+
+describe('file tree chrome', () => {
+  it('starts closed on the left, unpinned', () => {
+    expect(initialFileTreeChrome()).toEqual({ side: 'left', open: false, pinned: false })
+  })
+
+  it('reveals on one side only', () => {
+    const left = applyFileTreeChrome(initialFileTreeChrome(), { type: 'reveal', side: 'left' })
+    expect(left).toEqual({ side: 'left', open: true, pinned: false })
+    expect(applyFileTreeChrome(left, { type: 'reveal', side: 'right' })).toEqual({
+      side: 'right',
+      open: true,
+      pinned: false
+    })
+  })
+
+  it('flips the open panel to the other side', () => {
+    const open = applyFileTreeChrome(initialFileTreeChrome(), { type: 'reveal', side: 'left' })
+    expect(applyFileTreeChrome(open, { type: 'flipSide' }).side).toBe('right')
+    expect(applyFileTreeChrome({ ...open, side: 'right' }, { type: 'flipSide' }).side).toBe('left')
+  })
+
+  it('stays open on mouse leave when pinned', () => {
+    const pinned = applyFileTreeChrome(
+      applyFileTreeChrome(initialFileTreeChrome(), { type: 'reveal', side: 'left' }),
+      { type: 'togglePin' }
+    )
+    expect(pinned.pinned).toBe(true)
+    expect(applyFileTreeChrome(pinned, { type: 'requestClose' }).open).toBe(true)
+  })
+
+  it('closes on mouse leave when unpinned', () => {
+    const open = applyFileTreeChrome(initialFileTreeChrome(), { type: 'reveal', side: 'left' })
+    expect(applyFileTreeChrome(open, { type: 'requestClose' }).open).toBe(false)
   })
 })

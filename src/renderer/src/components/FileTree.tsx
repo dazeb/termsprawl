@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import type { DirEntry } from '@shared/types'
-import { type TreeSide } from '../state/edge-reveal'
+import { applyFileTreeChrome, initialFileTreeChrome, type TreeSide } from '../state/edge-reveal'
+import { HelpBadge } from './HelpBadge'
 
 const PANEL_WIDTH = 248
 const CLOSE_MS = 220
@@ -11,9 +12,9 @@ interface FileTreeProps {
 }
 
 export function FileTree({ cwd, onOpenFile }: FileTreeProps): React.JSX.Element {
-  const [side, setSide] = useState<TreeSide>('left')
-  const [open, setOpen] = useState(false)
+  const [chrome, dispatch] = useReducer(applyFileTreeChrome, undefined, initialFileTreeChrome)
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const ignoreLeave = useRef(false)
 
   const cancelClose = useCallback(() => {
     if (closeTimer.current) {
@@ -23,15 +24,27 @@ export function FileTree({ cwd, onOpenFile }: FileTreeProps): React.JSX.Element 
   }, [])
 
   const scheduleClose = useCallback(() => {
+    if (chrome.pinned || ignoreLeave.current) {
+      cancelClose()
+      return
+    }
     cancelClose()
-    closeTimer.current = setTimeout(() => setOpen(false), CLOSE_MS)
+    closeTimer.current = setTimeout(() => dispatch({ type: 'requestClose' }), CLOSE_MS)
+  }, [cancelClose, chrome.pinned])
+
+  const flipSide = useCallback(() => {
+    ignoreLeave.current = true
+    cancelClose()
+    dispatch({ type: 'flipSide' })
+    window.setTimeout(() => {
+      ignoreLeave.current = false
+    }, 400)
   }, [cancelClose])
 
   const reveal = useCallback(
     (next: TreeSide) => {
       cancelClose()
-      setSide(next)
-      setOpen(true)
+      dispatch({ type: 'reveal', side: next })
     },
     [cancelClose]
   )
@@ -39,6 +52,8 @@ export function FileTree({ cwd, onOpenFile }: FileTreeProps): React.JSX.Element 
   useEffect(() => () => cancelClose(), [cancelClose])
 
   const rootName = cwd ? cwd.replace(/\/+$/, '').split('/').pop() || cwd : null
+  const { side, open, pinned } = chrome
+  const otherSide = side === 'left' ? 'right' : 'left'
 
   return (
     <>
@@ -57,13 +72,46 @@ export function FileTree({ cwd, onOpenFile }: FileTreeProps): React.JSX.Element 
         </>
       )}
       <aside
-        className={`file-tree file-tree-${side}${open ? ' is-open' : ''}`}
+        className={`file-tree file-tree-${side}${open ? ' is-open' : ''}${pinned ? ' is-pinned' : ''}`}
         style={{ width: PANEL_WIDTH }}
         onMouseEnter={cancelClose}
         onMouseLeave={scheduleClose}
       >
-        <div className="file-tree-head" title={cwd ?? 'no folder'}>
-          {rootName ?? 'no folder'}
+        <div className="file-tree-head">
+          <span className="file-tree-title" title={cwd ?? 'no folder'}>
+            {rootName ?? 'no folder'}
+          </span>
+          <HelpBadge
+            label="about the file tree"
+            text="One sidebar for this project's folder. Hover the left or right canvas edge to open it. The dock icon moves this same panel to the other side — it is never shown on both. Pin keeps it open; unpin and it closes when the pointer leaves. Click a file to open or focus an editor node. Dotfiles, .git, and node_modules are hidden."
+          />
+          {open && (
+            <div className="file-tree-actions">
+              <button
+                type="button"
+                className="file-tree-icon"
+                title={`move to ${otherSide}`}
+                aria-label={`move file tree to ${otherSide}`}
+                onClick={flipSide}
+              >
+                {side === 'left' ? (
+                  <DockRightIcon />
+                ) : (
+                  <DockLeftIcon />
+                )}
+              </button>
+              <button
+                type="button"
+                className={`file-tree-icon${pinned ? ' is-active' : ''}`}
+                title={pinned ? 'unpin sidebar' : 'pin sidebar open'}
+                aria-label={pinned ? 'unpin sidebar' : 'pin sidebar open'}
+                aria-pressed={pinned}
+                onClick={() => dispatch({ type: 'togglePin' })}
+              >
+                <PinIcon filled={pinned} />
+              </button>
+            </div>
+          )}
         </div>
         <div className="file-tree-body">
           {!cwd ? (
@@ -158,4 +206,35 @@ function relFrom(root: string, abs: string): string {
   if (abs === root) return '.'
   const prefix = root.endsWith('/') ? root : `${root}/`
   return abs.startsWith(prefix) ? abs.slice(prefix.length) : abs
+}
+
+function DockRightIcon(): React.JSX.Element {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+      <rect x="1.25" y="1.75" width="9.5" height="8.5" rx="1" fill="none" stroke="currentColor" />
+      <rect x="7.25" y="1.75" width="3.5" height="8.5" fill="currentColor" />
+    </svg>
+  )
+}
+
+function DockLeftIcon(): React.JSX.Element {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+      <rect x="1.25" y="1.75" width="9.5" height="8.5" rx="1" fill="none" stroke="currentColor" />
+      <rect x="1.25" y="1.75" width="3.5" height="8.5" fill="currentColor" />
+    </svg>
+  )
+}
+
+function PinIcon({ filled }: { filled: boolean }): React.JSX.Element {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+      <path
+        d="M4.2 1.6h3.6l-.4 2.6 1.5 1.3v1.1H6.2v3.2L6 10.4l-.2-.6V6.6H3.1V5.5l1.5-1.3-.4-2.6z"
+        fill={filled ? 'currentColor' : 'none'}
+        stroke="currentColor"
+        strokeWidth="1"
+      />
+    </svg>
+  )
 }

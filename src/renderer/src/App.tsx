@@ -4,6 +4,7 @@ import { Canvas } from './canvas/Canvas'
 import { TabBar } from './components/TabBar'
 import { UpdateToast } from './components/UpdateToast'
 import { AppSettingsPanel } from './components/AppSettingsPanel'
+import { HelpBadge } from './components/HelpBadge'
 import { useProjects } from './state/projects'
 
 export function App(): React.JSX.Element {
@@ -42,7 +43,13 @@ export function App(): React.JSX.Element {
   return (
     <div className="shell" style={activeAccent ? ({ ['--accent']: activeAccent } as React.CSSProperties) : undefined}>
       <div className="toolbar">
-        <span className="brand">termsprawl</span>
+        <span className="brand">
+          termsprawl
+          <HelpBadge
+            label="what is termsprawl"
+            text="A Linux canvas of terminals, editors, and agents — not a tab bar. Each project is a folder. Drag nodes, pan the empty canvas, scroll to zoom. Sessions live in tmux, so closing a tab detaches instead of killing shells. Hover a canvas edge for the project file tree."
+          />
+        </span>
         <TabBar />
         <button
           type="button"

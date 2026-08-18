@@ -3,6 +3,7 @@ import type { NodeProps } from 'reactflow'
 import { nodeTitle } from '../state/workspace'
 import { useCanvas } from '../canvas/Canvas'
 import type { GroupNodeData } from '../state/workspace'
+import { HelpBadge } from '../components/HelpBadge'
 
 // A parent frame around other nodes. The frame itself is the drag handle —
 // React Flow moves children (parentId) along with it. The label pill is
@@ -52,6 +53,10 @@ export function GroupNode({ id, data }: NodeProps<GroupNodeData>): React.JSX.Ele
         ) : (
           <span className="group-label-text">{nodeTitle(data)}</span>
         )}
+        <HelpBadge
+          label="about this group"
+          text="A frame around other nodes. Drag the frame to move every child with it. Double-click the name to rename. Close ungroups — children stay on the canvas at the same place. Right-click a selection to wrap nodes in a new group."
+        />
         <button
           className="node-close"
           title="Close group (ungroups children)"

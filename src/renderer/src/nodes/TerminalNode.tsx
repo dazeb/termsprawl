@@ -8,6 +8,7 @@ import { resumedSessionId } from '../state/workspace'
 import { useCanvas } from '../canvas/Canvas'
 import { useAgentStatuses } from '../state/agents'
 import { useProjects } from '../state/projects'
+import { HelpBadge } from '../components/HelpBadge'
 
 // Status badge labels for agent nodes (Phase 7). Only nodes spawned with a
 // command (agent presets like claude/codex, druk) can carry a status.
@@ -205,6 +206,10 @@ export function TerminalNode({ id, data }: NodeProps<TerminalNodeData>): React.J
             {data.title}
           </span>
         )}
+        <HelpBadge
+          label="about this terminal"
+          text={terminalHelp(data.command)}
+        />
         {agentHint && agentStatus && (
           <span className={`agent-badge agent-${agentStatus}`}>{STATUS_LABEL[agentStatus]}</span>
         )}
@@ -247,4 +252,14 @@ export function TerminalNode({ id, data }: NodeProps<TerminalNodeData>): React.J
       />
     </div>
   )
+}
+
+function terminalHelp(command: string | undefined): string {
+  if (!command) {
+    return 'A real PTY inside a tmux session that survives remounts and app restarts. Drag the header to move the node. Hover, then dwell, to type. Wheel scrolls tmux history. Close kills this session; switching project tabs only detaches.'
+  }
+  if (command.startsWith('druk')) {
+    return 'Opens the druk TUI editor in this project folder, still inside tmux. Same hover-guard as a shell: drag the header, dwell to type. Close kills the druk session.'
+  }
+  return 'An agent CLI launched once in a persistent tmux session. Status badges come from local hooks. Double-click the title to rename — Claude also gets /rename. Right-click for branch / resume when the CLI supports it. Close kills the session.'
 }

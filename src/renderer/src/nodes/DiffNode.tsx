@@ -6,6 +6,7 @@ import { detectLanguage } from '../monaco'
 import { useCanvas } from '../canvas/Canvas'
 import type { DiffNodeData } from '../state/workspace'
 import type { DiffInfoResult } from '@shared/types'
+import { HelpBadge } from '../components/HelpBadge'
 
 // A read-only git diff: original side comes from the chosen ref (staged index
 // or HEAD), modified side from the working tree. The path/base are persisted
@@ -55,6 +56,10 @@ export function DiffNode({ id, data }: NodeProps<DiffNodeData>): React.JSX.Eleme
         <span className="diff-node-title" title={data.path ?? undefined}>
           {nodeTitle(data)}
         </span>
+        <HelpBadge
+          label="about this diff"
+          text="Read-only Monaco diff. Open picks a file; the toggle switches the left side between the git index (staged) and HEAD. Right side is always the working tree. Needs a git repo. Nothing here writes back to disk."
+        />
         <button
           className="diff-toggle"
           onClick={toggleBase}

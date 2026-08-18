@@ -9,6 +9,7 @@ import type { EditorNodeData } from '../state/workspace'
 import { renderMarkdown } from '../markdown'
 import { toFilePreviewUrl } from '@shared/file-url'
 import type { FileReadResult } from '@shared/types'
+import { HelpBadge } from '../components/HelpBadge'
 
 export function EditorNode({ id, data }: NodeProps<EditorNodeData>): React.JSX.Element {
   const { updateNodeData, closeNode } = useCanvas()
@@ -89,6 +90,10 @@ export function EditorNode({ id, data }: NodeProps<EditorNodeData>): React.JSX.E
         <span className="editor-node-title" title={data.path ?? undefined}>
           {nodeTitle(data)}
         </span>
+        <HelpBadge
+          label="about this editor"
+          text="Opens a file from disk through the project-safe file service. Ctrl+S or save writes utf-8. The lime dot means unsaved. Markdown gets a preview toggle (raw HTML is stripped). Images preview in-place and are not editable here. Reopen the project and this node still points at the same path."
+        />
         {dirty && (
           <span className="editor-dirty" title="Unsaved changes" aria-label="Unsaved changes" />
         )}
