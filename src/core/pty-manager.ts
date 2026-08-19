@@ -19,6 +19,7 @@ import type { CorePlatform } from './platform'
 import { ptyDataChannel, ptyExitChannel } from '../shared/ipc'
 import type { PtyCreateRequest, PtyCreateResult, PtyExitInfo } from '../shared/types'
 import { resolveCommandLine } from './command-resolver'
+import { stripAuthEnv } from './agent-accounts'
 import { ensureTmuxConfig, hasSession, sessionNameFor, type TmuxConfig } from './tmux'
 import { ScrollbackStore } from './scrollback-store'
 
@@ -82,8 +83,10 @@ export class PtyManager {
       spawnArgs = command ? ['-lc', command] : []
     }
 
-    // Strip tmux nesting vars so a reattach inside tmux can't refuse.
-    const env: Record<string, string> = { ...process.env, ...req.env } as Record<string, string>
+    // Strip tmux nesting vars so a reattach inside tmux can't refuse, and drop
+    // inherited auth env (ANTHROPIC_* / CLAUDE_API_KEY) so a managed account's
+    // config dir is the only credential source.
+    const env = stripAuthEnv({ ...process.env, ...req.env }) as Record<string, string>
     delete env['TMUX']
     delete env['TMUX_PANE']
 

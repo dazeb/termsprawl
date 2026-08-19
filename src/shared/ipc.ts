@@ -52,7 +52,8 @@ export const IPC = {
 
   // Managed accounts (Phase 7, 7.6)
   accountCreate: 'app:account-create',
-  accountDelete: 'app:account-delete'
+  accountDelete: 'app:account-delete',
+  permissionProbe: 'app:permission-probe'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

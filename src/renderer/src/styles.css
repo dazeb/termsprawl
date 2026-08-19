@@ -542,6 +542,16 @@ body {
   border-radius: 5px;
   white-space: nowrap;
 }
+.account-permission {
+  background: #10110d;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font: 10px/1 'Geist Mono', monospace;
+  padding: 2px 2px;
+  border-radius: 4px;
+  max-width: 92px;
+}
+
 
 
 .update-toast {

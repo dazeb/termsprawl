@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, Notification, protocol, net } from 'electron'
+import { execFileSync } from 'node:child_process'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -9,7 +10,8 @@ import { diffInfo } from '../core/git-service'
 import { classifyFile, listProjectDir, readProjectFile, writeProjectFile } from '../core/file-service'
 import { addLink, listLinks, removeLink } from '../core/context-links'
 import { ensureContextDiscovery } from '../core/context-discovery'
-import { createManagedAccount, deleteManagedAccount } from '../core/agent-accounts'
+import { createManagedAccount, deleteManagedAccount, activeAccount, claudeConfigEnv } from '../core/agent-accounts'
+import { claudeSupportsPermissionMode } from '../core/agent-cli'
 import { FILE_PROTOCOL, fromFilePreviewUrl } from '../shared/file-url'
 import { PtyManager } from '../core/pty-manager'
 import { shouldNotify, type AgentStatus } from '../shared/agent-status'
@@ -227,6 +229,7 @@ function registerUpdateIpc(): void {
     appSettings.current = saveAppSettings(platform.userDataPath, { accounts, activeAccountId })
     return appSettings.current
   })
+  ipcMain.handle(IPC.permissionProbe, () => claudePermissionModeSupported())
   ipcMain.handle(IPC.updateCheck, () => updateBridge.check())
   ipcMain.handle(IPC.updateDownload, () => updateBridge.download())
   ipcMain.handle(IPC.updateInstall, () => {
@@ -272,13 +275,46 @@ function withAgentNodeIdEnv(req: PtyCreateRequest): PtyCreateRequest {
   return { ...req, env: { ...req.env, TERMSPRAWL_NODE_ID: req.id } }
 }
 
+/** Cached (once per process) whether the installed Claude CLI supports
+ * `--permission-mode`. A missing/old binary reads as unsupported — the control
+ * hides and spawns still work, just without the flag. */
+let claudePermissionSupported: boolean | null = null
+function claudePermissionModeSupported(): boolean {
+  if (claudePermissionSupported === null) {
+    try {
+      const help = execFileSync('claude', ['--help'], { encoding: 'utf8', timeout: 5000 })
+      claudePermissionSupported = claudeSupportsPermissionMode(help)
+    } catch {
+      claudePermissionSupported = false
+    }
+  }
+  return claudePermissionSupported
+}
+
+/** Graft the active managed account's config env onto any Claude spawn (agent
+ * or login), and append `--permission-mode` for session-pinned agent nodes when
+ * the CLI supports it and the account requests a non-default mode. No active
+ * account = default ~/.claude behaviour. */
+function withAgentEnvironment(req: PtyCreateRequest): PtyCreateRequest {
+  if (!req.command || !/\bclaude\b/.test(req.command)) return req
+  const account = activeAccount(appSettings.current)
+  if (!account) return req
+  let out: PtyCreateRequest = { ...req, env: { ...req.env, ...claudeConfigEnv(account.configDir) } }
+  const pm = account.permissionMode
+  if (pm && pm !== 'default' && isClaudeAgentCommand(req.command) && claudePermissionModeSupported()) {
+    out = { ...out, command: `${req.command} --permission-mode ${pm}` }
+  }
+  return out
+}
+
 function registerPtyIpc(): void {
   ipcMain.handle(IPC.ptyCreate, (_event, req: PtyCreateRequest) => {
-    const augmented = withAgentNodeIdEnv(req)
+    let augmented = withAgentNodeIdEnv(req)
+    augmented = withAgentEnvironment(augmented)
     // When a Claude agent node is spawned into a folder project, make sure the
     // context CLI discovery markers exist so the agent can find its peers.
-    if (isClaudeAgentCommand(req.command ?? '') && req.cwd) {
-      ensureContextDiscovery(req.cwd)
+    if (isClaudeAgentCommand(augmented.command ?? '') && augmented.cwd) {
+      ensureContextDiscovery(augmented.cwd)
     }
     return ptyManager.create(augmented)
   })

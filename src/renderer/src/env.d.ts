@@ -29,6 +29,7 @@ declare global {
         set(patch: Partial<AppSettings>): Promise<AppSettings>
         createAccount(label: string): Promise<AppSettings>
         deleteAccount(id: string): Promise<AppSettings>
+        permissionSupported(): Promise<boolean>
       }
       updates: {
         check(): Promise<UpdateStatus>

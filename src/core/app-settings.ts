@@ -20,8 +20,12 @@ export function settingsPath(userDataPath: string): string {
   return join(userDataPath, SETTINGS_FILE)
 }
 
-function asSafeAccount(raw: unknown): { id?: string; label?: string; agentId?: string; configDir?: string } {
+function asSafeAccount(raw: unknown): { id?: string; label?: string; agentId?: string; configDir?: string; permissionMode?: unknown } {
   return raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+}
+
+function isPermissionMode(v: unknown): v is 'default' | 'acceptEdits' | 'bypassPermissions' {
+  return v === 'default' || v === 'acceptEdits' || v === 'bypassPermissions'
 }
 
 export function normalizeAppSettings(raw: unknown): AppSettings {
@@ -30,13 +34,20 @@ export function normalizeAppSettings(raw: unknown): AppSettings {
     ? obj.accounts
         .map(asSafeAccount)
         .filter(
-          (a): a is { id: string; label: string; agentId: 'claude'; configDir: string } =>
+          (a) =>
             typeof a.id === 'string' &&
             a.id.length > 0 &&
             typeof a.label === 'string' &&
             a.agentId === 'claude' &&
             typeof a.configDir === 'string'
         )
+        .map((a) => ({
+          id: a.id as string,
+          label: a.label as string,
+          agentId: 'claude' as const,
+          configDir: a.configDir as string,
+          ...(isPermissionMode(a.permissionMode) ? { permissionMode: a.permissionMode } : {})
+        }))
     : []
   const activeAccountId =
     typeof obj.activeAccountId === 'string' && obj.activeAccountId.length > 0

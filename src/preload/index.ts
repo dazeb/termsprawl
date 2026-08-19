@@ -33,7 +33,8 @@ const api = {
     createAccount: (label: string): Promise<AppSettings> =>
       ipcRenderer.invoke(IPC.accountCreate, label),
     deleteAccount: (id: string): Promise<AppSettings> =>
-      ipcRenderer.invoke(IPC.accountDelete, id)
+      ipcRenderer.invoke(IPC.accountDelete, id),
+    permissionSupported: (): Promise<boolean> => ipcRenderer.invoke(IPC.permissionProbe)
   },
 
   updates: {

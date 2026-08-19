@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { AppSettings } from '@shared/types'
+import type { AgentAccount, AppSettings } from '@shared/types'
 import { HelpBadge } from './HelpBadge'
 
 interface AppSettingsPanelProps {
@@ -12,11 +12,13 @@ export function AppSettingsPanel({ onClose }: AppSettingsPanelProps): React.JSX.
     accounts: [],
     activeAccountId: null
   })
+  const [permissionSupported, setPermissionSupported] = useState(false)
   const [newLabel, setNewLabel] = useState('')
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
 
   useEffect(() => {
     void window.termsprawl.settings.get().then(setSettings)
+    void window.termsprawl.settings.permissionSupported().then(setPermissionSupported)
   }, [])
 
   const toggleAutoDownload = async (checked: boolean): Promise<void> => {
@@ -30,6 +32,14 @@ export function AppSettingsPanel({ onClose }: AppSettingsPanelProps): React.JSX.
 
   const setActive = async (id: string | null): Promise<void> => {
     setSettings(await window.termsprawl.settings.set({ activeAccountId: id }))
+  }
+
+  const setPermissionMode = async (
+    id: string,
+    mode: AgentAccount['permissionMode']
+  ): Promise<void> => {
+    const accounts = settings.accounts.map((a) => (a.id === id ? { ...a, permissionMode: mode } : a))
+    setSettings(await window.termsprawl.settings.set({ accounts }))
   }
 
   const deleteAccount = async (id: string): Promise<void> => {
@@ -85,6 +95,20 @@ export function AppSettingsPanel({ onClose }: AppSettingsPanelProps): React.JSX.
               <span className="account-label">{acc.label}</span>
               <span className="account-id">{acc.id}</span>
             </label>
+            {permissionSupported && (
+              <select
+                className="account-permission"
+                value={acc.permissionMode ?? 'default'}
+                title="permission mode (claude --permission-mode; hidden if your CLI doesn't support it)"
+                onChange={(event) =>
+                  void setPermissionMode(acc.id, event.target.value as AgentAccount['permissionMode'])
+                }
+              >
+                <option value="default">default</option>
+                <option value="acceptEdits">accept edits</option>
+                <option value="bypassPermissions">bypass</option>
+              </select>
+            )}
             {confirmDelete === acc.id ? (
               <span className="account-confirm">
                 <span className="account-confirm-text">removes its local Claude config dir</span>

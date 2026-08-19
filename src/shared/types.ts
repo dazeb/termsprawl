@@ -108,6 +108,8 @@ export interface AgentAccount {
   agentId: 'claude'
   /** Absolute path, under userData/accounts/<id>. Never store tokens here. */
   configDir: string
+  /** Per-account permission mode; undefined = the CLI default. */
+  permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions'
 }
 
 export type DirEntryKind = 'dir' | 'file'
