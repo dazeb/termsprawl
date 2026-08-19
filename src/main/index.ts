@@ -8,6 +8,7 @@ import type { CorePlatform } from '../core/platform'
 import { diffInfo } from '../core/git-service'
 import { classifyFile, listProjectDir, readProjectFile, writeProjectFile } from '../core/file-service'
 import { addLink, listLinks, removeLink } from '../core/context-links'
+import { ensureContextDiscovery } from '../core/context-discovery'
 import { FILE_PROTOCOL, fromFilePreviewUrl } from '../shared/file-url'
 import { PtyManager } from '../core/pty-manager'
 import { shouldNotify, type AgentStatus } from '../shared/agent-status'
@@ -182,6 +183,7 @@ function registerContextLinkIpc(): void {
     if (!isKnownProjectCwd(cwd)) return { ok: false, error: 'NO_FOLDER' }
     const res = addLink(cwd, a, b)
     if ('error' in res) return { ok: false, error: res.error.code }
+    ensureContextDiscovery(cwd)
     return { ok: true }
   })
   ipcMain.handle(IPC.contextLinkRemove, (_event, cwd: string, a: string, b: string): ContextLinkWriteResult => {
@@ -254,9 +256,15 @@ function withAgentNodeIdEnv(req: PtyCreateRequest): PtyCreateRequest {
 }
 
 function registerPtyIpc(): void {
-  ipcMain.handle(IPC.ptyCreate, (_event, req: PtyCreateRequest) =>
-    ptyManager.create(withAgentNodeIdEnv(req))
-  )
+  ipcMain.handle(IPC.ptyCreate, (_event, req: PtyCreateRequest) => {
+    const augmented = withAgentNodeIdEnv(req)
+    // When a Claude agent node is spawned into a folder project, make sure the
+    // context CLI discovery markers exist so the agent can find its peers.
+    if (isClaudeAgentCommand(req.command ?? '') && req.cwd) {
+      ensureContextDiscovery(req.cwd)
+    }
+    return ptyManager.create(augmented)
+  })
   ipcMain.on(IPC.ptyWrite, (_event, id: string, data: string) => ptyManager.write(id, data))
   ipcMain.on(IPC.ptyResize, (_event, id: string, cols: number, rows: number) =>
     ptyManager.resize(id, cols, rows)
