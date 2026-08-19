@@ -350,6 +350,13 @@ extension, one feature at a time.**
 - Create: `src/renderer/components/SourceControlPanel.tsx` — file list,
   +/- stage, discard, commit box, branch UI, gh banner.
 - Verify: full cycle in a test repo.
+- **Status: DONE (on main).** `git:snapshot/stage/unstage/discard/commit/
+  branch-create/branch-checkout/push/pull/publish` IPC (main validates the
+  active project cwd), preload + env.d.ts surface, `GitPanelSnapshot` in
+  shared/types. `SourceControlPanel.tsx`: status file list (+/− stage,
+  inline-confirm discard, status letters), commit box, branch list +
+  create/switch, push/pull/publish, sync (ahead/behind) and gh-auth banner.
+  Docked via the "source control" toolbar button (folder projects only).
 
 ### Task 8.3: Worktrees bound to groups
 - One worktree store/poller (epoch-guarded); creation dialog; scoped panel

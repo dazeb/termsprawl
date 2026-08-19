@@ -4,9 +4,9 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { IPC } from '../shared/ipc'
-import type { ContextLinkListResult, ContextLinkWriteResult, DiffBase, DiffInfoResult, ProjectSettings, PtyCreateRequest, PtyExitInfo, SerializedNode, AppSettings } from '../shared/types'
+import type { ContextLinkListResult, ContextLinkWriteResult, DiffBase, DiffInfoResult, ProjectSettings, PtyCreateRequest, PtyExitInfo, SerializedNode, AppSettings, GitPanelSnapshot, GitResult } from '../shared/types'
 import type { CorePlatform } from '../core/platform'
-import { diffInfo } from '../core/git-service'
+import { diffInfo, findRepoRoot, currentBranch, remoteUrl, syncState, gitStatus, listBranches, recentCommits, ghAuthed, stageChanges, unstageChanges, discardChanges, commitChanges, createBranch, checkoutBranch, push as gitPush, pull as gitPull, publish as gitPublish } from '../core/git-service'
 import { classifyFile, listProjectDir, readProjectFile, writeProjectFile } from '../core/file-service'
 import { addLink, listLinks, removeLink } from '../core/context-links'
 import { ensureContextDiscovery } from '../core/context-discovery'
@@ -196,6 +196,68 @@ function registerContextLinkIpc(): void {
   })
 }
 
+function gitEmptySnapshot(cwd: string): GitPanelSnapshot {
+  return {
+    cwd,
+    branch: '',
+    remote: null,
+    sync: { upstream: null, ahead: 0, behind: 0 },
+    changes: [],
+    branches: [],
+    commits: [],
+    ghAuthed: false
+  }
+}
+
+function registerGitIpc(): void {
+  ipcMain.handle(IPC.gitSnapshot, async (_event, cwd: string): Promise<GitPanelSnapshot> => {
+    if (!isKnownProjectCwd(cwd)) return gitEmptySnapshot(cwd)
+    const root = findRepoRoot(cwd)
+    if (!root) return gitEmptySnapshot(cwd)
+    const [branch, remote, sync, changes, branches, commits, authed] = await Promise.all([
+      currentBranch(root),
+      remoteUrl(root),
+      syncState(root),
+      gitStatus(root),
+      listBranches(root),
+      recentCommits(root, 20),
+      ghAuthed()
+    ])
+    return { cwd, branch, remote, sync, changes, branches, commits, ghAuthed: authed }
+  })
+
+  // Writes run against the active project's cwd only (never an arbitrary root).
+  const guarded = (cwd: string, op: (root: string) => Promise<GitResult>): Promise<GitResult> => {
+    if (!isKnownProjectCwd(cwd)) {
+      return Promise.resolve({ code: 1, stdout: '', stderr: 'no project folder' })
+    }
+    const root = findRepoRoot(cwd)
+    if (!root) return Promise.resolve({ code: 1, stdout: '', stderr: 'not a git repository' })
+    return op(root)
+  }
+  ipcMain.handle(IPC.gitStage, (_event, cwd: string, paths: string[]) =>
+    guarded(cwd, (r) => stageChanges(r, paths))
+  )
+  ipcMain.handle(IPC.gitUnstage, (_event, cwd: string, paths: string[]) =>
+    guarded(cwd, (r) => unstageChanges(r, paths))
+  )
+  ipcMain.handle(IPC.gitDiscard, (_event, cwd: string, paths: string[]) =>
+    guarded(cwd, (r) => discardChanges(r, paths))
+  )
+  ipcMain.handle(IPC.gitCommit, (_event, cwd: string, message: string) =>
+    guarded(cwd, (r) => commitChanges(r, message))
+  )
+  ipcMain.handle(IPC.gitCreateBranch, (_event, cwd: string, name: string) =>
+    guarded(cwd, (r) => createBranch(r, name))
+  )
+  ipcMain.handle(IPC.gitCheckout, (_event, cwd: string, name: string) =>
+    guarded(cwd, (r) => checkoutBranch(r, name))
+  )
+  ipcMain.handle(IPC.gitPush, (_event, cwd: string) => guarded(cwd, (r) => gitPush(r)))
+  ipcMain.handle(IPC.gitPull, (_event, cwd: string) => guarded(cwd, (r) => gitPull(r)))
+  ipcMain.handle(IPC.gitPublish, (_event, cwd: string) => guarded(cwd, (r) => gitPublish(r)))
+}
+
 function registerFileProtocol(): void {
   protocol.handle(FILE_PROTOCOL, (request) => {
     const filePath = fromFilePreviewUrl(request.url)
@@ -349,6 +411,7 @@ void app.whenReady().then(async () => {
   registerDiffIpc()
   registerFileIpc()
   registerContextLinkIpc()
+  registerGitIpc()
   registerFileProtocol()
   registerUpdateIpc()
 

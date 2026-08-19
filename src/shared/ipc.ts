@@ -54,7 +54,19 @@ export const IPC = {
   accountCreate: 'app:account-create',
   accountDelete: 'app:account-delete',
   permissionProbe: 'app:permission-probe',
-  loginCommand: 'app:login-command'
+  loginCommand: 'app:login-command',
+
+  // Source control (Phase 8)
+  gitSnapshot: 'git:snapshot',
+  gitStage: 'git:stage',
+  gitUnstage: 'git:unstage',
+  gitDiscard: 'git:discard',
+  gitCommit: 'git:commit',
+  gitCreateBranch: 'git:branch-create',
+  gitCheckout: 'git:branch-checkout',
+  gitPush: 'git:push',
+  gitPull: 'git:pull',
+  gitPublish: 'git:publish'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

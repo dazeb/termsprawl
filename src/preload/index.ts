@@ -17,7 +17,9 @@ import type {
   WorkspaceSnapshot,
   AppSettings,
   ContextLinkListResult,
-  ContextLinkWriteResult
+  ContextLinkWriteResult,
+  GitPanelSnapshot,
+  GitResult
 } from '../shared/types'
 import type { UpdateStatus } from '../shared/update-status'
 
@@ -148,6 +150,26 @@ const api = {
       ipcRenderer.invoke(IPC.contextLinkAdd, cwd, a, b),
     remove: (cwd: string, a: string, b: string): Promise<ContextLinkWriteResult> =>
       ipcRenderer.invoke(IPC.contextLinkRemove, cwd, a, b)
+  },
+
+  git: {
+    snapshot: (cwd: string): Promise<GitPanelSnapshot> =>
+      ipcRenderer.invoke(IPC.gitSnapshot, cwd),
+    stage: (cwd: string, paths: string[]): Promise<GitResult> =>
+      ipcRenderer.invoke(IPC.gitStage, cwd, paths),
+    unstage: (cwd: string, paths: string[]): Promise<GitResult> =>
+      ipcRenderer.invoke(IPC.gitUnstage, cwd, paths),
+    discard: (cwd: string, paths: string[]): Promise<GitResult> =>
+      ipcRenderer.invoke(IPC.gitDiscard, cwd, paths),
+    commit: (cwd: string, message: string): Promise<GitResult> =>
+      ipcRenderer.invoke(IPC.gitCommit, cwd, message),
+    createBranch: (cwd: string, name: string): Promise<GitResult> =>
+      ipcRenderer.invoke(IPC.gitCreateBranch, cwd, name),
+    checkout: (cwd: string, name: string): Promise<GitResult> =>
+      ipcRenderer.invoke(IPC.gitCheckout, cwd, name),
+    push: (cwd: string): Promise<GitResult> => ipcRenderer.invoke(IPC.gitPush, cwd),
+    pull: (cwd: string): Promise<GitResult> => ipcRenderer.invoke(IPC.gitPull, cwd),
+    publish: (cwd: string): Promise<GitResult> => ipcRenderer.invoke(IPC.gitPublish, cwd)
   }
 }
 

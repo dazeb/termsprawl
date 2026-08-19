@@ -4,6 +4,7 @@ import { Canvas } from './canvas/Canvas'
 import { TabBar } from './components/TabBar'
 import { UpdateToast } from './components/UpdateToast'
 import { AppSettingsPanel } from './components/AppSettingsPanel'
+import { SourceControlPanel } from './components/SourceControlPanel'
 import { HelpBadge } from './components/HelpBadge'
 import { useProjects } from './state/projects'
 
@@ -11,6 +12,7 @@ export function App(): React.JSX.Element {
   const [version, setVersion] = useState<string>('…')
   const [error, setError] = useState<string | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [sourceControlOpen, setSourceControlOpen] = useState(false)
   const loaded = useProjects((s) => s.loaded)
   const load = useProjects((s) => s.load)
   const activeProjectId = useProjects((s) => s.activeProjectId)
@@ -51,6 +53,16 @@ export function App(): React.JSX.Element {
           />
         </span>
         <TabBar />
+        {activeCwd && (
+          <button
+            type="button"
+            className="app-settings-toggle-btn"
+            onClick={() => setSourceControlOpen((open) => !open)}
+            title="Source control"
+          >
+            source control
+          </button>
+        )}
         <button
           type="button"
           className="app-settings-toggle-btn"
@@ -62,6 +74,9 @@ export function App(): React.JSX.Element {
         <span className="version">v{version}</span>
       </div>
       {settingsOpen && <AppSettingsPanel onClose={() => setSettingsOpen(false)} />}
+      {sourceControlOpen && activeCwd && (
+        <SourceControlPanel cwd={activeCwd} onClose={() => setSourceControlOpen(false)} />
+      )}
       <UpdateToast />
       {error && (
         <div className="error-banner" onClick={() => setError(null)} title="Click to dismiss">

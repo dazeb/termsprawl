@@ -5,6 +5,14 @@
 import { execFile, spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, relative } from 'node:path'
+import type {
+  GitBranchInfo,
+  GitCommitInfo,
+  GitFileChange,
+  GitFileStatus,
+  GitResult,
+  GitSyncState
+} from '../shared/types'
 
 export type DiffErrorCode = 'NO_REPO' | 'MISSING' | 'IO'
 
@@ -114,12 +122,6 @@ export async function diffInfo(path: string, base: DiffBase): Promise<DiffInfo> 
 
 import { execFile as execFileCb } from 'node:child_process'
 
-export interface GitResult {
-  code: number
-  stdout: string
-  stderr: string
-}
-
 function runGit(cwd: string, args: string[]): Promise<GitResult> {
   return new Promise((resolve) => {
     execFileCb(
@@ -134,12 +136,14 @@ function runGit(cwd: string, args: string[]): Promise<GitResult> {
   })
 }
 
-export type GitFileStatus = 'added' | 'modified' | 'deleted' | 'renamed' | 'untracked'
-export interface GitFileChange {
-  path: string
-  status: GitFileStatus
-  staged: boolean
-}
+export type {
+  GitFileStatus,
+  GitFileChange,
+  GitBranchInfo,
+  GitCommitInfo,
+  GitSyncState,
+  GitResult
+} from '../shared/types'
 
 /** Parse `git status --porcelain` (v1) into a change list. Each line is
  * `XY <path>`; X is the index (staged) state, Y the working-tree state. */
@@ -173,11 +177,6 @@ export async function gitStatus(repoRoot: string): Promise<GitFileChange[]> {
 export async function currentBranch(repoRoot: string): Promise<string> {
   const res = await runGit(repoRoot, ['branch', '--show-current'])
   return res.code === 0 ? res.stdout.trim() : ''
-}
-
-export interface GitBranchInfo {
-  name: string
-  current: boolean
 }
 
 export async function listBranches(repoRoot: string): Promise<GitBranchInfo[]> {
@@ -222,13 +221,6 @@ export async function commitChanges(repoRoot: string, message: string): Promise<
   return runGit(repoRoot, ['commit', '-m', message])
 }
 
-export interface GitCommitInfo {
-  hash: string
-  author: string
-  date: string
-  subject: string
-}
-
 export async function recentCommits(repoRoot: string, limit = 20): Promise<GitCommitInfo[]> {
   const res = await runGit(repoRoot, [
     'log',
@@ -245,12 +237,6 @@ export async function recentCommits(repoRoot: string, limit = 20): Promise<GitCo
     commits.push({ hash, author: author ?? '', date: date ?? '', subject: subject ?? '' })
   }
   return commits
-}
-
-export interface GitSyncState {
-  upstream: string | null
-  ahead: number
-  behind: number
 }
 
 /** Parse `## main...origin/main [ahead N, behind M]` from `git status -sb`. */

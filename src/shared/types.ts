@@ -126,6 +126,51 @@ export type DirListResult =
 
 // Agent status lives in shared/agent-status.ts (types + shouldNotify).
 
+// Source control (Phase 8): surface types shared by core git-service, main IPC,
+// and the renderer panel.
+export type GitFileStatus = 'added' | 'modified' | 'deleted' | 'renamed' | 'untracked'
+
+export interface GitFileChange {
+  path: string
+  status: GitFileStatus
+  staged: boolean
+}
+
+export interface GitBranchInfo {
+  name: string
+  current: boolean
+}
+
+export interface GitCommitInfo {
+  hash: string
+  author: string
+  date: string
+  subject: string
+}
+
+export interface GitSyncState {
+  upstream: string | null
+  ahead: number
+  behind: number
+}
+
+export interface GitResult {
+  code: number
+  stdout: string
+  stderr: string
+}
+
+export interface GitPanelSnapshot {
+  cwd: string | null
+  branch: string
+  remote: string | null
+  sync: GitSyncState
+  changes: GitFileChange[]
+  branches: GitBranchInfo[]
+  commits: GitCommitInfo[]
+  ghAuthed: boolean
+}
+
 // Context links (Phase 7, 7.5): a link file per node pair under the project
 // folder. IPC calls carry the project cwd; main validates it is a known
 // project cwd (never an arbitrary root) before touching core.

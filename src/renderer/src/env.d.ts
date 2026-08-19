@@ -14,7 +14,9 @@ import type {
   WorkspaceSnapshot,
   AppSettings,
   ContextLinkListResult,
-  ContextLinkWriteResult
+  ContextLinkWriteResult,
+  GitPanelSnapshot,
+  GitResult
 } from '@shared/types'
 import type { AgentStatusEvent } from '@shared/agent-status'
 import type { UpdateStatus } from '@shared/update-status'
@@ -81,6 +83,18 @@ declare global {
         list(cwd: string): Promise<ContextLinkListResult>
         add(cwd: string, a: string, b: string): Promise<ContextLinkWriteResult>
         remove(cwd: string, a: string, b: string): Promise<ContextLinkWriteResult>
+      }
+      git: {
+        snapshot(cwd: string): Promise<GitPanelSnapshot>
+        stage(cwd: string, paths: string[]): Promise<GitResult>
+        unstage(cwd: string, paths: string[]): Promise<GitResult>
+        discard(cwd: string, paths: string[]): Promise<GitResult>
+        commit(cwd: string, message: string): Promise<GitResult>
+        createBranch(cwd: string, name: string): Promise<GitResult>
+        checkout(cwd: string, name: string): Promise<GitResult>
+        push(cwd: string): Promise<GitResult>
+        pull(cwd: string): Promise<GitResult>
+        publish(cwd: string): Promise<GitResult>
       }
     }
   }
