@@ -313,9 +313,25 @@ extension, one feature at a time.**
 ### Task 7.6: Managed accounts + permission mode
 - Account list in settings; per-account config dirs; env injection with
   AUTH_ENV strip; login node flow. Permission-mode flag with CLI version gate.
+- **Status: DONE (TDD, on main).** `core/agent-accounts.ts` (managed dirs under
+  userData/accounts, safe ids, `claudeConfigEnv`, `stripAuthEnv` — drops
+  `ANTHROPIC_API_KEY`/`CLAUDE_API_KEY`/`ANTHROPIC_AUTH_TOKEN`, unit-tested),
+  `activeAccount` resolver; `AppSettings` + normalization carry
+  `accounts`/`activeAccountId`/per-account `permissionMode`. Settings panel:
+  list, active radio, add (creates dir via `app:account-create`), delete with
+  in-app destructive confirm (`app:account-delete`), per-account permission-mode
+  select shown only when `claude --help` advertises `--permission-mode`
+  (cached probe). Spawn: main injects active account `CLAUDE_CONFIG_DIR` on any
+  Claude spawn, appends `--permission-mode` for session-pinned agent nodes when
+  supported, and pty-manager always strips inherited auth env. Login nodes:
+  `core/agent-cli.ts` CLI probes, `app:login-command` IPC, `createAgentLoginNode`
+  + a renderer spawn-request store so settings can drop a login terminal onto the
+  canvas. 252 tests green.
 
 ### Task 7.7: Commit
 - `git commit -m "feat: agent support"`
+- **Status: DONE.** Phase 7 complete (7.1–7.7); version bump / AppImage /
+  release only on request.
 
 ## Phase 8 — Source control
 
