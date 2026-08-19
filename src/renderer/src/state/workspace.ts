@@ -158,6 +158,19 @@ export function resumedSessionId(command: string | undefined): string | null {
   return match ? match[1] : null
 }
 
+/** A one-shot login terminal for a managed account (7.6). Runs the resolved
+ * claude login command; main injects CLAUDE_CONFIG_DIR from the active account,
+ * so `claude auth login` writes credentials into that account's dir. */
+export function createAgentLoginNode(command: string, cwd?: string): Node<TerminalNodeData> {
+  return {
+    id: nextId(),
+    type: 'terminal',
+    ...TERMINAL_DIMENSIONS,
+    position: { x: 60 + Math.random() * 240, y: 60 + Math.random() * 160 },
+    data: { kind: 'terminal', title: 'claude login', cwd, command }
+  }
+}
+
 /** True when a command launches a known, enabled agent CLI (e.g.
  * `claude --session-id n1` or a bare `codex`). Non-agent terminals (a plain
  * shell or `druk …`) return false. Used to scope context-link peer lists. */

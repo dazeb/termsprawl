@@ -11,7 +11,7 @@ import { classifyFile, listProjectDir, readProjectFile, writeProjectFile } from 
 import { addLink, listLinks, removeLink } from '../core/context-links'
 import { ensureContextDiscovery } from '../core/context-discovery'
 import { createManagedAccount, deleteManagedAccount, activeAccount, claudeConfigEnv } from '../core/agent-accounts'
-import { claudeSupportsPermissionMode } from '../core/agent-cli'
+import { claudeLoginCommand, claudeSupportsPermissionMode } from '../core/agent-cli'
 import { FILE_PROTOCOL, fromFilePreviewUrl } from '../shared/file-url'
 import { PtyManager } from '../core/pty-manager'
 import { shouldNotify, type AgentStatus } from '../shared/agent-status'
@@ -230,6 +230,10 @@ function registerUpdateIpc(): void {
     return appSettings.current
   })
   ipcMain.handle(IPC.permissionProbe, () => claudePermissionModeSupported())
+  ipcMain.handle(IPC.loginCommand, () => {
+    const help = claudeHelpText()
+    return help ? claudeLoginCommand(help) : 'claude'
+  })
   ipcMain.handle(IPC.updateCheck, () => updateBridge.check())
   ipcMain.handle(IPC.updateDownload, () => updateBridge.download())
   ipcMain.handle(IPC.updateInstall, () => {
@@ -275,20 +279,24 @@ function withAgentNodeIdEnv(req: PtyCreateRequest): PtyCreateRequest {
   return { ...req, env: { ...req.env, TERMSPRAWL_NODE_ID: req.id } }
 }
 
-/** Cached (once per process) whether the installed Claude CLI supports
- * `--permission-mode`. A missing/old binary reads as unsupported — the control
- * hides and spawns still work, just without the flag. */
-let claudePermissionSupported: boolean | null = null
-function claudePermissionModeSupported(): boolean {
-  if (claudePermissionSupported === null) {
+/** Cached `claude --help` output (once per process), or null when the binary is
+ * missing/old. Missing/old reads as unsupported everywhere — the controls hide
+ * and spawns still work, just without the flag. */
+let claudeHelpCache: string | null | undefined // undefined = not probed yet
+function claudeHelpText(): string | null {
+  if (claudeHelpCache === undefined) {
     try {
-      const help = execFileSync('claude', ['--help'], { encoding: 'utf8', timeout: 5000 })
-      claudePermissionSupported = claudeSupportsPermissionMode(help)
+      claudeHelpCache = execFileSync('claude', ['--help'], { encoding: 'utf8', timeout: 5000 })
     } catch {
-      claudePermissionSupported = false
+      claudeHelpCache = null
     }
   }
-  return claudePermissionSupported
+  return claudeHelpCache
+}
+
+function claudePermissionModeSupported(): boolean {
+  const help = claudeHelpText()
+  return help ? claudeSupportsPermissionMode(help) : false
 }
 
 /** Graft the active managed account's config env onto any Claude spawn (agent

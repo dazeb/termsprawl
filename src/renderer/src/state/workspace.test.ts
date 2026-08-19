@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Node } from 'reactflow'
 import {
+  createAgentLoginNode,
   createAgentNode,
   createDiffNode,
   createDrukNode,
@@ -385,5 +386,15 @@ describe('context link cache', () => {
     const restored = deserializeNodes(serializeNodes([node]))[0]
     if (restored.data.kind !== 'terminal') throw new Error('expected terminal node')
     expect(restored.data.linkedIds).toEqual(['n-other'])
+  })
+})
+
+describe('createAgentLoginNode', () => {
+  it('builds a login terminal with the resolved claude command', () => {
+    const node = createAgentLoginNode('claude auth login', '/tmp')
+    if (node.data.kind !== 'terminal') throw new Error('expected terminal node')
+    expect(node.data.title).toBe('claude login')
+    expect(node.data.command).toBe('claude auth login')
+    expect(node.data.cwd).toBe('/tmp')
   })
 })

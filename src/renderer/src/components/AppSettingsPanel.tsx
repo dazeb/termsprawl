@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { AgentAccount, AppSettings } from '@shared/types'
 import { HelpBadge } from './HelpBadge'
+import { useCanvasRequests } from '../state/canvas-requests'
 
 interface AppSettingsPanelProps {
   onClose: () => void
@@ -40,6 +41,17 @@ export function AppSettingsPanel({ onClose }: AppSettingsPanelProps): React.JSX.
   ): Promise<void> => {
     const accounts = settings.accounts.map((a) => (a.id === id ? { ...a, permissionMode: mode } : a))
     setSettings(await window.termsprawl.settings.set({ accounts }))
+  }
+
+  // Make the account active, then open a login terminal for it. The canvas
+  // consumes the spawn request; main injects that account's CLAUDE_CONFIG_DIR.
+  const loginInto = async (acc: AgentAccount): Promise<void> => {
+    if (settings.activeAccountId !== acc.id) {
+      setSettings(await window.termsprawl.settings.set({ activeAccountId: acc.id }))
+    }
+    const command = await window.termsprawl.settings.loginCommand()
+    useCanvasRequests.getState().spawn({ kind: 'agentLogin', command })
+    onClose()
   }
 
   const deleteAccount = async (id: string): Promise<void> => {
@@ -108,6 +120,15 @@ export function AppSettingsPanel({ onClose }: AppSettingsPanelProps): React.JSX.
                 <option value="acceptEdits">accept edits</option>
                 <option value="bypassPermissions">bypass</option>
               </select>
+            )}
+            {!confirmDelete && (
+              <button
+                className="account-login"
+                title="open a login terminal for this account (uses its config dir)"
+                onClick={() => void loginInto(acc)}
+              >
+                login
+              </button>
             )}
             {confirmDelete === acc.id ? (
               <span className="account-confirm">

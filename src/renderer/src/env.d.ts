@@ -30,6 +30,7 @@ declare global {
         createAccount(label: string): Promise<AppSettings>
         deleteAccount(id: string): Promise<AppSettings>
         permissionSupported(): Promise<boolean>
+        loginCommand(): Promise<string>
       }
       updates: {
         check(): Promise<UpdateStatus>

@@ -18,6 +18,7 @@ import { GroupNode } from '../nodes/GroupNode'
 import { DiffNode } from '../nodes/DiffNode'
 import { EditorNode } from '../nodes/EditorNode'
 import {
+  createAgentLoginNode,
   createAgentNode,
   createDiffNode,
   createDrukNode,
@@ -37,6 +38,7 @@ import { agentIds, agentName, agentTitle } from '@shared/agents/config'
 import type { AgentId } from '@shared/agents/config'
 import { useHistory } from '../state/history'
 import { useProjects } from '../state/projects'
+import { useCanvasRequests } from '../state/canvas-requests'
 import type { SprawlNodeData, TerminalNodeData } from '../state/workspace'
 
 const nodeTypes = {
@@ -433,6 +435,20 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
     push()
     setMenu(null)
   }, [menu, cwd, push, screenToFlowPosition, appendOnTop])
+
+  // Consume a one-shot spawn request raised OUTSIDE the canvas (managed-account
+  // login nodes come from the settings panel). Canvas stays the source of truth
+  // for node state.
+  const spawnRequest = useCanvasRequests((s) => s.request)
+  useEffect(() => {
+    if (!spawnRequest) return
+    if (spawnRequest.kind === 'agentLogin') {
+      const node = createAgentLoginNode(spawnRequest.command, cwd)
+      appendOnTop(node)
+      push()
+    }
+    useCanvasRequests.getState().consume()
+  }, [spawnRequest, cwd, appendOnTop, push])
 
   // Context links (7.5): link files on disk are the source of truth; `linkedIds`
   // is a cache we keep in sync here. Undo is intentionally NOT pushed for links
