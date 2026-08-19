@@ -338,6 +338,13 @@ extension, one feature at a time.**
 ### Task 8.1: Git service
 - Create: `src/core/git-service.ts` — system git + gh; repoRoot, status, diff,
   stage/unstage, discard, branch ops, commit, push/sync/publish, recent commits.
+- **Status: DONE (TDD, on main).** Extended `core/git-service.ts` with a
+  promisified `runGit` (argv-array, remote-agnostic) and `gitStatus`
+  (`parseGitStatus` porcelain), `currentBranch`/`listBranches`/
+  `createBranch`/`checkoutBranch`/`deleteBranch`, `stageChanges`/
+  `unstageChanges`/`discardChanges`, `commitChanges`/`recentCommits`,
+  `syncState`/`parseSyncState` (ahead/behind), `push`/`pull`/`publish`/
+  `remoteUrl`, `ghAuthed`. 263 tests green.
 
 ### Task 8.2: Panel
 - Create: `src/renderer/components/SourceControlPanel.tsx` — file list,
