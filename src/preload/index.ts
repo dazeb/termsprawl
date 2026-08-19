@@ -29,7 +29,11 @@ const api = {
   settings: {
     get: (): Promise<AppSettings> => ipcRenderer.invoke(IPC.appSettingsGet),
     set: (patch: Partial<AppSettings>): Promise<AppSettings> =>
-      ipcRenderer.invoke(IPC.appSettingsSet, patch)
+      ipcRenderer.invoke(IPC.appSettingsSet, patch),
+    createAccount: (label: string): Promise<AppSettings> =>
+      ipcRenderer.invoke(IPC.accountCreate, label),
+    deleteAccount: (id: string): Promise<AppSettings> =>
+      ipcRenderer.invoke(IPC.accountDelete, id)
   },
 
   updates: {

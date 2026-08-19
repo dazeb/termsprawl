@@ -3,12 +3,13 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { IPC } from '../shared/ipc'
-import type { ContextLinkListResult, ContextLinkWriteResult, DiffBase, DiffInfoResult, ProjectSettings, PtyCreateRequest, PtyExitInfo, SerializedNode } from '../shared/types'
+import type { ContextLinkListResult, ContextLinkWriteResult, DiffBase, DiffInfoResult, ProjectSettings, PtyCreateRequest, PtyExitInfo, SerializedNode, AppSettings } from '../shared/types'
 import type { CorePlatform } from '../core/platform'
 import { diffInfo } from '../core/git-service'
 import { classifyFile, listProjectDir, readProjectFile, writeProjectFile } from '../core/file-service'
 import { addLink, listLinks, removeLink } from '../core/context-links'
 import { ensureContextDiscovery } from '../core/context-discovery'
+import { createManagedAccount, deleteManagedAccount } from '../core/agent-accounts'
 import { FILE_PROTOCOL, fromFilePreviewUrl } from '../shared/file-url'
 import { PtyManager } from '../core/pty-manager'
 import { shouldNotify, type AgentStatus } from '../shared/agent-status'
@@ -205,9 +206,25 @@ function registerFileProtocol(): void {
 
 function registerUpdateIpc(): void {
   ipcMain.handle(IPC.appSettingsGet, () => appSettings.current)
-  ipcMain.handle(IPC.appSettingsSet, (_event, patch: { autoDownloadUpdates?: boolean }) => {
+  ipcMain.handle(IPC.appSettingsSet, (_event, patch: Partial<AppSettings>) => {
     appSettings.current = saveAppSettings(platform.userDataPath, patch)
     updateBridge.setAutoDownload(appSettings.current.autoDownloadUpdates)
+    return appSettings.current
+  })
+  ipcMain.handle(IPC.accountCreate, (_event, label: unknown): AppSettings => {
+    const trimmed = typeof label === 'string' && label.trim() ? label.trim() : 'account'
+    const created = { ...createManagedAccount(platform.userDataPath, trimmed), agentId: 'claude' as const }
+    appSettings.current = saveAppSettings(platform.userDataPath, {
+      accounts: [...appSettings.current.accounts, created]
+    })
+    return appSettings.current
+  })
+  ipcMain.handle(IPC.accountDelete, (_event, id: unknown): AppSettings => {
+    if (typeof id === 'string') deleteManagedAccount(platform.userDataPath, id)
+    const accounts = appSettings.current.accounts.filter((a) => a.id !== id)
+    const activeAccountId =
+      appSettings.current.activeAccountId === id ? null : appSettings.current.activeAccountId
+    appSettings.current = saveAppSettings(platform.userDataPath, { accounts, activeAccountId })
     return appSettings.current
   })
   ipcMain.handle(IPC.updateCheck, () => updateBridge.check())

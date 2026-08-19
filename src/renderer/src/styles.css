@@ -444,6 +444,106 @@ body {
   color: var(--muted);
 }
 
+/* Managed agent accounts (7.6) */
+.account-section-title {
+  margin: 16px 0 0;
+  font-size: 12px;
+}
+.account-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.account-radio {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+.account-radio input {
+  margin: 0;
+}
+.account-label {
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.account-id {
+  color: var(--muted);
+  font-size: 10px;
+}
+.account-delete {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: 10px/1 'Geist Mono', monospace;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.account-delete:hover {
+  color: #ff8a8a;
+  border-color: #ff5c5c66;
+}
+.account-confirm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.account-confirm-text {
+  color: #ff8a8a;
+  font-size: 10px;
+}
+.account-confirm button {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+  font: 10px/1 'Geist Mono', monospace;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.account-confirm .account-danger {
+  color: #ff8a8a;
+  border-color: #ff5c5c66;
+}
+.account-new {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+.account-label-input {
+  flex: 1;
+  min-width: 0;
+  background: #10110d;
+  border: 1px solid var(--border);
+  color: var(--fg);
+  font: 11px/1.4 'Geist Mono', monospace;
+  padding: 4px 6px;
+  border-radius: 4px;
+  outline: none;
+}
+.account-label-input:focus {
+  border-color: var(--accent);
+}
+.account-new button {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font: 11px/1 'Geist Mono', monospace;
+  padding: 3px 8px;
+  border-radius: 5px;
+  white-space: nowrap;
+}
+
+
 .update-toast {
   position: fixed;
   top: 46px;

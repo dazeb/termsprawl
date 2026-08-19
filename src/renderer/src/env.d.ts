@@ -27,6 +27,8 @@ declare global {
       settings: {
         get(): Promise<AppSettings>
         set(patch: Partial<AppSettings>): Promise<AppSettings>
+        createAccount(label: string): Promise<AppSettings>
+        deleteAccount(id: string): Promise<AppSettings>
       }
       updates: {
         check(): Promise<UpdateStatus>

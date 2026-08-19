@@ -48,7 +48,11 @@ export const IPC = {
   // Context links (Phase 7, 7.5)
   contextLinkList: 'context:list',
   contextLinkAdd: 'context:add',
-  contextLinkRemove: 'context:remove'
+  contextLinkRemove: 'context:remove',
+
+  // Managed accounts (Phase 7, 7.6)
+  accountCreate: 'app:account-create',
+  accountDelete: 'app:account-delete'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]
