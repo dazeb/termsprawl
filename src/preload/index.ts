@@ -15,7 +15,9 @@ import type {
   PtyExitInfo,
   SerializedNode,
   WorkspaceSnapshot,
-  AppSettings
+  AppSettings,
+  ContextLinkListResult,
+  ContextLinkWriteResult
 } from '../shared/types'
 import type { UpdateStatus } from '../shared/update-status'
 
@@ -131,6 +133,15 @@ const api = {
         ipcRenderer.removeListener(channel, listener)
       }
     }
+  },
+
+  contextLinks: {
+    list: (cwd: string): Promise<ContextLinkListResult> =>
+      ipcRenderer.invoke(IPC.contextLinkList, cwd),
+    add: (cwd: string, a: string, b: string): Promise<ContextLinkWriteResult> =>
+      ipcRenderer.invoke(IPC.contextLinkAdd, cwd, a, b),
+    remove: (cwd: string, a: string, b: string): Promise<ContextLinkWriteResult> =>
+      ipcRenderer.invoke(IPC.contextLinkRemove, cwd, a, b)
   }
 }
 

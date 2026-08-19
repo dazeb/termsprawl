@@ -43,7 +43,12 @@ export const IPC = {
 
   // Agent hooks (Phase 7)
   agentStatus: 'agent:status', // suffixed ':<sessionId>' for the push channel
-  agentSessionName: 'agent:session-name' // suffixed ':<sessionId>' for the push channel
+  agentSessionName: 'agent:session-name', // suffixed ':<sessionId>' for the push channel
+
+  // Context links (Phase 7, 7.5)
+  contextLinkList: 'context:list',
+  contextLinkAdd: 'context:add',
+  contextLinkRemove: 'context:remove'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

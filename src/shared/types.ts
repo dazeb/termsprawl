@@ -112,3 +112,21 @@ export type DirListResult =
   | { error: { code: 'MISSING' | 'IO' | 'OUTSIDE'; message: string } }
 
 // Agent status lives in shared/agent-status.ts (types + shouldNotify).
+
+// Context links (Phase 7, 7.5): a link file per node pair under the project
+// folder. IPC calls carry the project cwd; main validates it is a known
+// project cwd (never an arbitrary root) before touching core.
+export interface ContextLinkPair {
+  a: string
+  b: string
+}
+
+export type ContextLinkError = 'NO_FOLDER' | 'SELF' | 'BAD_ID' | 'IO'
+
+export type ContextLinkListResult =
+  | { ok: true; links: ContextLinkPair[] }
+  | { ok: false; error: 'NO_FOLDER' }
+
+export type ContextLinkWriteResult =
+  | { ok: true }
+  | { ok: false; error: ContextLinkError }

@@ -3,10 +3,11 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { IPC } from '../shared/ipc'
-import type { DiffBase, DiffInfoResult, ProjectSettings, PtyCreateRequest, PtyExitInfo, SerializedNode } from '../shared/types'
+import type { ContextLinkListResult, ContextLinkWriteResult, DiffBase, DiffInfoResult, ProjectSettings, PtyCreateRequest, PtyExitInfo, SerializedNode } from '../shared/types'
 import type { CorePlatform } from '../core/platform'
 import { diffInfo } from '../core/git-service'
 import { classifyFile, listProjectDir, readProjectFile, writeProjectFile } from '../core/file-service'
+import { addLink, listLinks, removeLink } from '../core/context-links'
 import { FILE_PROTOCOL, fromFilePreviewUrl } from '../shared/file-url'
 import { PtyManager } from '../core/pty-manager'
 import { shouldNotify, type AgentStatus } from '../shared/agent-status'
@@ -165,6 +166,31 @@ function registerFileIpc(): void {
   )
 }
 
+/** Context-link IPC (Phase 7, 7.5): link files are the source of truth. cwd is
+ * validated to be a known project cwd — never an arbitrary root (same "stay
+ * inside root" idea as listProjectDir). Folder-less projects return NO_FOLDER. */
+function isKnownProjectCwd(cwd: string): boolean {
+  return workspaceStore.snapshot().index.projects.some((p) => p.cwd === cwd)
+}
+
+function registerContextLinkIpc(): void {
+  ipcMain.handle(IPC.contextLinkList, (_event, cwd: string): ContextLinkListResult => {
+    if (!isKnownProjectCwd(cwd)) return { ok: false, error: 'NO_FOLDER' }
+    return { ok: true, links: listLinks(cwd).map(({ a, b }) => ({ a, b })) }
+  })
+  ipcMain.handle(IPC.contextLinkAdd, (_event, cwd: string, a: string, b: string): ContextLinkWriteResult => {
+    if (!isKnownProjectCwd(cwd)) return { ok: false, error: 'NO_FOLDER' }
+    const res = addLink(cwd, a, b)
+    if ('error' in res) return { ok: false, error: res.error.code }
+    return { ok: true }
+  })
+  ipcMain.handle(IPC.contextLinkRemove, (_event, cwd: string, a: string, b: string): ContextLinkWriteResult => {
+    if (!isKnownProjectCwd(cwd)) return { ok: false, error: 'NO_FOLDER' }
+    removeLink(cwd, a, b)
+    return { ok: true }
+  })
+}
+
 function registerFileProtocol(): void {
   protocol.handle(FILE_PROTOCOL, (request) => {
     const filePath = fromFilePreviewUrl(request.url)
@@ -214,8 +240,23 @@ function createWindow(): void {
   }
 }
 
+/** Claude agent command detection: the command references the claude CLI and
+ * pins a session (`--session-id` or `--resume`) — i.e. a termsprawl agent node. */
+function isClaudeAgentCommand(command: string): boolean {
+  return /\bclaude\b/.test(command) && /(--session-id|--resume)/.test(command)
+}
+
+/** On a Claude agent spawn, inject TERMSPRAWL_NODE_ID so the agent's context
+ * CLI can resolve its own id without the user guessing. */
+function withAgentNodeIdEnv(req: PtyCreateRequest): PtyCreateRequest {
+  if (!req.command || !isClaudeAgentCommand(req.command)) return req
+  return { ...req, env: { ...req.env, TERMSPRAWL_NODE_ID: req.id } }
+}
+
 function registerPtyIpc(): void {
-  ipcMain.handle(IPC.ptyCreate, (_event, req: PtyCreateRequest) => ptyManager.create(req))
+  ipcMain.handle(IPC.ptyCreate, (_event, req: PtyCreateRequest) =>
+    ptyManager.create(withAgentNodeIdEnv(req))
+  )
   ipcMain.on(IPC.ptyWrite, (_event, id: string, data: string) => ptyManager.write(id, data))
   ipcMain.on(IPC.ptyResize, (_event, id: string, cols: number, rows: number) =>
     ptyManager.resize(id, cols, rows)
@@ -238,6 +279,7 @@ void app.whenReady().then(async () => {
   registerWorkspaceIpc()
   registerDiffIpc()
   registerFileIpc()
+  registerContextLinkIpc()
   registerFileProtocol()
   registerUpdateIpc()
 

@@ -12,7 +12,9 @@ import type {
   PtyExitInfo,
   SerializedNode,
   WorkspaceSnapshot,
-  AppSettings
+  AppSettings,
+  ContextLinkListResult,
+  ContextLinkWriteResult
 } from '@shared/types'
 import type { AgentStatusEvent } from '@shared/agent-status'
 import type { UpdateStatus } from '@shared/update-status'
@@ -70,6 +72,11 @@ declare global {
           sessionId: string,
           cb: (info: { sessionId: string; name: string }) => void
         ): () => void
+      }
+      contextLinks: {
+        list(cwd: string): Promise<ContextLinkListResult>
+        add(cwd: string, a: string, b: string): Promise<ContextLinkWriteResult>
+        remove(cwd: string, a: string, b: string): Promise<ContextLinkWriteResult>
       }
     }
   }
