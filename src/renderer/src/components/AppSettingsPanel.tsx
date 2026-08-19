@@ -7,7 +7,11 @@ interface AppSettingsPanelProps {
 }
 
 export function AppSettingsPanel({ onClose }: AppSettingsPanelProps): React.JSX.Element {
-  const [settings, setSettings] = useState<AppSettings>({ autoDownloadUpdates: false })
+  const [settings, setSettings] = useState<AppSettings>({
+    autoDownloadUpdates: false,
+    accounts: [],
+    activeAccountId: null
+  })
 
   useEffect(() => {
     void window.termsprawl.settings.get().then(setSettings)

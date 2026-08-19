@@ -35,9 +35,15 @@ describe('app-settings', () => {
   it('round-trips auto-download through disk', () => {
     const dir = scratch()
     expect(saveAppSettings(dir, { autoDownloadUpdates: true })).toEqual({
-      autoDownloadUpdates: true
+      autoDownloadUpdates: true,
+      accounts: [],
+      activeAccountId: null
     })
-    expect(loadAppSettings(dir)).toEqual({ autoDownloadUpdates: true })
+    expect(loadAppSettings(dir)).toEqual({
+      autoDownloadUpdates: true,
+      accounts: [],
+      activeAccountId: null
+    })
     const raw = JSON.parse(readFileSync(join(dir, 'settings.json'), 'utf8')) as {
       autoDownloadUpdates: boolean
     }
@@ -48,5 +54,43 @@ describe('app-settings', () => {
     const dir = scratch()
     writeFileSync(join(dir, 'settings.json'), '{not json')
     expect(loadAppSettings(dir)).toEqual(DEFAULT_APP_SETTINGS)
+  })
+
+  it('defaults accounts to [] and activeAccountId to null', () => {
+    const s = normalizeAppSettings({})
+    expect(s.accounts).toEqual([])
+    expect(s.activeAccountId).toBeNull()
+  })
+
+  it('keeps only well-formed claude accounts and drops junk', () => {
+    const s = normalizeAppSettings({
+      activeAccountId: 'acc-1',
+      accounts: [
+        { id: 'acc-1', label: 'work', agentId: 'claude', configDir: '/ud/accounts/acc-1' },
+        { id: 'acc-2', label: 'bad agent', agentId: 'codex', configDir: '/ud/x' },
+        { label: 'no id' },
+        'not-an-object',
+        { id: 5, label: 'bad id type', agentId: 'claude', configDir: '/ud/y' }
+      ]
+    })
+    expect(s.accounts).toEqual([
+      { id: 'acc-1', label: 'work', agentId: 'claude', configDir: '/ud/accounts/acc-1' }
+    ])
+    expect(s.activeAccountId).toBe('acc-1')
+  })
+
+  it('coerces a non-string activeAccountId to null', () => {
+    expect(normalizeAppSettings({ activeAccountId: 7 }).activeAccountId).toBeNull()
+    expect(normalizeAppSettings({ activeAccountId: '' }).activeAccountId).toBeNull()
+  })
+
+  it('round-trips accounts through disk', () => {
+    const dir = scratch()
+    const saved = saveAppSettings(dir, {
+      accounts: [{ id: 'acc-1', label: 'work', agentId: 'claude', configDir: '/ud/accounts/acc-1' }],
+      activeAccountId: 'acc-1'
+    })
+    expect(saved.accounts).toHaveLength(1)
+    expect(loadAppSettings(dir).activeAccountId).toBe('acc-1')
   })
 })

@@ -9,7 +9,9 @@ import type { AppSettings } from '../shared/types'
 export type { AppSettings }
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
-  autoDownloadUpdates: false
+  autoDownloadUpdates: false,
+  accounts: [],
+  activeAccountId: null
 }
 
 const SETTINGS_FILE = 'settings.json'
@@ -18,10 +20,32 @@ export function settingsPath(userDataPath: string): string {
   return join(userDataPath, SETTINGS_FILE)
 }
 
+function asSafeAccount(raw: unknown): { id?: string; label?: string; agentId?: string; configDir?: string } {
+  return raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+}
+
 export function normalizeAppSettings(raw: unknown): AppSettings {
   const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  const accounts = Array.isArray(obj.accounts)
+    ? obj.accounts
+        .map(asSafeAccount)
+        .filter(
+          (a): a is { id: string; label: string; agentId: 'claude'; configDir: string } =>
+            typeof a.id === 'string' &&
+            a.id.length > 0 &&
+            typeof a.label === 'string' &&
+            a.agentId === 'claude' &&
+            typeof a.configDir === 'string'
+        )
+    : []
+  const activeAccountId =
+    typeof obj.activeAccountId === 'string' && obj.activeAccountId.length > 0
+      ? obj.activeAccountId
+      : null
   return {
-    autoDownloadUpdates: obj.autoDownloadUpdates === true
+    autoDownloadUpdates: obj.autoDownloadUpdates === true,
+    accounts,
+    activeAccountId
   }
 }
 

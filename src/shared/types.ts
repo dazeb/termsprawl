@@ -97,6 +97,17 @@ export type FileWriteResult = { ok: true } | { error: { code: FileErrorCode; mes
 
 export interface AppSettings {
   autoDownloadUpdates: boolean
+  /** Managed agent accounts (7.6). v1: Claude only. Null active = default ~/.claude. */
+  accounts: AgentAccount[]
+  activeAccountId: string | null
+}
+
+export interface AgentAccount {
+  id: string
+  label: string
+  agentId: 'claude'
+  /** Absolute path, under userData/accounts/<id>. Never store tokens here. */
+  configDir: string
 }
 
 export type DirEntryKind = 'dir' | 'file'
