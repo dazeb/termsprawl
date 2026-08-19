@@ -10,7 +10,8 @@
   "desktopName": "termsprawl",
   "scripts": {
     "dev": "electron-vite dev",
-    "build": "electron-vite build",
+    "build": "pnpm run build:cli && electron-vite build",
+    "build:cli": "node scripts/build-context-cli.mjs",
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
