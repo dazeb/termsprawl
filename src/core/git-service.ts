@@ -11,7 +11,8 @@ import type {
   GitFileChange,
   GitFileStatus,
   GitResult,
-  GitSyncState
+  GitSyncState,
+  GitWorktree
 } from '../shared/types'
 
 export type DiffErrorCode = 'NO_REPO' | 'MISSING' | 'IO'
@@ -142,7 +143,8 @@ export type {
   GitBranchInfo,
   GitCommitInfo,
   GitSyncState,
-  GitResult
+  GitResult,
+  GitWorktree
 } from '../shared/types'
 
 /** Parse `git status --porcelain` (v1) into a change list. Each line is
@@ -281,4 +283,59 @@ export async function remoteUrl(repoRoot: string, name = 'origin'): Promise<stri
 export async function ghAuthed(): Promise<boolean> {
   const res = spawnSync('gh', ['auth', 'status'], { stdio: 'ignore' })
   return res.status === 0
+}
+
+/** Parse `git worktree list --porcelain`. Each worktree is a `worktree <path>`
+ * record with a `HEAD <sha>` line and either a `branch refs/heads/<name>` line
+ * or a bare `detached` (branch stays null). */
+export function parseWorktreePorcelain(raw: string): GitWorktree[] {
+  const worktrees: GitWorktree[] = []
+  let cur: GitWorktree | null = null
+  for (const line of raw.split('\n')) {
+    if (line === '') {
+      cur = null
+      continue
+    }
+    if (line.startsWith('worktree ')) {
+      cur = { path: line.slice('worktree '.length), branch: null, head: null }
+      worktrees.push(cur)
+    } else if (cur) {
+      if (line.startsWith('HEAD ')) cur.head = line.slice('HEAD '.length)
+      else if (line.startsWith('branch refs/heads/')) {
+        cur.branch = line.slice('branch refs/heads/'.length)
+      }
+      // a bare 'detached' line leaves branch null
+    }
+  }
+  return worktrees
+}
+
+export async function listWorktrees(repoRoot: string): Promise<GitWorktree[]> {
+  const res = await runGit(repoRoot, ['worktree', 'list', '--porcelain'])
+  return res.code === 0 ? parseWorktreePorcelain(res.stdout) : []
+}
+
+/** Create a worktree at `path`. With `branch`, create (-b) and check it out in
+ * the new worktree; without, check out the current commit detached. `path` must
+ * not already exist (git errors otherwise). */
+export async function addWorktree(
+  repoRoot: string,
+  path: string,
+  branch?: string
+): Promise<GitResult> {
+  const args = ['worktree', 'add']
+  if (branch) args.push('-b', branch)
+  args.push(path)
+  return runGit(repoRoot, args)
+}
+
+/** Remove a worktree at `path`. Git refuses when it has uncommitted changes;
+ * pass `force` only after the caller has confirmed the destructive discard. */
+export async function removeWorktree(
+  repoRoot: string,
+  path: string,
+  force = false
+): Promise<GitResult> {
+  const args = ['worktree', 'remove', ...(force ? ['--force'] : []), path]
+  return runGit(repoRoot, args)
 }

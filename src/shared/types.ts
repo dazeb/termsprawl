@@ -160,6 +160,14 @@ export interface GitResult {
   stderr: string
 }
 
+export interface GitWorktree {
+  path: string
+  /** Branch name (e.g. "feature/x"), or null when detached. */
+  branch: string | null
+  /** Commit hash at the worktree's HEAD, or null when unknown. */
+  head: string | null
+}
+
 export interface GitPanelSnapshot {
   cwd: string | null
   branch: string

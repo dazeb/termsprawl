@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { diffInfo, findRepoRoot, readWorkingTree, showFromRef, parseGitStatus, gitStatus, currentBranch, listBranches, stageChanges, unstageChanges, discardChanges, createBranch, checkoutBranch, deleteBranch, commitChanges, recentCommits, parseSyncState, syncState, remoteUrl, push, publish } from './git-service'
+import { diffInfo, findRepoRoot, readWorkingTree, showFromRef, parseGitStatus, gitStatus, currentBranch, listBranches, stageChanges, unstageChanges, discardChanges, createBranch, checkoutBranch, deleteBranch, commitChanges, recentCommits, parseSyncState, syncState, remoteUrl, push, publish, parseWorktreePorcelain, listWorktrees, addWorktree, removeWorktree } from './git-service'
 
 // Each test gets a throwaway git repo under the OS temp dir; removed after.
 let repoRoot: string
@@ -208,5 +208,48 @@ describe('sync state + remotes', () => {
   it('push/publish fail cleanly (non-zero) with no remote', async () => {
     expect((await push(repoRoot)).code).not.toBe(0)
     expect((await publish(repoRoot)).code).not.toBe(0)
+  })
+})
+
+describe('worktrees', () => {
+  it('parses porcelain with a branched and a detached worktree', () => {
+    const porcelain = [
+      'worktree /repo',
+      'HEAD abc123',
+      'branch refs/heads/main',
+      '',
+      'worktree /repo/wt',
+      'HEAD def456',
+      'detached'
+    ].join('\n')
+    expect(parseWorktreePorcelain(porcelain)).toEqual([
+      { path: '/repo', branch: 'main', head: 'abc123' },
+      { path: '/repo/wt', branch: null, head: 'def456' }
+    ])
+  })
+
+  it('adds, lists, and removes a worktree', async () => {
+    const wtPath = join(repoRoot, '..', 'wt-feature')
+    const add = await addWorktree(repoRoot, wtPath, 'feature/wt')
+    expect(add.code, add.stderr).toBe(0)
+
+    const list = await listWorktrees(repoRoot)
+    expect(list).toContainEqual({ path: repoRoot, branch: 'main', head: expect.any(String) })
+    expect(list).toContainEqual({ path: wtPath, branch: 'feature/wt', head: expect.any(String) })
+
+    const rm = await removeWorktree(repoRoot, wtPath)
+    expect(rm.code, rm.stderr).toBe(0)
+    expect((await listWorktrees(repoRoot)).some((w) => w.path === wtPath)).toBe(false)
+  })
+
+  it('removeWorktree refuses a worktree with uncommitted changes unless forced', async () => {
+    const wtPath = join(repoRoot, '..', 'wt-dirty')
+    await addWorktree(repoRoot, wtPath, 'feature/dirty')
+    writeFileSync(join(wtPath, 'file.txt'), 'uncommitted in worktree\n')
+    // git worktree remove refuses dirty worktrees
+    const rm = await removeWorktree(repoRoot, wtPath, false)
+    expect(rm.code).not.toBe(0)
+    const force = await removeWorktree(repoRoot, wtPath, true)
+    expect(force.code, force.stderr).toBe(0)
   })
 })
