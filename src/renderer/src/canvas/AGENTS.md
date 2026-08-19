@@ -8,6 +8,9 @@ The canvas — React Flow wiring.
   node state** (no separate store mirroring nodes). Handles pan/zoom, node
   drag/select/delete, hover-guard (drag = move, dwell = focus), and emits
   layout changes for persistence.
+- Hosts the node context menu: agent actions (branch / resume) plus the
+  "link to another agent" submenu (7.5), which persists `data.linkedIds` as a
+  cache backed by `.termsprawl/links/*.json` files.
 
 ## Rules
 

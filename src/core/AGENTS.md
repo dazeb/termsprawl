@@ -24,6 +24,14 @@ Server Edition boots from.
 - `git-service.ts` — git operations for source-control features.
 - `agent-status.ts`, `session-name.ts`, `command-resolver.ts`, `transcript.ts`
   — agent status aggregation, session-name sync, command resolution, transcripts.
+- `context-links.ts`, `transcript-index.ts`, `context-cli.ts`,
+  `context-discovery.ts` — context links between agent nodes: ordered-pair link
+  files, per-node transcript path index, the standalone `termsprawl-context`
+  CLI (bundled to `scripts/termsprawl-context.mjs`), and the project-local
+  discovery markers (skill + AGENTS.md block).
+- `agent-accounts.ts`, `agent-cli.ts` — managed agent accounts (config dirs
+  under userData/accounts, auth-env strip) and CLI `--help` probes
+  (permission-mode / login command).
 - `platform.ts` — `CorePlatform` interface: `broadcast()` + `userDataPath`.
   Core talks to its shell ONLY through this.
 
