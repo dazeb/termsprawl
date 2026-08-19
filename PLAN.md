@@ -296,6 +296,19 @@ extension, one feature at a time.**
 ### Task 7.5: Context links
 - Link file per node pair; CLI that parses transcript formats to print linked
   context; discovery markers per agent (skill / AGENTS.md marker block).
+- **Status: DONE (TDD, v0.3.5-dev on main).** `core/context-links.ts` (ordered
+  pair file, add/list/remove/peers, SELF guard), `core/transcript.ts`
+  `readTranscriptTurns` + `formatLinkedContext`, `core/transcript-index.ts`
+  (per-node transcript path persistence so the one-shot CLI finds peers),
+  `core/context-cli.ts` + `scripts/termsprawl-context.mjs` (bundled via
+  `pnpm build:cli`, a thin runContextCli wired to a real-io impl),
+  `core/context-discovery.ts` (`.termsprawl/AGENTS.md` managed block +
+  `.claude/skills/termsprawl-context/SKILL.md`, project-local only). IPC
+  `context:list/add/remove` with known-cwd guard in main; preload + env.d.ts
+  surface; `TERMSPRAWL_NODE_ID` injected on Claude `--session-id/--resume`
+  spawn; canvas "link to another agent" submenu (Claude gate, folder projects
+  only) persisting `data.linkedIds` as a cache rebuilt from disk on load.
+  229 tests green.
 
 ### Task 7.6: Managed accounts + permission mode
 - Account list in settings; per-account config dirs; env injection with
