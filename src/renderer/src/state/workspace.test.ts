@@ -10,6 +10,7 @@ import {
   createStickyNode,
   createTerminalNode,
   deserializeNodes,
+  isAgentCommand,
   nodeTitle,
   projectNameFromPath,
   removeNode,
@@ -343,5 +344,46 @@ describe('projectNameFromPath', () => {
 
   it('falls back for a root path', () => {
     expect(projectNameFromPath('/', 'project-1')).toBe('project-1')
+  })
+})
+
+describe('isAgentCommand', () => {
+  it('recognises a claude agent spawn', () => {
+    expect(isAgentCommand('claude --session-id n1')).toBe(true)
+  })
+
+  it('recognises a bare enabled agent command', () => {
+    expect(isAgentCommand('codex')).toBe(true)
+    expect(isAgentCommand('gemini')).toBe(true)
+    expect(isAgentCommand('grok')).toBe(true)
+  })
+
+  it('rejects non-agent terminals', () => {
+    expect(isAgentCommand('druk /tmp/repo')).toBe(false)
+    expect(isAgentCommand('bash')).toBe(false)
+    expect(isAgentCommand(undefined)).toBe(false)
+    expect(isAgentCommand('')).toBe(false)
+  })
+
+  it('rejects the disabled custom template', () => {
+    expect(isAgentCommand('agent --session-id n1')).toBe(false)
+  })
+})
+
+describe('context link cache', () => {
+  it('defaults linkedIds to [] on deserialize when absent', () => {
+    const restored = deserializeNodes([
+      { id: 't1', type: 'terminal', position: { x: 0, y: 0 }, data: { kind: 'terminal', title: 'claude' } }
+    ])[0]
+    if (restored.data.kind !== 'terminal') throw new Error('expected terminal node')
+    expect(restored.data.linkedIds).toEqual([])
+  })
+
+  it('preserves linkedIds through serialize/deserialize (cache only)', () => {
+    const node = createAgentNode('claude', '/tmp')
+    node.data.linkedIds = ['n-other']
+    const restored = deserializeNodes(serializeNodes([node]))[0]
+    if (restored.data.kind !== 'terminal') throw new Error('expected terminal node')
+    expect(restored.data.linkedIds).toEqual(['n-other'])
   })
 })

@@ -26,6 +26,7 @@ import {
   createResumeAgentNode,
   createStickyNode,
   createTerminalNode,
+  isAgentCommand,
   removeNode,
   serializeNodes,
   deserializeNodes,
@@ -36,7 +37,7 @@ import { agentIds, agentName, agentTitle } from '@shared/agents/config'
 import type { AgentId } from '@shared/agents/config'
 import { useHistory } from '../state/history'
 import { useProjects } from '../state/projects'
-import type { SprawlNodeData } from '../state/workspace'
+import type { SprawlNodeData, TerminalNodeData } from '../state/workspace'
 
 const nodeTypes = {
   terminal: TerminalNode,
@@ -77,6 +78,7 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
   const [edges, setEdges] = useState<Edge[]>([])
   const [menu, setMenu] = useState<{ x: number; y: number; nodeId?: string } | null>(null)
   const [agentMenuOpen, setAgentMenuOpen] = useState(false)
+  const [linkMenuOpen, setLinkMenuOpen] = useState(false)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [cleanupError, setCleanupError] = useState<string | null>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
@@ -357,6 +359,7 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
   const onPaneContextMenu = useCallback((event: React.MouseEvent) => {
     event.preventDefault()
     setAgentMenuOpen(false)
+    setLinkMenuOpen(false)
     setMenu({ x: event.clientX, y: event.clientY })
   }, [])
 
@@ -364,6 +367,7 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
     event.preventDefault()
     event.stopPropagation()
     setAgentMenuOpen(false)
+    setLinkMenuOpen(false)
     setMenu({ x: event.clientX, y: event.clientY, nodeId: node.id })
   }, [])
 
@@ -430,6 +434,42 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
     setMenu(null)
   }, [menu, cwd, push, screenToFlowPosition, appendOnTop])
 
+  // Context links (7.5): link files on disk are the source of truth; `linkedIds`
+  // is a cache we keep in sync here. Undo is intentionally NOT pushed for links
+  // — they are disk state, rebuilt from the files on project load.
+  const toggleLink = useCallback(
+    (peerId: string, already: boolean) => {
+      if (!menu?.nodeId || !cwd) return
+      const selfId = menu.nodeId
+      const action = already
+        ? window.termsprawl.contextLinks.remove
+        : window.termsprawl.contextLinks.add
+      void action(cwd, selfId, peerId).then((res) => {
+        if (res.ok) {
+          setNodes((nds) =>
+            nds.map((n) => {
+              if (n.id !== selfId) return n
+              const base = n.data as TerminalNodeData
+              return {
+                ...n,
+                data: {
+                  ...base,
+                  linkedIds: already
+                    ? (base.linkedIds ?? []).filter((id) => id !== peerId)
+                    : [...(base.linkedIds ?? []), peerId]
+                }
+              }
+            })
+          )
+        } else {
+          setCleanupError(`Could not ${already ? 'unlink' : 'link'}: ${res.error}`)
+        }
+      })
+      setLinkMenuOpen(false)
+    },
+    [cwd, menu, setCleanupError]
+  )
+
   // Deleting a group ungroups its children instead of destroying them —
   // terminals inside keep their tmux sessions. Intercepted in onNodesChange
   // (React Flow v11's onNodesDelete can't veto the cascade removal).
@@ -442,6 +482,19 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
     menuNode?.type === 'terminal' &&
     typeof (menuNode.data as { command?: string }).command === 'string' &&
     (menuNode.data as { command?: string }).command?.startsWith('claude') === true
+
+  // Context-link submenu: other agent terminals on this canvas (folder projects
+  // only). `linkedIds` mirrors the link files on disk.
+  const menuNodeData = menu?.nodeId ? (menuNode?.data as TerminalNodeData | undefined) : undefined
+  const linkedIds = cwd ? (menuNodeData?.linkedIds ?? []) : []
+  const agentPeers = cwd
+    ? nodes.filter(
+        (n) =>
+          n.id !== menu?.nodeId &&
+          n.type === 'terminal' &&
+          isAgentCommand((n.data as { command?: string }).command)
+      )
+    : []
 
   // Persist the active project's nodes (debounced) as the canvas settles.
   useEffect(() => {
@@ -535,6 +588,29 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
               <button onClick={resumeAgentSession} title="New node resuming this session">
                 Resume session in new node
               </button>
+              {cwd && agentPeers.length > 0 && (
+                <>
+                  <button
+                    className="context-submenu-toggle"
+                    onClick={() => setLinkMenuOpen((v) => !v)}
+                  >
+                    {linkMenuOpen ? 'link to another agent ▾' : 'link to another agent ▸'}
+                  </button>
+                  {linkMenuOpen && (
+                    <div className="context-submenu">
+                      {agentPeers.map((peer) => {
+                        const already = linkedIds.includes(peer.id)
+                        const title = (peer.data as { title?: string }).title ?? peer.id
+                        return (
+                          <button key={peer.id} onClick={() => toggleLink(peer.id, already)}>
+                            {already ? `unlink ${title}` : `link ${title}`}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
             </>
           )}
           <button onClick={addTerminal}>New terminal</button>

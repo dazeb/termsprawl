@@ -4,7 +4,7 @@
 
 import type { Node } from 'reactflow'
 import type { SerializedNode } from '@shared/types'
-import { agentTitle, agentCommand, type AgentId } from '@shared/agents/config'
+import { agentConfig, agentIds, agentTitle, agentCommand, type AgentId } from '@shared/agents/config'
 
 export const NODE_TYPES = ['terminal', 'sticky', 'group', 'diff', 'editor'] as const
 export type NodeKind = (typeof NODE_TYPES)[number]
@@ -15,6 +15,10 @@ export interface TerminalNodeData {
   cwd?: string
   /** Optional command the PTY runs instead of a bare shell (e.g. `druk`). */
   command?: string
+  /** Agent nodes linked for context sharing — CACHE ONLY. Source of truth is
+   * the `.termsprawl/links/*.json` files; rebuilt on project load, so a
+   * git-pulled link shows up even if this field was never saved. */
+  linkedIds?: string[]
 }
 
 export const STICKY_COLORS = ['slate', 'amber', 'lime', 'pink', 'cyan'] as const
@@ -152,6 +156,18 @@ export function resumedSessionId(command: string | undefined): string | null {
   if (!command) return null
   const match = /--resume\s+(\S+)/.exec(command)
   return match ? match[1] : null
+}
+
+/** True when a command launches a known, enabled agent CLI (e.g.
+ * `claude --session-id n1` or a bare `codex`). Non-agent terminals (a plain
+ * shell or `druk …`) return false. Used to scope context-link peer lists. */
+export function isAgentCommand(command: string | undefined): boolean {
+  if (!command) return false
+  const first = command.trim().split(/\s+/)[0]
+  return agentIds().some((id: AgentId) => {
+    const cfg = agentConfig(id)
+    return cfg.enabled && first === cfg.command
+  })
 }
 
 export function createStickyNode(): Node<StickyNodeData> {
@@ -332,7 +348,7 @@ export function deserializeNodes(serialized: SerializedNode[]): Node<SprawlNodeD
     return {
       ...base,
       ...TERMINAL_DIMENSIONS,
-      data: { kind: 'terminal', title: 'shell', ...data } as TerminalNodeData
+      data: { kind: 'terminal', title: 'shell', linkedIds: [], ...data } as TerminalNodeData
     }
   })
 }

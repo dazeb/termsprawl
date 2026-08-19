@@ -52,10 +52,29 @@ export const useProjects = create<ProjectsState>((set, get) => ({
       {}
     )
     const nodeCache = Object.fromEntries(
-      Object.entries(snap.projects).map(([projectId, nodes]) => {
-        const tombstones = new Set(tombstonedNodeIds[projectId] ?? [])
-        return [projectId, nodes.filter((node) => !tombstones.has(node.id))]
-      })
+      await Promise.all(
+        Object.entries(snap.projects).map(async ([projectId, nodes]) => {
+          const tombstones = new Set(tombstonedNodeIds[projectId] ?? [])
+          const kept = nodes.filter((node) => !tombstones.has(node.id))
+          const project = snap.index.projects.find((p) => p.id === projectId)
+          if (!project?.cwd) return [projectId, kept]
+          // Source of truth for context links is the files on disk; rebuild the
+          // cache so a git-pulled `.termsprawl/links/` shows up on load.
+          const res = await window.termsprawl.contextLinks.list(project.cwd)
+          if (!res.ok || res.links.length === 0) return [projectId, kept]
+          return [
+            projectId,
+            kept.map((node) => {
+              if (node.type !== 'terminal') return node
+              const linkedIds = res.links
+                .filter((l) => l.a === node.id || l.b === node.id)
+                .map((l) => (l.a === node.id ? l.b : l.a))
+              if (linkedIds.length === 0) return node
+              return { ...node, data: { ...node.data, linkedIds } }
+            })
+          ]
+        })
+      )
     )
     set({
       projects: snap.index.projects,
