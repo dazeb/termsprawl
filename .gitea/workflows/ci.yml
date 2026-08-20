@@ -40,7 +40,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: dist
-        run: pnpm run dist
+        # --publish never: electron-builder would otherwise auto-publish to
+        # the configured github provider on tag builds (fails without
+        # GH_TOKEN). The 'publish release' step below uploads to Gitea.
+        run: pnpm run build && pnpm exec electron-builder --linux --publish never
 
       - name: publish release
         env:
