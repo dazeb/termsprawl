@@ -3,7 +3,7 @@
 // branches, and push/pull/publish. Talks to core only via window.termsprawl.git.
 
 import { useCallback, useEffect, useState } from 'react'
-import type { GitFileChange, GitPanelSnapshot, GitResult } from '@shared/types'
+import type { GitFileChange, GitPanelSnapshot, GitResult, GitWorktree } from '@shared/types'
 import { HelpBadge } from './HelpBadge'
 
 interface SourceControlPanelProps {
@@ -19,9 +19,18 @@ export function SourceControlPanel({ cwd, onClose }: SourceControlPanelProps): R
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [confirmDiscard, setConfirmDiscard] = useState<string | null>(null)
+  const [worktrees, setWorktrees] = useState<GitWorktree[]>([])
+  const [newWtName, setNewWtName] = useState('')
+  const [newWtBranch, setNewWtBranch] = useState('')
+  const [confirmRemoveWt, setConfirmRemoveWt] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
-    setSnap(await window.termsprawl.git.snapshot(cwd))
+    const [next, wt] = await Promise.all([
+      window.termsprawl.git.snapshot(cwd),
+      window.termsprawl.git.worktrees(cwd)
+    ])
+    setSnap(next)
+    setWorktrees(wt)
   }, [cwd])
 
   useEffect(() => {
@@ -58,6 +67,22 @@ export function SourceControlPanel({ cwd, onClose }: SourceControlPanelProps): R
     if (!text) return
     void run(() => window.termsprawl.git.commit(cwd, text), 'committed')
     setMsg('')
+  }
+
+  const createWorktree = (): void => {
+    const name = newWtName.trim()
+    if (!name) return
+    const branch = newWtBranch.trim() || undefined
+    void run(() => window.termsprawl.git.worktreeAdd(cwd, name, branch), 'worktree created')
+    setNewWtName('')
+    setNewWtBranch('')
+  }
+
+  // Destructive: force-removes the worktree (and its uncommitted changes) after
+  // the inline confirm.
+  const removeWorktreeAt = (path: string): void => {
+    void run(() => window.termsprawl.git.worktreeRemove(cwd, path, true), 'worktree removed')
+    setConfirmRemoveWt(null)
   }
 
   const ghNeedsAuth = !!snap?.remote?.includes('github.com') && snap.ghAuthed === false
@@ -195,12 +220,70 @@ export function SourceControlPanel({ cwd, onClose }: SourceControlPanelProps): R
               >
                 create
               </button>
-            </div>
-          </div>
-        </div>
-      )}
+                            </div>
+                          </div>
+
+                          <div className="source-control-worktrees">
+                            <div className="source-control-subtitle">worktrees</div>
+                            {worktrees.map((w) => (
+                              <div key={w.path} className="source-control-wtrow">
+                                <span className="source-control-wtpath" title={w.path}>
+                                  {w.path === cwd ? '● ' : ''}
+                                  {basenameOf(w.path)}
+                                </span>
+                                <span className="source-control-wtbranch">{w.branch ?? 'detached'}</span>
+                                {w.path !== cwd &&
+                                  (confirmRemoveWt === w.path ? (
+                                    <span className="git-file-confirm">
+                                      <span className="account-confirm-text">
+                                        removes this worktree (discards its changes)
+                                      </span>
+                                      <button className="danger" onClick={() => removeWorktreeAt(w.path)}>
+                                        confirm
+                                      </button>
+                                      <button onClick={() => setConfirmRemoveWt(null)}>keep</button>
+                                    </span>
+                                  ) : (
+                                    <button
+                                      className="git-file-action git-file-discard"
+                                      title="remove worktree"
+                                      onClick={() => setConfirmRemoveWt(w.path)}
+                                    >
+                                      ✕
+                                    </button>
+                                  ))}
+                              </div>
+                            ))}
+                            <div className="source-control-commit">
+                              <input
+                                className="source-control-msg"
+                                value={newWtName}
+                                placeholder="worktree name"
+                                onChange={(event) => setNewWtName(event.target.value)}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter') createWorktree()
+                                }}
+                              />
+                              <input
+                                className="source-control-msg"
+                                value={newWtBranch}
+                                placeholder="branch (optional)"
+                                onChange={(event) => setNewWtBranch(event.target.value)}
+                              />
+                              <button disabled={!newWtName.trim()} onClick={createWorktree}>
+                                create
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                    )}
     </div>
   )
+}
+
+function basenameOf(path: string): string {
+  const parts = path.split('/').filter(Boolean)
+  return parts.length > 0 ? (parts[parts.length - 1] ?? '') : path
 }
 
 function statusLetter(change: GitFileChange): string {

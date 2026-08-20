@@ -66,7 +66,10 @@ export const IPC = {
   gitCheckout: 'git:branch-checkout',
   gitPush: 'git:push',
   gitPull: 'git:pull',
-  gitPublish: 'git:publish'
+  gitPublish: 'git:publish',
+  gitWorktrees: 'git:worktrees',
+  gitWorktreeAdd: 'git:worktree-add',
+  gitWorktreeRemove: 'git:worktree-remove'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

@@ -1,12 +1,12 @@
 import { app, BrowserWindow, dialog, ipcMain, Notification, protocol, net } from 'electron'
 import { execFileSync } from 'node:child_process'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, isAbsolute, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { IPC } from '../shared/ipc'
 import type { ContextLinkListResult, ContextLinkWriteResult, DiffBase, DiffInfoResult, ProjectSettings, PtyCreateRequest, PtyExitInfo, SerializedNode, AppSettings, GitPanelSnapshot, GitResult } from '../shared/types'
 import type { CorePlatform } from '../core/platform'
-import { diffInfo, findRepoRoot, currentBranch, remoteUrl, syncState, gitStatus, listBranches, recentCommits, ghAuthed, stageChanges, unstageChanges, discardChanges, commitChanges, createBranch, checkoutBranch, push as gitPush, pull as gitPull, publish as gitPublish } from '../core/git-service'
+import { diffInfo, findRepoRoot, currentBranch, remoteUrl, syncState, gitStatus, listBranches, recentCommits, ghAuthed, stageChanges, unstageChanges, discardChanges, commitChanges, createBranch, checkoutBranch, push as gitPush, pull as gitPull, publish as gitPublish, listWorktrees, addWorktree, removeWorktree } from '../core/git-service'
 import { classifyFile, listProjectDir, readProjectFile, writeProjectFile } from '../core/file-service'
 import { addLink, listLinks, removeLink } from '../core/context-links'
 import { ensureContextDiscovery } from '../core/context-discovery'
@@ -256,6 +256,17 @@ function registerGitIpc(): void {
   ipcMain.handle(IPC.gitPush, (_event, cwd: string) => guarded(cwd, (r) => gitPush(r)))
   ipcMain.handle(IPC.gitPull, (_event, cwd: string) => guarded(cwd, (r) => gitPull(r)))
   ipcMain.handle(IPC.gitPublish, (_event, cwd: string) => guarded(cwd, (r) => gitPublish(r)))
+  ipcMain.handle(IPC.gitWorktrees, (_event, cwd: string) => {
+    if (!isKnownProjectCwd(cwd)) return []
+    const root = findRepoRoot(cwd)
+    return root ? listWorktrees(root) : []
+  })
+  ipcMain.handle(IPC.gitWorktreeAdd, (_event, cwd: string, name: string, branch?: string) =>
+    guarded(cwd, (r) => addWorktree(r, isAbsolute(name) ? name : join(dirname(r), name), branch))
+  )
+  ipcMain.handle(IPC.gitWorktreeRemove, (_event, cwd: string, path: string, force = false) =>
+    guarded(cwd, (r) => removeWorktree(r, path, force))
+  )
 }
 
 function registerFileProtocol(): void {

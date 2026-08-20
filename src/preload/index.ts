@@ -19,7 +19,8 @@ import type {
   ContextLinkListResult,
   ContextLinkWriteResult,
   GitPanelSnapshot,
-  GitResult
+  GitResult,
+  GitWorktree
 } from '../shared/types'
 import type { UpdateStatus } from '../shared/update-status'
 
@@ -169,7 +170,13 @@ const api = {
       ipcRenderer.invoke(IPC.gitCheckout, cwd, name),
     push: (cwd: string): Promise<GitResult> => ipcRenderer.invoke(IPC.gitPush, cwd),
     pull: (cwd: string): Promise<GitResult> => ipcRenderer.invoke(IPC.gitPull, cwd),
-    publish: (cwd: string): Promise<GitResult> => ipcRenderer.invoke(IPC.gitPublish, cwd)
+    publish: (cwd: string): Promise<GitResult> => ipcRenderer.invoke(IPC.gitPublish, cwd),
+    worktrees: (cwd: string): Promise<GitWorktree[]> =>
+      ipcRenderer.invoke(IPC.gitWorktrees, cwd),
+    worktreeAdd: (cwd: string, path: string, branch?: string): Promise<GitResult> =>
+      ipcRenderer.invoke(IPC.gitWorktreeAdd, cwd, path, branch),
+    worktreeRemove: (cwd: string, path: string, force?: boolean): Promise<GitResult> =>
+      ipcRenderer.invoke(IPC.gitWorktreeRemove, cwd, path, force)
   }
 }
 

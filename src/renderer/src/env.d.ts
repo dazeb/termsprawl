@@ -16,7 +16,8 @@ import type {
   ContextLinkListResult,
   ContextLinkWriteResult,
   GitPanelSnapshot,
-  GitResult
+  GitResult,
+  GitWorktree
 } from '@shared/types'
 import type { AgentStatusEvent } from '@shared/agent-status'
 import type { UpdateStatus } from '@shared/update-status'
@@ -95,6 +96,9 @@ declare global {
         push(cwd: string): Promise<GitResult>
         pull(cwd: string): Promise<GitResult>
         publish(cwd: string): Promise<GitResult>
+        worktrees(cwd: string): Promise<GitWorktree[]>
+        worktreeAdd(cwd: string, path: string, branch?: string): Promise<GitResult>
+        worktreeRemove(cwd: string, path: string, force?: boolean): Promise<GitResult>
       }
     }
   }
