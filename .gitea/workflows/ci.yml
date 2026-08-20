@@ -26,3 +26,49 @@ jobs:
 
       - name: build
         run: pnpm run build
+
+  release:
+    # Only on version tags: package the AppImage/.deb and publish a Gitea
+    # release with the artifacts (+ latest-linux.yml for auto-update).
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: install
+        run: pnpm install --frozen-lockfile
+
+      - name: dist
+        run: pnpm run dist
+
+      - name: publish release
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITEA_URL: ${{ github.server_url }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # Create the release (idempotent: 409 if it already exists → reuse).
+          api="${GITEA_URL}/api/v1/repos/${REPO}/releases"
+          body="{\"tag_name\":\"${TAG}\",\"name\":\"${TAG}\",\"draft\":false,\"prerelease\":false}"
+          resp="$(curl -fsS -X POST -H "Authorization: token ${TOKEN}" -H 'Content-Type: application/json' \
+            -d "${body}" "${api}" 2>/dev/null || true)"
+          if [[ -z "${resp}" || "${resp}" == *"already exists"* ]]; then
+            resp="$(curl -fsS -H "Authorization: token ${TOKEN}" "${api}/tags/${TAG}")"
+          fi
+          rel_id="$(printf '%s' "${resp}" | jq -r '.id')"
+          echo "release id: ${rel_id}"
+
+          # Upload each artifact. Gitea's API takes the filename via ?name=.
+          for f in dist/termsprawl-*.AppImage dist/termsprawl_*_amd64.deb dist/latest-linux.yml; do
+            [[ -f "$f" ]] || continue
+            name="$(basename "$f")"
+            echo "uploading ${name}"
+            curl -fsS -X POST \
+              -H "Authorization: token ${TOKEN}" \
+              -F "attachment=@${f}" \
+              "${api}/${rel_id}/assets?name=${name}" >/dev/null
+          done
+          echo "release ${TAG} published"
