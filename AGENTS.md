@@ -128,9 +128,13 @@ only, never ported). Extend `NODE_TYPES` and the `data.kind` union in
 The repo has a real remote so agents can work in parallel without clobbering
 each other:
 
-- **github** = `git@github.com:dazeb/termsprawl.git` — canonical remote
-  (public repo, created 2026-08-13; SSH key auth — id_ed25519 registered on
-  GitHub, no tokens needed). Push there for any released/notable state.
+- **github** = `git@github.com:dazeb/termsprawl.git` — canonical public remote
+  (created 2026-08-13; SSH key auth — id_ed25519 registered on GitHub, no
+  tokens needed). Push there for any released/notable state.
+- **gitea** = `ssh://gitea@192.168.8.175:22/dazeb/termsprawl.git` — self-hosted
+  Gitea (CT 100 on the Proxmox host, PVE 192.168.8.195). **CI runs here only**
+  (Gitea Actions; the user is banned from GitHub Actions). Push every branch
+  push here so CI sees it (`git push gitea main`).
 - **origin** = `hermes-box:/srv/git/termsprawl.git` — bare repo on hermes-box
   (SSH alias in `~/.ssh/config`; key `~/.ssh/hermes-box_ed25519`). Working
   remote for the parallel-agent loop (fast, no auth churn). Both remotes get
@@ -153,6 +157,35 @@ each other:
   get merged to main by Hermes after verification.
 - Checkout plumbing (`git worktree list`): three linked worktrees share one
   object database — a remote is only for cross-checkout/backup sync.
+
+## CI & release ritual
+
+**CI runs on self-hosted Gitea only** (`.gitea/workflows/ci.yml`). The user is
+banned from GitHub Actions — never add `.github/workflows` or suggest GitHub
+Actions. Pipeline (runner CT 109 `actrunner` at 192.168.8.221, `gitea-runner`
+v3.2.0, host executor, label `ubuntu-latest`):
+
+- push to `main` → `verify`: checkout, install, typecheck, test, build
+- `v*` tag → `verify` + `release`: builds once, publishes the AppImage,
+  `.deb`, and `latest-linux.yml` to **both** the Gitea release and GitHub
+  Releases (via `gh`, token = `GH_TOKEN` secret, user-scoped in Gitea).
+
+Releasing a version (the ritual):
+
+```bash
+pnpm run typecheck && pnpm test          # gates first
+git commit -m "release: vX.Y.Z"          # bump package.json + README status
+git push origin main && git push github main
+git tag -a vX.Y.Z -m "vX.Y.Z"
+git push gitea vX.Y.Z                    # triggers CI → both releases publish
+git push github vX.Y.Z                   # same tag on GitHub (gh release create needs it)
+```
+
+Then bump `termsprawl-web` `APP_VERSION` + deploy (see termsprawl-web repo).
+GitHub Releases still feeds the app's auto-updater via `latest-linux.yml` —
+it must be in the GitHub release, so `--publish never` on electron-builder in
+CI is deliberate (its implicit tag-publish to the github provider would crash
+without a GH_TOKEN env and would fight the workflow's own uploads).
 
 ## Tests
 
