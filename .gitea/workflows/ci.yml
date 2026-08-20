@@ -28,8 +28,10 @@ jobs:
         run: pnpm run build
 
   release:
-    # Only on version tags: package the AppImage/.deb and publish a Gitea
-    # release with the artifacts (+ latest-linux.yml for auto-update).
+    # On version tags: build the AppImage/.deb once, publish to BOTH the Gitea
+    # release (this instance) and GitHub Releases (the app's auto-updater reads
+    # GitHub latest-linux.yml). CI runs on Gitea; GitHub only receives the
+    # published artifacts.
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
@@ -42,10 +44,10 @@ jobs:
       - name: dist
         # --publish never: electron-builder would otherwise auto-publish to
         # the configured github provider on tag builds (fails without
-        # GH_TOKEN). The 'publish release' step below uploads to Gitea.
+        # GH_TOKEN). The publish steps below upload to Gitea + GitHub.
         run: pnpm run build && pnpm exec electron-builder --linux --publish never
 
-      - name: publish release
+      - name: publish gitea release
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITEA_URL: ${{ github.server_url }}
@@ -53,7 +55,7 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          # Create the release (idempotent: 409 if it already exists → reuse).
+          # Create the release (idempotent: reuse if it already exists).
           api="${GITEA_URL}/api/v1/repos/${REPO}/releases"
           body="{\"tag_name\":\"${TAG}\",\"name\":\"${TAG}\",\"draft\":false,\"prerelease\":false}"
           resp="$(curl -fsS -X POST -H "Authorization: token ${TOKEN}" -H 'Content-Type: application/json' \
@@ -62,16 +64,39 @@ jobs:
             resp="$(curl -fsS -H "Authorization: token ${TOKEN}" "${api}/tags/${TAG}")"
           fi
           rel_id="$(printf '%s' "${resp}" | jq -r '.id')"
-          echo "release id: ${rel_id}"
+          echo "gitea release id: ${rel_id}"
 
-          # Upload each artifact. Gitea's API takes the filename via ?name=.
           for f in dist/termsprawl-*.AppImage dist/termsprawl_*_amd64.deb dist/latest-linux.yml; do
             [[ -f "$f" ]] || continue
             name="$(basename "$f")"
-            echo "uploading ${name}"
+            echo "gitea uploading ${name}"
             curl -fsS -X POST \
               -H "Authorization: token ${TOKEN}" \
               -F "attachment=@${f}" \
               "${api}/${rel_id}/assets?name=${name}" >/dev/null
           done
-          echo "release ${TAG} published"
+          echo "gitea release ${TAG} published"
+
+      - name: publish github release
+        # Requires a GitHub PAT with repo scope as the GH_TOKEN secret.
+        # Without it, the step is skipped (Gitea release still happens).
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          REPO: dazeb/termsprawl
+        run: |
+          set -euo pipefail
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "GH_TOKEN not set — skipping GitHub release (Gitea release already published)."
+            exit 0
+          fi
+          echo "creating/updating GitHub release ${TAG}"
+          gh release create "${TAG}" \
+            --repo "${REPO}" \
+            --title "${TAG}" \
+            dist/termsprawl-*.AppImage dist/termsprawl_*_amd64.deb dist/latest-linux.yml 2>/dev/null \
+          || gh release upload "${TAG}" \
+            --repo "${REPO}" \
+            --clobber \
+            dist/termsprawl-*.AppImage dist/termsprawl_*_amd64.deb dist/latest-linux.yml
+          echo "github release ${TAG} published"
