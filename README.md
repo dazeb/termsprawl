@@ -23,13 +23,16 @@ sprawls, nothing hides in tabs.
   notifications when an agent finishes.
 - **Sticky, group, editor, and diff nodes** — notes, frames, and Monaco-based
   editors/diffs as first-class canvas citizens.
+- **Source control** — stage, commit, branch, push/pull, and manage worktrees
+  from a panel bound to the active project.
 - **Undo/redo, command palette, dark lime-on-black UI.**
 
 ## Status
 
-Actively developed. Phases 0–6 of [PLAN.md](PLAN.md) are shipped (scaffold,
+Actively developed. Phases 0–7 of [PLAN.md](PLAN.md) are shipped (scaffold,
 terminal nodes, canvas, tmux continuity, projects/persistence, sticky/group/
-editor/diff nodes); Phase 7 (agents) is in progress. Current version: **0.3.4**.
+editor/diff nodes, agents with context links and managed accounts); Phase 8
+(source control) is in progress. Current version: **0.4.0**.
 
 Linux only — AppImage and `.deb` artifacts. No macOS support, by design.
 
