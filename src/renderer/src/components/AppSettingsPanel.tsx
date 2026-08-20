@@ -22,6 +22,15 @@ export function AppSettingsPanel({ onClose }: AppSettingsPanelProps): React.JSX.
     void window.termsprawl.settings.permissionSupported().then(setPermissionSupported)
   }, [])
 
+  // Escape closes the modal; backdrop click closes it too.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
   const toggleAutoDownload = async (checked: boolean): Promise<void> => {
     setSettings(await window.termsprawl.settings.set({ autoDownloadUpdates: checked }))
   }
@@ -60,112 +69,127 @@ export function AppSettingsPanel({ onClose }: AppSettingsPanelProps): React.JSX.
   }
 
   return (
-    <div className="app-settings">
-      <div className="project-settings-title">
-        app settings
-        <HelpBadge
-          label="about app settings"
-          text="These apply to the whole app, not one project. Updates check GitHub Releases a few seconds after a packaged launch. Dev builds skip the check. Restart is always required to install."
-        />
-      </div>
-      <label className="app-settings-toggle">
-        <input
-          type="checkbox"
-          checked={settings.autoDownloadUpdates}
-          onChange={(event) => void toggleAutoDownload(event.target.checked)}
-        />
-        auto download updates when available
-        <HelpBadge
-          label="about auto download"
-          text="Off (default): a toast appears when a newer GitHub release exists; you choose when to download. On: the AppImage/.deb downloads in the background, then the toast asks you to restart. The current build cannot update itself — this becomes the baseline for the next version. Releases must include latest-linux.yml."
-        />
-      </label>
-      <p className="app-settings-hint">
-        When off, you get a toast and choose when to download. When on, updates
-        download in the background and you restart to install.
-      </p>
+    <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="settings-modal" role="dialog" aria-modal="true" aria-label="app settings">
+        <div className="settings-modal-head">
+          <span className="settings-modal-title">
+            app settings
+            <HelpBadge
+              label="about app settings"
+              text="These apply to the whole app, not one project. Updates check GitHub Releases a few seconds after a packaged launch. Dev builds skip the check. Restart is always required to install."
+            />
+          </span>
+          <button className="settings-modal-close" onClick={onClose} title="Close settings">
+            ×
+          </button>
+        </div>
 
-      <div className="agent-accounts">
-        <div className="project-settings-title account-section-title">agent accounts</div>
-        <p className="app-settings-hint">
-          Each account is its own local Claude config directory. Pick the active account
-          for new Claude agents; none means the default ~/.claude. The active account's dir
-          is the only credential source — inherited API keys are stripped from its spawns.
-        </p>
-        {settings.accounts.length === 0 && (
-          <p className="app-settings-hint">no accounts yet — add one below.</p>
-        )}
-        {settings.accounts.map((acc) => (
-          <div key={acc.id} className="account-row">
-            <label className="account-radio">
+        <div className="settings-modal-body">
+          <div className="settings-section">
+            <div className="settings-section-title">updates</div>
+            <label className="app-settings-toggle">
               <input
-                type="radio"
-                name="activeAccount"
-                checked={settings.activeAccountId === acc.id}
-                onChange={() => void setActive(acc.id)}
+                type="checkbox"
+                checked={settings.autoDownloadUpdates}
+                onChange={(event) => void toggleAutoDownload(event.target.checked)}
               />
-              <span className="account-label">{acc.label}</span>
-              <span className="account-id">{acc.id}</span>
+              auto download updates when available
+              <HelpBadge
+                label="about auto download"
+                text="Off (default): a toast appears when a newer GitHub release exists; you choose when to download. On: the AppImage/.deb downloads in the background, then the toast asks you to restart. The current build cannot update itself — this becomes the baseline for the next version. Releases must include latest-linux.yml."
+              />
             </label>
-            {permissionSupported && (
-              <select
-                className="account-permission"
-                value={acc.permissionMode ?? 'default'}
-                title="permission mode (claude --permission-mode; hidden if your CLI doesn't support it)"
-                onChange={(event) =>
-                  void setPermissionMode(acc.id, event.target.value as AgentAccount['permissionMode'])
-                }
-              >
-                <option value="default">default</option>
-                <option value="acceptEdits">accept edits</option>
-                <option value="bypassPermissions">bypass</option>
-              </select>
-            )}
-            {!confirmDelete && (
-              <button
-                className="account-login"
-                title="open a login terminal for this account (uses its config dir)"
-                onClick={() => void loginInto(acc)}
-              >
-                login
-              </button>
-            )}
-            {confirmDelete === acc.id ? (
-              <span className="account-confirm">
-                <span className="account-confirm-text">removes its local Claude config dir</span>
-                <button className="account-danger" onClick={() => void deleteAccount(acc.id)}>
-                  confirm delete
-                </button>
-                <button onClick={() => setConfirmDelete(null)}>keep</button>
-              </span>
-            ) : (
-              <button
-                className="account-delete"
-                title="delete this account and its local Claude config dir"
-                onClick={() => setConfirmDelete(acc.id)}
-              >
-                delete
-              </button>
-            )}
+            <p className="app-settings-hint">
+              When off, you get a toast and choose when to download. When on, updates
+              download in the background and you restart to install.
+            </p>
           </div>
-        ))}
-        <div className="account-new">
-          <input
-            className="account-label-input"
-            value={newLabel}
-            placeholder="account label"
-            onChange={(event) => setNewLabel(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') void addAccount()
-            }}
-          />
-          <button onClick={() => void addAccount()}>add account</button>
+
+          <div className="settings-section">
+            <div className="settings-section-title">agent accounts</div>
+            <p className="app-settings-hint">
+              Each account is its own local Claude config directory. Pick the active account
+              for new Claude agents; none means the default ~/.claude. The active account's dir
+              is the only credential source — inherited API keys are stripped from its spawns.
+            </p>
+            {settings.accounts.length === 0 && (
+              <p className="app-settings-hint">no accounts yet — add one below.</p>
+            )}
+            {settings.accounts.map((acc) => (
+              <div key={acc.id} className="account-row">
+                <label className="account-radio">
+                  <input
+                    type="radio"
+                    name="activeAccount"
+                    checked={settings.activeAccountId === acc.id}
+                    onChange={() => void setActive(acc.id)}
+                  />
+                  <span className="account-label">{acc.label}</span>
+                  <span className="account-id">{acc.id}</span>
+                </label>
+                {permissionSupported && (
+                  <select
+                    className="account-permission"
+                    value={acc.permissionMode ?? 'default'}
+                    title="permission mode (claude --permission-mode; hidden if your CLI doesn't support it)"
+                    onChange={(event) =>
+                      void setPermissionMode(acc.id, event.target.value as AgentAccount['permissionMode'])
+                    }
+                  >
+                    <option value="default">default</option>
+                    <option value="acceptEdits">accept edits</option>
+                    <option value="bypassPermissions">bypass</option>
+                  </select>
+                )}
+                {!confirmDelete && (
+                  <button
+                    className="account-login"
+                    title="open a login terminal for this account (uses its config dir)"
+                    onClick={() => void loginInto(acc)}
+                  >
+                    login
+                  </button>
+                )}
+                {confirmDelete === acc.id ? (
+                  <span className="account-confirm">
+                    <span className="account-confirm-text">removes its local Claude config dir</span>
+                    <button className="account-danger" onClick={() => void deleteAccount(acc.id)}>
+                      confirm delete
+                    </button>
+                    <button onClick={() => setConfirmDelete(null)}>keep</button>
+                  </span>
+                ) : (
+                  <button
+                    className="account-delete"
+                    title="delete this account and its local Claude config dir"
+                    onClick={() => setConfirmDelete(acc.id)}
+                  >
+                    delete
+                  </button>
+                )}
+              </div>
+            ))}
+            <div className="account-new">
+              <input
+                className="account-label-input"
+                value={newLabel}
+                placeholder="account label"
+                onChange={(event) => setNewLabel(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') void addAccount()
+                }}
+              />
+              <button onClick={() => void addAccount()}>add account</button>
+            </div>
+          </div>
+        </div>
+
+        <div className="settings-modal-foot">
+          <button className="settings-modal-done" onClick={onClose}>
+            done
+          </button>
         </div>
       </div>
-
-      <button className="project-settings-done" onClick={onClose}>
-        done
-      </button>
     </div>
   )
 }

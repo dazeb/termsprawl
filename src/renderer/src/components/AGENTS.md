@@ -10,7 +10,13 @@ Shared UI components (non-node chrome).
 - `FileTree.tsx` — hover a canvas edge to slide out one project file tree.
   Header icons: move left/right (single panel) and pin open.
 - `UpdateToast.tsx` — packaged-app update notice (download / restart).
-- `AppSettingsPanel.tsx` — app-wide settings (auto-download updates).
+- `AppSettingsPanel.tsx` — app-wide settings (auto-download updates, managed
+  agent accounts) as a centered modal (`modal-backdrop` + `settings-modal`).
+  Closes on Escape / backdrop click; the footer `done` button is the primary
+  confirm.
+- `CogMenu.tsx` — toolbar cog button + dropdown (source control / settings).
+  Closes on Escape or outside click; source control is disabled without a
+  folder project.
 - `HelpBadge.tsx` — `?` next to titles; hover/focus/click opens a portaled
   explanation so node overflow cannot clip it.
 

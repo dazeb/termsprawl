@@ -5,6 +5,7 @@ import { TabBar } from './components/TabBar'
 import { UpdateToast } from './components/UpdateToast'
 import { AppSettingsPanel } from './components/AppSettingsPanel'
 import { SourceControlPanel } from './components/SourceControlPanel'
+import { CogMenu } from './components/CogMenu'
 import { HelpBadge } from './components/HelpBadge'
 import { useProjects } from './state/projects'
 
@@ -53,24 +54,11 @@ export function App(): React.JSX.Element {
           />
         </span>
         <TabBar />
-        {activeCwd && (
-          <button
-            type="button"
-            className="app-settings-toggle-btn"
-            onClick={() => setSourceControlOpen((open) => !open)}
-            title="Source control"
-          >
-            source control
-          </button>
-        )}
-        <button
-          type="button"
-          className="app-settings-toggle-btn"
-          onClick={() => setSettingsOpen((open) => !open)}
-          title="App settings"
-        >
-          settings
-        </button>
+        <CogMenu
+          hasActiveProject={!!activeCwd}
+          onOpenSourceControl={() => setSourceControlOpen(true)}
+          onOpenSettings={() => setSettingsOpen(true)}
+        />
         <span className="version">v{version}</span>
       </div>
       {settingsOpen && <AppSettingsPanel onClose={() => setSettingsOpen(false)} />}
