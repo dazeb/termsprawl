@@ -361,6 +361,13 @@ extension, one feature at a time.**
 - One worktree store/poller (epoch-guarded); creation dialog; scoped panel
   (scope = main checkout or bound worktree); reconciliation against
   `git worktree list`; destructive-safety rules.
+- **Status: DONE (on main, shipped in v0.4.0).** `core/worktree-store.ts`
+  (epoch-guarded `reconcile`: drops stale/out-of-order/same-version polls;
+  `get`/`has`/`at`, 5 tests), `git:worktrees/worktreeAdd/worktreeRemove` IPC
+  (main validates cwd, force guarded with in-app destructive confirm).
+  `SourceControlPanel.tsx` renders a scoped worktree list: create (name + run)
+  and force-remove with explicit change-discard confirmation. Landed in commits
+  9f08a80 (primitives) + 9d33b0a (panel), both ahead of the v0.4.0 tag.
 
 ### Task 8.4: AI commit messages + naming
 - BYO local agent CLI spawned read-only on staged diff / captured output.
