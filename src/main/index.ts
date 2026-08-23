@@ -36,6 +36,18 @@ if (process.platform === 'linux' && process.env.XDG_SESSION_TYPE === 'wayland') 
   app.commandLine.appendSwitch('ozone-platform', 'x11')
 }
 
+// On some hosts the GPU (Chromium GPU process) segfaults at startup even over
+// X11/XWayland — `GPU process exited unexpectedly: exit_code=139` (SIGSEGV),
+// `Failed to send GpuControl.CreateCommandBuffer`. This is a host-driver /
+// GPU-diagnostic failure, not an app bug; a terminal-canvas UI needs no real
+// GPU, so fall back to software rendering so the app reliably opens. (Verified
+// 2026-08-23: `--disable-gpu` on the affected Ubuntu 26 host boots fine and
+// spawns tmux sessions; without it the app dies with SIGSEGV.) The user can
+// still opt back in with `--enable-gpu` from a launcher the app did not set.
+if (process.platform === 'linux') {
+  app.commandLine.appendSwitch('disable-gpu')
+}
+
 // Must run before app.ready so <img src="termsprawl-file://..."> is treated as
 // a secure custom scheme (otherwise Chromium blocks it under the CSP).
 protocol.registerSchemesAsPrivileged([
