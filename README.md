@@ -32,7 +32,8 @@ sprawls, nothing hides in tabs.
 Actively developed. Phases 0–7 of [PLAN.md](PLAN.md) are shipped (scaffold,
 terminal nodes, canvas, tmux continuity, projects/persistence, sticky/group/
 editor/diff nodes, agents with context links and managed accounts); Phase 8
-(source control) is in progress. Current version: **0.4.0**.
+(source control panel with git status, staging, commits, branches, sync, and
+worktrees) is shipped through 8.3. Current version: **0.5.0**.
 
 Linux only — AppImage and `.deb` artifacts. No macOS support, by design.
 
