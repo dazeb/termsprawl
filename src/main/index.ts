@@ -26,6 +26,16 @@ import { claudeSettingsPath, installClaudeHooks } from './agents/hook-installer'
 import { SessionNameTracker } from '../core/session-name'
 import { agentSessionNameChannel } from '../shared/ipc'
 
+// Electron 43 crashes at startup on Wayland sessions when it auto-selects
+// Vulkan (EGL) for the GPU — `'--ozone-platform=wayland' is not compatible
+// with Vulkan` — leaving no window and a dead process. That is the default
+// session on Ubuntu 24.04+/26, so force X11/XWayland there so the packaged
+// app just opens. Active in the app itself, not via a CLI flag the user must
+// remember. Remove only if Chromium's Wayland + GL/GLES path stops crashing.
+if (process.platform === 'linux' && process.env.XDG_SESSION_TYPE === 'wayland') {
+  app.commandLine.appendSwitch('ozone-platform', 'x11')
+}
+
 // Must run before app.ready so <img src="termsprawl-file://..."> is treated as
 // a secure custom scheme (otherwise Chromium blocks it under the CSP).
 protocol.registerSchemesAsPrivileged([
