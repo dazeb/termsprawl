@@ -243,8 +243,7 @@ extension, one feature at a time.**
   agent CLIs in ~/.local/bin). Fixed a latent gap: `@shared/*` value imports
   never resolved at bundle/test time (only type imports were erased) — added
   aliases to electron.vite.config.ts + vitest.config.ts. 62 tests green.
-- **Grok added** on `feature/grok-agent` (worktree
-  `/home/dazeb/workspace/projects/active/termsprawl-grok`). Registry id
+- **Grok added** on `feature/grok-agent` (worktree, merged to main). Registry id
   `grok`, command `grok`, enabled. Capabilities match the Grok CLI
   (hooks/resume/subagents/recurring/branch/usage/chat/permissionMode). No
   `--session-id` pin — Grok requires a UUID, and node ids are not UUIDs.

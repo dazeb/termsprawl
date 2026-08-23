@@ -3,7 +3,7 @@
 # hook installer writes Claude hooks pointing at a live loopback server, then
 # POST a lifecycle event and confirm it's accepted. Fail-open checks too.
 set -u
-cd /home/dazeb/workspace/projects/active/termsprawl
+cd /home/dazeb/workspace/projects/termsprawl
 
 # Snapshot the current settings.json so we can restore it after.
 SETTINGS=~/.claude/settings.json
