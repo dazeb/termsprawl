@@ -437,11 +437,12 @@ concepts, not a porting source.*
 
 ### Task 12.2: Auto-update + announcements
 - GitHub Releases feed; update card; announce banner.
-- **Status: PARTIAL.** electron-updater checks GitHub Releases on packaged
-  boot. Toast: update available / downloading / restart to install. App
-  settings switch: "auto download updates when available" (default off).
-  Releases must include `latest-linux.yml` (produced by `pnpm run dist`)
-  or the client cannot see a new version. Announcements banner still open.
+- **Status: DONE (commit e4289d2).** electron-updater checks GitHub Releases on
+  packaged boot (toast + auto-download switch, default off). Added a
+  dismissible announcements banner that shows the latest GitHub release notes
+  (parseLatestRelease, TDD) — dismissal persisted per version in app settings.
+  Releases must include `latest-linux.yml` (produced by `pnpm run dist`) or the
+  client cannot see a new version.
 
 ### Task 12.3: CI
 - GitHub Actions: typecheck + test + build on PR; release on tag.
