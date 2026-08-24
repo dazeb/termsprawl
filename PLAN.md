@@ -386,11 +386,16 @@ extension, one feature at a time.**
 - Renderer keeps using the terminal transport interface — remote is a second
   implementation, canvas untouched.
 - Verify: open project on a test host; terminal/git/file ops run remotely.
-- **Status: PARTIAL (foundation committed c4a65da).** `core/ssh.ts` remote
-  spec + argv-array `runSsh` (verified against a real host) and
-  `core/remote-git.ts` (`git -C <path>` remotely). Remaining: remote PTY/tmux
-  transport, remote file ops, remote project config + renderer wiring,
-  ControlMaster multiplexing.
+- **Status: PARTIAL (transport stack complete + live-verified; commits
+  75dd7b3/…/4f13869).** `core/ssh.ts` (remote spec + runSsh), `core/remote-git.ts`
+  (`git -C`), `core/remote-file.ts` (quoted remote read), and
+  `core/remote-pty.ts` + PtyManager remote routing (`ssh -tt` + remote tmux;
+  create/destroy/fresh over ssh, local spawn cwd fixed, remote sessions skip
+  local scrollback). All verified against a real host (hermes-box): remote
+  terminal spawns + streams. Remaining surface wiring: a remote-project entry
+  (host/path) in the renderer/main, routing the source-control and file panel to
+  the remote transports for `remote` projects, passing `remote` through the
+  terminal-create flow, and ControlMaster multiplexing.
 
 ### Task 9.2: Commit
 - `git commit -m "feat: ssh remote projects"`
