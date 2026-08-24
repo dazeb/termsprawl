@@ -104,6 +104,39 @@ export interface Announcement {
   body: string
 }
 
+// Phase — Termsprawl Cloud. Shapes mirror the web API contract
+// (termsprawl-web/docs/cloud-app-integration.md).
+export type CloudPlan = 'free' | 'pro'
+export type CloudBackupStatus = 'ok' | 'restoring' | 'failed'
+export type CloudSyncState = 'synced' | 'syncing' | 'idle' | 'error'
+
+export interface CloudUser {
+  id: string
+  github_login: string
+  name: string
+  email: string
+  avatar_url: string
+  plan: CloudPlan
+  created_at: string
+}
+export interface CloudBackup {
+  id: string
+  project: string
+  size_bytes: number
+  created_at: string
+  status: CloudBackupStatus
+}
+export interface CloudBackupDetail extends CloudBackup {
+  content: { project: string; name?: string; workspace: unknown; files: Record<string, unknown> }
+}
+export interface CloudSyncStatus {
+  state: CloudSyncState
+  last_backup_at: string | null
+  storage_used_bytes: number
+  storage_quota_bytes: number
+  encryption: boolean
+}
+
 export interface AppSettings {
   autoDownloadUpdates: boolean
   /** Managed agent accounts (7.6). v1: Claude only. Null active = default ~/.claude. */
@@ -111,6 +144,8 @@ export interface AppSettings {
   activeAccountId: string | null
   /** Announcements banner (12.2): the release version the user already dismissed. */
   dismissedAnnouncementVersion: string | null
+  /** Termsprawl Cloud origin for the in-app sign-in + backup. Unset = https://termsprawl.com */
+  cloudApiBase?: string
 }
 
 export interface AgentAccount {
