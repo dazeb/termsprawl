@@ -3,7 +3,7 @@
 // ACTIVE project's nodes; this store holds the list and the disk contract.
 
 import { create } from 'zustand'
-import type { DurableCleanupResult, ProjectMeta, ProjectSettings, SerializedNode } from '@shared/types'
+import type { DurableCleanupResult, ProjectMeta, ProjectRemote, ProjectSettings, SerializedNode } from '@shared/types'
 
 interface ProjectsState {
   projects: ProjectMeta[]
@@ -16,8 +16,8 @@ interface ProjectsState {
 
   load(): Promise<void>
   select(id: string): void
-  /** Create a project (folder or inline); returns its meta. */
-  create(name: string, cwd: string | null): Promise<ProjectMeta>
+  /** Create a project (folder, inline, or remote); returns its meta. */
+  create(name: string, cwd: string | null, remote?: ProjectRemote): Promise<ProjectMeta>
   /** Persist the active project's nodes. */
   saveNodes(nodes: SerializedNode[]): Promise<void>
   /** Persist nodes for an explicit project, even after the active tab changes. */
@@ -89,8 +89,8 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     set({ activeProjectId: id })
   },
 
-  async create(name: string, cwd: string | null) {
-    const project = await window.termsprawl.workspace.addProject(name, cwd)
+  async create(name: string, cwd: string | null, remote?: ProjectRemote) {
+    const project = await window.termsprawl.workspace.addProject(name, cwd, remote)
     set((s) => ({
       projects: [...s.projects.filter((p) => p.id !== project.id), project],
       nodeCache: { ...s.nodeCache, [project.id]: [] },

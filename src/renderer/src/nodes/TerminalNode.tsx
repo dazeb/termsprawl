@@ -4,6 +4,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import type { TerminalNodeData } from '../state/workspace'
+import type { ProjectRemote } from '@shared/types'
 import { resumedSessionId } from '../state/workspace'
 import { useCanvas } from '../canvas/Canvas'
 import { useAgentStatuses } from '../state/agents'
@@ -17,6 +18,13 @@ const STATUS_LABEL: Record<string, string> = {
   waiting: 'NEEDS YOU',
   blocked: 'BLOCKED',
   done: 'DONE'
+}
+
+/** Owning project's remote destination (Phase 9), or undefined for a local
+ * project or an unowned terminal. Read from the live projects store. */
+function getOwningRemote(projectId: string | null): ProjectRemote | undefined {
+  if (!projectId) return undefined
+  return useProjects.getState().projects.find((p) => p.id === projectId)?.remote
 }
 
 // One terminal session, rendered with xterm, as a React Flow custom node.
@@ -123,6 +131,8 @@ export function TerminalNode({ id, data }: NodeProps<TerminalNodeData>): React.J
       if (active) term.write('\r\n\x1b[90m[session ended]\x1b[0m\r\n')
     })
 
+    // A remote project's terminal runs over ssh -tt + remote tmux.
+    const ownerRemote = getOwningRemote(ownerProjectIdRef.current)
     void window.termsprawl.pty
       .create({
         id,
@@ -130,7 +140,8 @@ export function TerminalNode({ id, data }: NodeProps<TerminalNodeData>): React.J
         cols: term.cols,
         rows: term.rows,
         cwd: data.cwd,
-        command: data.command
+        command: data.command,
+        ...(ownerRemote ? { remote: ownerRemote } : {})
       })
       .then(async (result) => {
         if (!active) return

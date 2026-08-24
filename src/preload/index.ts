@@ -9,6 +9,7 @@ import type {
   FileWriteResult,
   DirListResult,
   ProjectMeta,
+  ProjectRemote,
   ProjectSettings,
   PtyCreateRequest,
   PtyCreateResult,
@@ -65,8 +66,8 @@ const api = {
     snapshot: (): Promise<WorkspaceSnapshot> => ipcRenderer.invoke(IPC.workspaceSnapshot),
     saveNodes: (id: string, nodes: SerializedNode[]): Promise<number> =>
       ipcRenderer.invoke(IPC.workspaceSaveNodes, id, nodes),
-    addProject: (name: string, cwd: string | null): Promise<ProjectMeta> =>
-      ipcRenderer.invoke(IPC.projectAdd, name, cwd),
+    addProject: (name: string, cwd: string | null, remote?: ProjectRemote): Promise<ProjectMeta> =>
+      ipcRenderer.invoke(IPC.projectAdd, name, cwd, remote),
     closeProject: (id: string): Promise<void> => ipcRenderer.invoke(IPC.projectClose, id),
     archiveProject: (id: string): Promise<void> => ipcRenderer.invoke(IPC.projectArchive, id),
     reopenProject: (id: string): Promise<void> => ipcRenderer.invoke(IPC.projectReopen, id),

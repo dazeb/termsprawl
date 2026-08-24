@@ -18,6 +18,7 @@ import {
   type SerializedNode,
   type WorkspaceIndex
 } from './workspace-files'
+import type { ProjectRemote } from '../shared/types'
 
 export interface WorkspaceSnapshot {
   index: WorkspaceIndex
@@ -45,9 +46,17 @@ export class WorkspaceStore {
     return { index: this.index, projects }
   }
 
-  addProject(name: string, cwd: string | null): ProjectMeta {
+  addProject(name: string, cwd: string | null, remote?: ProjectRemote): ProjectMeta {
     const id = `p-${Date.now().toString(36)}`
-    const project: ProjectMeta = { id, name, cwd, closed: false, archived: false }
+    const project: ProjectMeta = {
+      id,
+      name,
+      // A remote project has no local cwd; its destinations live on `remote`.
+      cwd: remote ? null : cwd,
+      ...(remote ? { remote } : {}),
+      closed: false,
+      archived: false
+    }
     this.index.projects.push(project)
     this.revs.set(id, 0)
     this.persistIndex()

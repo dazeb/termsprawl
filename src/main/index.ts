@@ -4,7 +4,7 @@ import { homedir } from 'node:os'
 import { dirname, isAbsolute, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { IPC } from '../shared/ipc'
-import type { ContextLinkListResult, ContextLinkWriteResult, DiffBase, DiffInfoResult, ProjectSettings, PtyCreateRequest, PtyExitInfo, SerializedNode, AppSettings, GitPanelSnapshot, GitResult, CommitMessageResult, Announcement } from '../shared/types'
+import type { ContextLinkListResult, ContextLinkWriteResult, DiffBase, DiffInfoResult, ProjectRemote, ProjectSettings, PtyCreateRequest, PtyExitInfo, SerializedNode, AppSettings, GitPanelSnapshot, GitResult, CommitMessageResult, Announcement } from '../shared/types'
 import type { CorePlatform } from '../core/platform'
 import { diffInfo, findRepoRoot, currentBranch, remoteUrl, syncState, gitStatus, listBranches, recentCommits, ghAuthed, stageChanges, unstageChanges, discardChanges, commitChanges, createBranch, checkoutBranch, push as gitPush, pull as gitPull, publish as gitPublish, listWorktrees, addWorktree, removeWorktree } from '../core/git-service'
 import { generateCommitMessage } from '../core/commit-message'
@@ -146,12 +146,15 @@ function registerWorkspaceIpc(): void {
   ipcMain.handle(IPC.workspaceSaveNodes, (_event, id: string, nodes: SerializedNode[]) =>
     workspaceStore.saveNodes(id, nodes)
   )
-  ipcMain.handle(IPC.projectAdd, (_event, name: string, cwd: string | null): ProjectMeta => {
+  ipcMain.handle(IPC.projectAdd, (_event, name: string, cwd: string | null, remote?: ProjectRemote): ProjectMeta => {
+    // Dedupe only local folder projects (a remote project has cwd null, so any
+    // remote + any path is its own identity). Two remote projects differ by
+    // host/path, not by the null cwd.
     if (cwd) {
       const existing = workspaceStore.snapshot().index.projects.find((p) => p.cwd === cwd)
       if (existing) return existing // folder already has a project — dedupe
     }
-    return workspaceStore.addProject(name, cwd)
+    return workspaceStore.addProject(name, cwd, remote)
   })
   ipcMain.handle(IPC.projectClose, (_event, id: string) => workspaceStore.closeProject(id))
   ipcMain.handle(IPC.projectArchive, (_event, id: string) => workspaceStore.archiveProject(id))

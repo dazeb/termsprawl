@@ -10,6 +10,7 @@
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
+import type { ProjectRemote } from '../shared/types'
 
 export interface SerializedNode {
   id: string
@@ -23,6 +24,9 @@ export interface ProjectMeta {
   name: string
   /** Project folder; null = cwd-less inline canvas. */
   cwd: string | null
+  /** Remote project (Phase 9): cwd is null and terminal/git/file ops run over
+   * ssh on this host at `path`. */
+  remote?: ProjectRemote
   closed: boolean
   /** Archived = hidden from the tab bar, preserved; reopen restores it. */
   archived?: boolean

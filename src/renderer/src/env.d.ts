@@ -6,6 +6,7 @@ import type {
   FileWriteResult,
   DirListResult,
   ProjectMeta,
+  ProjectRemote,
   ProjectSettings,
   PtyCreateRequest,
   PtyCreateResult,
@@ -50,7 +51,7 @@ declare global {
       workspace: {
         snapshot(): Promise<WorkspaceSnapshot>
         saveNodes(id: string, nodes: SerializedNode[]): Promise<number>
-        addProject(name: string, cwd: string | null): Promise<ProjectMeta>
+        addProject(name: string, cwd: string | null, remote?: ProjectRemote): Promise<ProjectMeta>
         closeProject(id: string): Promise<void>
         archiveProject(id: string): Promise<void>
         reopenProject(id: string): Promise<void>

@@ -46,6 +46,29 @@ describe('WorkspaceStore', () => {
     expect(store.snapshot().index.projects).toEqual([])
   })
 
+  it('adds a remote project with no cwd and round-trips its remote', () => {
+    const remote = { user: 'root', host: 'box', port: 22, path: '/srv/x' }
+    const project = store.addProject('remote', null, remote)
+    expect(project.cwd).toBeNull()
+    expect(project.remote).toEqual(remote)
+    expect(store.snapshot().index.projects[0].remote).toEqual(remote)
+
+    const reloaded = new WorkspaceStore(platform)
+    const meta = reloaded.snapshot().index.projects.find((p) => p.id === project.id)
+    expect(meta?.remote).toEqual(remote)
+  })
+
+  it('adds a local project without a remote and keeps its cwd', () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'ts-ws-local-'))
+    try {
+      const project = store.addProject('local', cwd)
+      expect(project.cwd).toBe(cwd)
+      expect(project.remote).toBeUndefined()
+    } finally {
+      rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
   it('round-trips projects and nodes across a new store instance', () => {
     const project = store.addProject('work', null)
     store.saveNodes(project.id, [makeNode('n1', 10, 20), makeNode('n2', 30, 40)])
