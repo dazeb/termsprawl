@@ -3,6 +3,7 @@ import { ReactFlowProvider } from 'reactflow'
 import { Canvas } from './canvas/Canvas'
 import { TabBar } from './components/TabBar'
 import { UpdateToast } from './components/UpdateToast'
+import { AnnouncementBanner } from './components/AnnouncementBanner'
 import { AppSettingsPanel } from './components/AppSettingsPanel'
 import { SourceControlPanel } from './components/SourceControlPanel'
 import { CogMenu } from './components/CogMenu'
@@ -66,6 +67,7 @@ export function App(): React.JSX.Element {
         <SourceControlPanel cwd={activeCwd} onClose={() => setSourceControlOpen(false)} />
       )}
       <UpdateToast />
+      <AnnouncementBanner />
       {error && (
         <div className="error-banner" onClick={() => setError(null)} title="Click to dismiss">
           ⚠ {error}

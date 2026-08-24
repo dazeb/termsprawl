@@ -950,6 +950,44 @@ body {
   font-size: 16px !important;
 }
 
+.announcement-banner {
+  position: fixed;
+  top: 46px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 80vw;
+  padding: 8px 12px;
+  background: #101010;
+  border: 1px solid #c6f13555;
+  border-radius: 8px;
+  color: #cbd5c0;
+  font-size: 12px;
+  box-shadow: 0 8px 30px #000a;
+  z-index: 60;
+}
+.announcement-banner .announcement-title {
+  color: #c6f135;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.announcement-banner .announcement-body {
+  color: #aab3a0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60vw;
+}
+.announcement-banner .announcement-dismiss {
+  border: 0;
+  background: transparent;
+  color: #c6f135;
+  font-size: 16px;
+  cursor: pointer;
+}
+
 .error-banner {
   position: fixed;
   top: 44px;

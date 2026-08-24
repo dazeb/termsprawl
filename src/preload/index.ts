@@ -21,7 +21,8 @@ import type {
   GitPanelSnapshot,
   GitResult,
   GitWorktree,
-  CommitMessageResult
+  CommitMessageResult,
+  Announcement
 } from '../shared/types'
 import type { UpdateStatus } from '../shared/update-status'
 
@@ -54,6 +55,10 @@ const api = {
         ipcRenderer.removeListener(IPC.updateStatus, listener)
       }
     }
+  },
+
+  announcements: {
+    get: (): Promise<Announcement | null> => ipcRenderer.invoke(IPC.announcementGet)
   },
 
   workspace: {

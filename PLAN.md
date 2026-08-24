@@ -371,6 +371,10 @@ extension, one feature at a time.**
 
 ### Task 8.4: AI commit messages + naming
 - BYO local agent CLI spawned read-only on staged diff / captured output.
+- **Status: DONE (commit a2a5245).** `core/commit-message.ts` (electron-free,
+  TDD) spawns claude>codex on the staged diff and returns a conventional
+  message; `git:commit-message` IPC + an "ai" button in SourceControlPanel
+  fills the commit input (never commits automatically).
 
 ### Task 8.5: Commit
 - `git commit -m "feat: source control"`

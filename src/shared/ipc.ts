@@ -11,6 +11,7 @@ export const IPC = {
   updateDownload: 'update:download',
   updateInstall: 'update:install',
   updateDismiss: 'update:dismiss',
+  announcementGet: 'announcement:get',
 
   // Workspace / projects (Phase 5)
   workspaceSnapshot: 'workspace:snapshot',

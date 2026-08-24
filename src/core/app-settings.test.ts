@@ -37,12 +37,14 @@ describe('app-settings', () => {
     expect(saveAppSettings(dir, { autoDownloadUpdates: true })).toEqual({
       autoDownloadUpdates: true,
       accounts: [],
-      activeAccountId: null
+      activeAccountId: null,
+      dismissedAnnouncementVersion: null
     })
     expect(loadAppSettings(dir)).toEqual({
       autoDownloadUpdates: true,
       accounts: [],
-      activeAccountId: null
+      activeAccountId: null,
+      dismissedAnnouncementVersion: null
     })
     const raw = JSON.parse(readFileSync(join(dir, 'settings.json'), 'utf8')) as {
       autoDownloadUpdates: boolean

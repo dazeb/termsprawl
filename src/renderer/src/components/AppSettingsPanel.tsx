@@ -11,7 +11,8 @@ export function AppSettingsPanel({ onClose }: AppSettingsPanelProps): React.JSX.
   const [settings, setSettings] = useState<AppSettings>({
     autoDownloadUpdates: false,
     accounts: [],
-    activeAccountId: null
+    activeAccountId: null,
+    dismissedAnnouncementVersion: null
   })
   const [permissionSupported, setPermissionSupported] = useState(false)
   const [newLabel, setNewLabel] = useState('')

@@ -11,7 +11,8 @@ export type { AppSettings }
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   autoDownloadUpdates: false,
   accounts: [],
-  activeAccountId: null
+  activeAccountId: null,
+  dismissedAnnouncementVersion: null
 }
 
 const SETTINGS_FILE = 'settings.json'
@@ -56,7 +57,11 @@ export function normalizeAppSettings(raw: unknown): AppSettings {
   return {
     autoDownloadUpdates: obj.autoDownloadUpdates === true,
     accounts,
-    activeAccountId
+    activeAccountId,
+    dismissedAnnouncementVersion:
+      typeof obj.dismissedAnnouncementVersion === 'string'
+        ? obj.dismissedAnnouncementVersion
+        : null
   }
 }
 

@@ -18,7 +18,8 @@ import type {
   GitPanelSnapshot,
   GitResult,
   GitWorktree,
-  CommitMessageResult
+  CommitMessageResult,
+  Announcement
 } from '@shared/types'
 import type { AgentStatusEvent } from '@shared/agent-status'
 import type { UpdateStatus } from '@shared/update-status'
@@ -42,6 +43,9 @@ declare global {
         install(): Promise<void>
         dismiss(): Promise<UpdateStatus>
         onStatus(cb: (status: UpdateStatus) => void): () => void
+      }
+      announcements: {
+        get(): Promise<Announcement | null>
       }
       workspace: {
         snapshot(): Promise<WorkspaceSnapshot>

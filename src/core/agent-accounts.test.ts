@@ -101,7 +101,8 @@ describe('activeAccount', () => {
   const settings: AppSettings = {
     autoDownloadUpdates: false,
     accounts: [{ id: 'acc-1', label: 'work', agentId: 'claude', configDir: '/ud/accounts/acc-1' }],
-    activeAccountId: 'acc-1'
+    activeAccountId: 'acc-1',
+    dismissedAnnouncementVersion: null
   }
 
   it('resolves the active account by id', () => {

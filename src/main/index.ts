@@ -4,10 +4,11 @@ import { homedir } from 'node:os'
 import { dirname, isAbsolute, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { IPC } from '../shared/ipc'
-import type { ContextLinkListResult, ContextLinkWriteResult, DiffBase, DiffInfoResult, ProjectSettings, PtyCreateRequest, PtyExitInfo, SerializedNode, AppSettings, GitPanelSnapshot, GitResult, CommitMessageResult } from '../shared/types'
+import type { ContextLinkListResult, ContextLinkWriteResult, DiffBase, DiffInfoResult, ProjectSettings, PtyCreateRequest, PtyExitInfo, SerializedNode, AppSettings, GitPanelSnapshot, GitResult, CommitMessageResult, Announcement } from '../shared/types'
 import type { CorePlatform } from '../core/platform'
 import { diffInfo, findRepoRoot, currentBranch, remoteUrl, syncState, gitStatus, listBranches, recentCommits, ghAuthed, stageChanges, unstageChanges, discardChanges, commitChanges, createBranch, checkoutBranch, push as gitPush, pull as gitPull, publish as gitPublish, listWorktrees, addWorktree, removeWorktree } from '../core/git-service'
 import { generateCommitMessage } from '../core/commit-message'
+import { parseLatestRelease } from '../core/announcements'
 import { classifyFile, listProjectDir, readProjectFile, writeProjectFile } from '../core/file-service'
 import { addLink, listLinks, removeLink } from '../core/context-links'
 import { ensureContextDiscovery } from '../core/context-discovery'
@@ -363,6 +364,29 @@ function registerUpdateIpc(): void {
   ipcMain.handle(IPC.updateDismiss, () => updateBridge.dismiss())
 }
 
+// Phase 12.2 — announcements: fetch the latest GitHub release notes (packaged
+// builds only) and let the renderer show a dismissible "what's new" banner.
+let latestAnnouncement: Announcement | null = null
+
+async function fetchLatestAnnouncement(): Promise<void> {
+  try {
+    const res = await net.fetch('https://api.github.com/repos/dazeb/termsprawl/releases/latest')
+    if (!res.ok) return
+    latestAnnouncement = parseLatestRelease(await res.json())
+  } catch {
+    // announcements are best-effort; never block or surface an error
+  }
+}
+
+function registerAnnouncementIpc(): void {
+  ipcMain.handle(IPC.announcementGet, () => {
+    const a = latestAnnouncement
+    if (!a) return null
+    if (appSettings.current.dismissedAnnouncementVersion === a.version) return null
+    return a
+  })
+}
+
 function createWindow(): void {
   const win = new BrowserWindow({
     width: 1440,
@@ -473,6 +497,8 @@ void app.whenReady().then(async () => {
   registerGitIpc()
   registerFileProtocol()
   registerUpdateIpc()
+  registerAnnouncementIpc()
+  if (app.isPackaged) void fetchLatestAnnouncement()
 
   for (const entry of workspaceStore.pendingTerminalNodeCleanup()) {
     try {

@@ -95,11 +95,22 @@ export type FileReadResult =
 
 export type FileWriteResult = { ok: true } | { error: { code: FileErrorCode; message: string } }
 
+// Phase 12.2 — announcements. Parsing of a GitHub release payload. Pure,
+// electron-free (the fetch lives in main).
+export interface Announcement {
+  /** Version without the leading 'v'. */
+  version: string
+  title: string
+  body: string
+}
+
 export interface AppSettings {
   autoDownloadUpdates: boolean
   /** Managed agent accounts (7.6). v1: Claude only. Null active = default ~/.claude. */
   accounts: AgentAccount[]
   activeAccountId: string | null
+  /** Announcements banner (12.2): the release version the user already dismissed. */
+  dismissedAnnouncementVersion: string | null
 }
 
 export interface AgentAccount {
