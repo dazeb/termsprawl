@@ -12,7 +12,9 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   autoDownloadUpdates: false,
   accounts: [],
   activeAccountId: null,
-  dismissedAnnouncementVersion: null
+  dismissedAnnouncementVersion: null,
+  a2aPeers: [],
+  apiProviders: []
 }
 
 const SETTINGS_FILE = 'settings.json'
@@ -27,6 +29,14 @@ function asSafeAccount(raw: unknown): { id?: string; label?: string; agentId?: s
 
 function isPermissionMode(v: unknown): v is 'default' | 'acceptEdits' | 'bypassPermissions' {
   return v === 'default' || v === 'acceptEdits' || v === 'bypassPermissions'
+}
+
+function asSafePeer(raw: unknown): { id?: string; label?: string; endpoint?: string } {
+  return raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+}
+
+function asSafeProvider(raw: unknown): { id?: string; name?: string; baseUrl?: string } {
+  return raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
 }
 
 export function normalizeAppSettings(raw: unknown): AppSettings {
@@ -54,6 +64,34 @@ export function normalizeAppSettings(raw: unknown): AppSettings {
     typeof obj.activeAccountId === 'string' && obj.activeAccountId.length > 0
       ? obj.activeAccountId
       : null
+  const a2aPeers = Array.isArray(obj.a2aPeers)
+    ? obj.a2aPeers
+        .map(asSafePeer)
+        .filter(
+          (p) =>
+            typeof p.id === 'string' &&
+            p.id.length > 0 &&
+            typeof p.label === 'string' &&
+            p.label.length > 0 &&
+            typeof p.endpoint === 'string' &&
+            p.endpoint.length > 0
+        )
+        .map((p) => ({ id: p.id as string, label: p.label as string, endpoint: p.endpoint as string }))
+    : []
+  const apiProviders = Array.isArray(obj.apiProviders)
+    ? obj.apiProviders
+        .map(asSafeProvider)
+        .filter(
+          (p) =>
+            typeof p.id === 'string' &&
+            p.id.length > 0 &&
+            typeof p.name === 'string' &&
+            p.name.length > 0 &&
+            typeof p.baseUrl === 'string' &&
+            p.baseUrl.length > 0
+        )
+        .map((p) => ({ id: p.id as string, name: p.name as string, baseUrl: p.baseUrl as string }))
+    : []
   return {
     autoDownloadUpdates: obj.autoDownloadUpdates === true,
     accounts,
@@ -61,7 +99,10 @@ export function normalizeAppSettings(raw: unknown): AppSettings {
     dismissedAnnouncementVersion:
       typeof obj.dismissedAnnouncementVersion === 'string'
         ? obj.dismissedAnnouncementVersion
-        : null
+        : null,
+    ...(typeof obj.displayName === 'string' && obj.displayName.length > 0 ? { displayName: obj.displayName } : {}),
+    a2aPeers,
+    apiProviders
   }
 }
 

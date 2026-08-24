@@ -332,6 +332,20 @@ extension, one feature at a time.**
 - **Status: DONE.** Phase 7 complete (7.1–7.7); version bump / AppImage /
   release only on request.
 
+### Task 7.8: Extensible settings panel
+- A proper, sectioned settings panel (the app-gear modal) driven by a section
+  registry, so new sections are added by appending to an array ("space to add
+  more stuff"). Sections: user (display name; cloud/account sign-in is the
+  extension point when the cloud feature lands), agents (primary: codex + grok),
+  agent accounts (existing), a2a peers (config only), api providers (non-secret
+  endpoints; keys deliberately not stored), updates (auto-download).
+- Model: `AppSettings.displayName`, `a2aPeers`, `apiProviders` (optional, added
+  to normalize + defaults). Focus: codex + grok are the primary agents
+  (PRIMARY_AGENTS); claude stays registered but secondary.
+- **Status: DONE (commit pending) on `phase-10-server`.** app-settings normalize
+  round-trips the new fields (13 tests); typecheck, build, build:server,
+  originality all green (325 tests).
+
 ## Phase 8 — Source control
 
 ### Task 8.1: Git service

@@ -160,6 +160,29 @@ export interface AppSettings {
   dismissedAnnouncementVersion: string | null
   /** Termsprawl Cloud origin for the in-app sign-in + backup. Unset = https://termsprawl.com */
   cloudApiBase?: string
+  /** Basic user profile: a display name shown in the user section. */
+  displayName?: string
+  /** Agent-to-agent peers (settings: A2A details). Config only — orchestration
+   * is a later feature; the panel just manages the peer list. */
+  a2aPeers?: A2APeer[]
+  /** OSS/provider API endpoints (settings: API details). Non-secret config only —
+   * keys are NOT stored here (would land plaintext in the settings JSON). */
+  apiProviders?: ApiProviderConfig[]
+}
+
+/** An A2A (agent-to-agent) peer the user may route tasks to. */
+export interface A2APeer {
+  id: string
+  label: string
+  /** Base URL of the peer's A2A endpoint. */
+  endpoint: string
+}
+
+/** A non-secret provider endpoint (name + base URL) for the chat/agent drivers. */
+export interface ApiProviderConfig {
+  id: string
+  name: string
+  baseUrl: string
 }
 
 export interface AgentAccount {
