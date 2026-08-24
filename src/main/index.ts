@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, Notification, protocol, net } from 'electron'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -26,14 +26,28 @@ import { claudeSettingsPath, installClaudeHooks } from './agents/hook-installer'
 import { SessionNameTracker } from '../core/session-name'
 import { agentSessionNameChannel } from '../shared/ipc'
 
-// Electron 43 crashes at startup on Wayland sessions when it auto-selects
-// Vulkan (EGL) for the GPU — `'--ozone-platform=wayland' is not compatible
-// with Vulkan` — leaving no window and a dead process. That is the default
-// session on Ubuntu 24.04+/26, so force X11/XWayland there so the packaged
-// app just opens. Active in the app itself, not via a CLI flag the user must
-// remember. Remove only if Chromium's Wayland + GL/GLES path stops crashing.
-if (process.platform === 'linux' && process.env.XDG_SESSION_TYPE === 'wayland') {
-  app.commandLine.appendSwitch('ozone-platform', 'x11')
+// ── Wayland → X11 ozone fix ─────────────────────────────────────────────────
+// Electron chooses the browser (main) process's ozone platform during native
+// startup, BEFORE this JS module runs. So `app.commandLine.appendSwitch(
+// 'ozone-platform', 'x11')` only moves the *child* processes (GPU/renderer) to
+// X11 while the browser stays on Wayland — a broken mix where the window is
+// created but never appears (verified on Ubuntu 26 / Wayland with Electron 43).
+// The only way to move the browser process is to put the flag on its real argv,
+// so on a Wayland session without one we re-spawn ourselves with the flag and
+// let this (wrong-ozone) instance exit. The re-spawned child already has the
+// flag and therefore does not re-spawn.
+const needsX11Respawn =
+  process.platform === 'linux' &&
+  process.env.XDG_SESSION_TYPE === 'wayland' &&
+  !process.argv.some((a) => a.startsWith('--ozone-platform'))
+
+if (needsX11Respawn) {
+  spawn(process.execPath, [...process.argv.slice(1), '--ozone-platform=x11'], {
+    detached: true,
+    stdio: 'inherit'
+  }).unref()
+  // Exit immediately so no window/IPC is set up in this wrong-ozone instance.
+  process.exit(0)
 }
 
 // On some hosts the GPU (Chromium GPU process) segfaults at startup even over
