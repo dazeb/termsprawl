@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useProjects } from '../state/projects'
 import { projectNameFromPath } from '../state/workspace'
+import { normalizeRemote, remoteLabel } from '@shared/remote-project'
 import { HelpBadge } from './HelpBadge'
 
 // Project tabs — the app's window chrome drag region. Right-click a tab for
@@ -24,6 +25,13 @@ export function TabBar(): React.JSX.Element {
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [storedOpen, setStoredOpen] = useState(false)
+  const [remoteOpen, setRemoteOpen] = useState(false)
+  const [remoteName, setRemoteName] = useState('')
+  const [remoteHost, setRemoteHost] = useState('')
+  const [remotePath, setRemotePath] = useState('')
+  const [remoteUser, setRemoteUser] = useState('')
+  const [remotePort, setRemotePort] = useState('')
+  const [remoteError, setRemoteError] = useState<string | null>(null)
   const storedRef = useRef<HTMLDivElement>(null)
   const settingsRef = useRef<HTMLDivElement>(null)
 
@@ -36,6 +44,33 @@ export function TabBar(): React.JSX.Element {
     if (!cwd) return
     const name = projectNameFromPath(cwd, `project-${openProjects.length + 1}`)
     await create(name, cwd)
+  }
+
+  const openRemoteDialog = (): void => {
+    setRemoteName(`remote-${openProjects.length + 1}`)
+    setRemoteHost('')
+    setRemotePath('')
+    setRemoteUser('')
+    setRemotePort('')
+    setRemoteError(null)
+    setRemoteOpen(true)
+  }
+
+  const submitRemote = async (): Promise<void> => {
+    const remote = {
+      host: remoteHost,
+      path: remotePath,
+      ...(remoteUser.trim() ? { user: remoteUser.trim() } : {}),
+      ...(remotePort.trim() ? { port: Number(remotePort.trim()) } : {})
+    }
+    const normalized = normalizeRemote(remote)
+    if (!normalized) {
+      setRemoteError('host and path are required')
+      return
+    }
+    const name = remoteName.trim() || `remote-${openProjects.length + 1}`
+    await create(name, null, normalized)
+    setRemoteOpen(false)
   }
 
   const onTabContextMenu = (event: React.MouseEvent, id: string): void => {
@@ -101,7 +136,7 @@ export function TabBar(): React.JSX.Element {
           className={`tab ${p.id === activeProjectId ? 'tab-active' : ''}`}
           onClick={() => select(p.id)}
           onContextMenu={(e) => onTabContextMenu(e, p.id)}
-          title={p.cwd ?? p.name}
+          title={p.cwd ?? (p.remote ? remoteLabel(p.remote) : p.name)}
         >
           <span className="tab-dot" style={p.settings?.accent ? { background: p.settings.accent } : undefined} />
           {p.name}
@@ -109,6 +144,9 @@ export function TabBar(): React.JSX.Element {
       ))}
       <button className="tab tab-new" onClick={() => void newProject()} title="New project (folder)">
         +
+      </button>
+      <button className="tab tab-new" onClick={openRemoteDialog} title="New remote (SSH) project">
+        ssh
       </button>
       {storedProjects.length > 0 && (
         <div className="tab-stored-wrap" ref={storedRef}>
@@ -134,7 +172,7 @@ export function TabBar(): React.JSX.Element {
                       void reopen(p.id)
                       setStoredOpen(false)
                     }}
-                    title={p.cwd ?? p.name}
+                    title={p.cwd ?? (p.remote ? remoteLabel(p.remote) : p.name)}
                   >
                     {p.archived ? 'archived' : 'closed'} · {p.name}
                   </button>
@@ -241,6 +279,69 @@ export function TabBar(): React.JSX.Element {
               <button className="danger" onClick={() => void doDelete(confirmId)}>
                 Delete
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {remoteOpen && (
+        <div className="confirm-overlay" onClick={() => setRemoteOpen(false)}>
+          <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-title">New remote (SSH) project</div>
+            <div className="confirm-body">
+              Terminals, git and the file tree run over ssh on the remote host.
+              Open the project there with a private key already trusted by the
+              host (e.g. forwarded via ssh-agent).
+            </div>
+            <label className="project-settings-field">
+              name
+              <input
+                type="text"
+                value={remoteName}
+                onChange={(e) => setRemoteName(e.target.value)}
+                placeholder="remote-1"
+              />
+            </label>
+            <label className="project-settings-field">
+              host
+              <input
+                type="text"
+                value={remoteHost}
+                onChange={(e) => setRemoteHost(e.target.value)}
+                placeholder="box.example.com"
+                autoFocus
+              />
+            </label>
+            <label className="project-settings-field">
+              path
+              <input
+                type="text"
+                value={remotePath}
+                onChange={(e) => setRemotePath(e.target.value)}
+                placeholder="/home/user/project"
+              />
+            </label>
+            <label className="project-settings-field">
+              user (optional)
+              <input
+                type="text"
+                value={remoteUser}
+                onChange={(e) => setRemoteUser(e.target.value)}
+                placeholder="user"
+              />
+            </label>
+            <label className="project-settings-field">
+              port (optional)
+              <input
+                type="text"
+                value={remotePort}
+                onChange={(e) => setRemotePort(e.target.value)}
+                placeholder="22"
+              />
+            </label>
+            {remoteError && <div className="confirm-body">{remoteError}</div>}
+            <div className="confirm-actions">
+              <button onClick={() => setRemoteOpen(false)}>Cancel</button>
+              <button onClick={() => void submitRemote()}>Create</button>
             </div>
           </div>
         </div>
