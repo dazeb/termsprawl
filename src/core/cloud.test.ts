@@ -87,4 +87,34 @@ describe('CloudClient', () => {
     expect(list).toHaveLength(1)
     expect(list[0].id).toBe('bk1')
   })
+
+  it('deviceStart() POSTs to /auth/device and returns the code to display', async () => {
+    const fetchFn = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(url)).toBe(`${ORIGIN}/api/v1/auth/device`)
+      expect((init?.method ?? 'GET').toUpperCase()).toBe('POST')
+      return jsonResponse(
+        { device_code: 'dc1', user_code: 'TERM-1234', verification_uri: 'https://github.com/login/device', interval: 5, expires_in: 900 },
+        200
+      )
+    })
+    const client = new CloudClient({ apiBase: ORIGIN, fetchFn, keepCookie: () => {}, getCookie: () => null })
+    const start = await client.deviceStart()
+    expect(start.user_code).toBe('TERM-1234')
+    expect(start.interval).toBe(5)
+  })
+
+  it('devicePoll() POSTs the device_code and returns pending then the user', async () => {
+    const body: Record<string, unknown> = {}
+    const fetchFn = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(url)).toBe(`${ORIGIN}/api/v1/auth/device/poll`)
+      expect((init?.method ?? 'GET').toUpperCase()).toBe('POST')
+      Object.assign(body, JSON.parse(String(init?.body)))
+      return jsonResponse({ status: 'ok', user: USER }, 200)
+    })
+    const client = new CloudClient({ apiBase: ORIGIN, fetchFn, keepCookie: () => {}, getCookie: () => 'ts_session=x' })
+    const poll = await client.devicePoll('dc1')
+    expect(body.device_code).toBe('dc1')
+    expect(poll.status).toBe('ok')
+    expect(poll.user?.github_login).toBe('dazeb')
+  })
 })

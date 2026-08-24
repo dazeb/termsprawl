@@ -20,7 +20,11 @@ import type {
   GitResult,
   GitWorktree,
   CommitMessageResult,
-  Announcement
+  Announcement,
+  CloudBackup,
+  CloudDevicePoll,
+  CloudDeviceStart,
+  CloudUser
 } from '@shared/types'
 import type { AgentStatusEvent } from '@shared/agent-status'
 import type { UpdateStatus } from '@shared/update-status'
@@ -106,6 +110,14 @@ declare global {
         worktrees(cwd: string): Promise<GitWorktree[]>
         worktreeAdd(cwd: string, path: string, branch?: string): Promise<GitResult>
         worktreeRemove(cwd: string, path: string, force?: boolean): Promise<GitResult>
+      }
+      cloud: {
+        status(): Promise<CloudUser | null>
+        deviceStart(): Promise<CloudDeviceStart>
+        devicePoll(deviceCode: string): Promise<CloudDevicePoll>
+        signOut(): Promise<void>
+        backupNow(): Promise<CloudBackup>
+        listBackups(limit?: number): Promise<CloudBackup[]>
       }
     }
   }

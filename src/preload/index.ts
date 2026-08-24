@@ -23,7 +23,11 @@ import type {
   GitResult,
   GitWorktree,
   CommitMessageResult,
-  Announcement
+  Announcement,
+  CloudBackup,
+  CloudDevicePoll,
+  CloudDeviceStart,
+  CloudUser
 } from '../shared/types'
 import type { UpdateStatus } from '../shared/update-status'
 
@@ -186,6 +190,19 @@ const api = {
       ipcRenderer.invoke(IPC.gitWorktreeAdd, cwd, path, branch),
     worktreeRemove: (cwd: string, path: string, force?: boolean): Promise<GitResult> =>
       ipcRenderer.invoke(IPC.gitWorktreeRemove, cwd, path, force)
+  },
+
+  cloud: {
+    /** Signed-in user, or null when not signed in. */
+    status: (): Promise<CloudUser | null> => ipcRenderer.invoke(IPC.cloudStatus),
+    /** Start GitHub device flow + open the verification page; returns the code to display. */
+    deviceStart: (): Promise<CloudDeviceStart> => ipcRenderer.invoke(IPC.cloudDeviceStart),
+    devicePoll: (deviceCode: string): Promise<CloudDevicePoll> =>
+      ipcRenderer.invoke(IPC.cloudDevicePoll, deviceCode),
+    signOut: (): Promise<void> => ipcRenderer.invoke(IPC.cloudSignOut),
+    backupNow: (): Promise<CloudBackup> => ipcRenderer.invoke(IPC.cloudBackupNow),
+    listBackups: (limit?: number): Promise<CloudBackup[]> =>
+      ipcRenderer.invoke(IPC.cloudListBackups, limit)
   }
 }
 

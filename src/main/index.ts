@@ -23,6 +23,8 @@ import { deleteProjectAndDestroyTerminals } from '../core/project-deletion'
 import { closeTerminalNode } from '../core/terminal-close'
 import { loadAppSettings, saveAppSettings } from '../core/app-settings'
 import { createUpdateBridge } from './updates'
+import { createCloudRuntime } from './cloud'
+import type { CloudBackup, CloudDevicePoll, CloudDeviceStart, CloudUser } from '../shared/types'
 import { HookServer } from './agents/hook-server'
 import { claudeSettingsPath, installClaudeHooks } from './agents/hook-installer'
 import { SessionNameTracker } from '../core/session-name'
@@ -96,6 +98,12 @@ const updateBridge = createUpdateBridge({
   isPackaged: app.isPackaged,
   autoDownload: appSettings.current.autoDownloadUpdates,
   broadcast: (channel, payload) => platform.broadcast(channel, payload)
+})
+
+// Termsprawl Cloud: in-app GitHub sign-in (device flow) + workspace backup.
+const cloud = createCloudRuntime({
+  apiBase: appSettings.current.cloudApiBase || 'https://termsprawl.com',
+  snapshot: () => workspaceStore.snapshot()
 })
 
 // Agent hook server (Phase 7): receives lifecycle POSTs from agent CLIs,
@@ -390,6 +398,15 @@ function registerAnnouncementIpc(): void {
   })
 }
 
+function registerCloudIpc(): void {
+  ipcMain.handle(IPC.cloudStatus, (): Promise<CloudUser | null> => cloud.getUser())
+  ipcMain.handle(IPC.cloudDeviceStart, (): Promise<CloudDeviceStart> => cloud.deviceStart())
+  ipcMain.handle(IPC.cloudDevicePoll, (_event, deviceCode: string): Promise<CloudDevicePoll> => cloud.devicePoll(deviceCode))
+  ipcMain.handle(IPC.cloudSignOut, (): Promise<void> => cloud.signOut())
+  ipcMain.handle(IPC.cloudBackupNow, (): Promise<CloudBackup> => cloud.backupNow())
+  ipcMain.handle(IPC.cloudListBackups, (_event, limit?: number): Promise<CloudBackup[]> => cloud.listBackups(limit))
+}
+
 function createWindow(): void {
   const win = new BrowserWindow({
     width: 1440,
@@ -501,6 +518,7 @@ void app.whenReady().then(async () => {
   registerFileProtocol()
   registerUpdateIpc()
   registerAnnouncementIpc()
+  registerCloudIpc()
   if (app.isPackaged) void fetchLatestAnnouncement()
 
   for (const entry of workspaceStore.pendingTerminalNodeCleanup()) {

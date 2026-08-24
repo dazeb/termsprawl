@@ -6,12 +6,14 @@
 import type {
   CloudBackup,
   CloudBackupDetail,
+  CloudDevicePoll,
+  CloudDeviceStart,
   CloudSyncStatus,
   CloudUser,
 } from '../shared/types'
 
 export interface CloudClientConfig {
-  /** e.g. https://termsprawl.com/api (no trailing slash). */
+  /** The cloud origin, e.g. https://termsprawl.com (no trailing slash). The client appends /api/v1/... */
   apiBase: string
   fetchFn: typeof fetch
   /** Persist the session cookie (from the Set-Cookie header). */
@@ -61,6 +63,16 @@ export class CloudClient {
   async signOut(): Promise<void> {
     await this.request<void>('/api/v1/auth/logout', { method: 'POST' })
     this.cfg.keepCookie('')
+  }
+
+  /** Start GitHub Device Flow; the caller shows user_code + verification_uri. */
+  async deviceStart(): Promise<CloudDeviceStart> {
+    return this.request<CloudDeviceStart>('/api/v1/auth/device', { method: 'POST' })
+  }
+
+  /** Poll the device flow; pending until the user approves in the browser. */
+  async devicePoll(deviceCode: string): Promise<CloudDevicePoll> {
+    return this.request<CloudDevicePoll>('/api/v1/auth/device/poll', { method: 'POST', body: JSON.stringify({ device_code: deviceCode }) })
   }
 
   async me(): Promise<CloudUser> {

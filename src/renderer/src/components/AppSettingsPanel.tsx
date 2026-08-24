@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { AgentAccount, AppSettings } from '@shared/types'
+import type { AgentAccount, AppSettings, CloudBackup, CloudDeviceStart, CloudUser } from '@shared/types'
 import { HelpBadge } from './HelpBadge'
 import { useCanvasRequests } from '../state/canvas-requests'
 
@@ -17,10 +17,15 @@ export function AppSettingsPanel({ onClose }: AppSettingsPanelProps): React.JSX.
   const [permissionSupported, setPermissionSupported] = useState(false)
   const [newLabel, setNewLabel] = useState('')
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [cloudUser, setCloudUser] = useState<CloudUser | null>(null)
+  const [cloudBusy, setCloudBusy] = useState(false)
+  const [device, setDevice] = useState<CloudDeviceStart | null>(null)
+  const [lastBackup, setLastBackup] = useState<CloudBackup | null>(null)
 
   useEffect(() => {
     void window.termsprawl.settings.get().then(setSettings)
     void window.termsprawl.settings.permissionSupported().then(setPermissionSupported)
+    void window.termsprawl.cloud.status().then(setCloudUser)
   }, [])
 
   // Escape closes the modal; backdrop click closes it too.
@@ -69,6 +74,38 @@ export function AppSettingsPanel({ onClose }: AppSettingsPanelProps): React.JSX.
     setConfirmDelete(null)
   }
 
+  // Termsprawl Cloud — GitHub device flow: main opens the verification page,
+  // we show the user_code and poll until the user approves in the browser.
+  const cloudSignIn = async (): Promise<void> => {
+    if (cloudBusy) return
+    setCloudBusy(true)
+    setDevice(null)
+    try {
+      const start = await window.termsprawl.cloud.deviceStart()
+      setDevice(start)
+      let user: CloudUser | null = null
+      for (let i = 0; i < 120 && !user; i++) {
+        await new Promise((r) => setTimeout(r, (start.interval || 5) * 1000))
+        const p = await window.termsprawl.cloud.devicePoll(start.device_code)
+        if (p.status === 'ok' && p.user) user = p.user
+      }
+      setDevice(null)
+      setCloudUser(user)
+    } finally {
+      setCloudBusy(false)
+    }
+  }
+
+  const cloudSignOut = async (): Promise<void> => {
+    await window.termsprawl.cloud.signOut()
+    setCloudUser(null)
+    setLastBackup(null)
+  }
+
+  const cloudBackupNow = async (): Promise<void> => {
+    setLastBackup(await window.termsprawl.cloud.backupNow())
+  }
+
   return (
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div className="settings-modal" role="dialog" aria-modal="true" aria-label="app settings">
@@ -104,6 +141,43 @@ export function AppSettingsPanel({ onClose }: AppSettingsPanelProps): React.JSX.
               When off, you get a toast and choose when to download. When on, updates
               download in the background and you restart to install.
             </p>
+          </div>
+
+          <div className="settings-section">
+            <div className="settings-section-title">termsprawl cloud</div>
+            {device && (
+              <p className="app-settings-hint">
+                open <strong>{device.verification_uri}</strong> and enter code{' '}
+                <strong>{device.user_code}</strong> to link this device.
+              </p>
+            )}
+            {cloudUser ? (
+              <>
+                <p className="app-settings-hint">
+                  signed in as {cloudUser.github_login} · {cloudUser.plan} plan. Backups are encrypted
+                  server-side with your key — the app sends the workspace, the API encrypts at rest.
+                </p>
+                <div className="account-row">
+                  <button className="account-login" onClick={() => void cloudBackupNow()}>
+                    back up now
+                  </button>
+                  {lastBackup && (
+                    <span className="account-id">
+                      backup {lastBackup.id.slice(0, 8)} · {lastBackup.size_bytes} bytes
+                    </span>
+                  )}
+                  <button className="account-delete" onClick={() => void cloudSignOut()}>
+                    sign out
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="account-row">
+                <button className="account-login" disabled={cloudBusy} onClick={() => void cloudSignIn()}>
+                  {cloudBusy ? 'waiting for github…' : 'sign in with github'}
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="settings-section">

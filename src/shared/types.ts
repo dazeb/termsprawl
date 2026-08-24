@@ -150,6 +150,22 @@ export interface CloudSyncStatus {
   storage_quota_bytes: number
   encryption: boolean
 }
+/** GitHub device-flow start response (the app shows user_code + verification_uri). */
+export interface CloudDeviceStart {
+  device_code: string
+  user_code: string
+  verification_uri: string
+  interval: number
+  expires_in: number
+  /** True only for the DEV_LOGIN seam (no real GitHub). */
+  dev?: boolean
+}
+/** One device-flow poll; pending until the user approves. */
+export interface CloudDevicePoll {
+  status: 'pending' | 'ok'
+  user?: CloudUser
+  slow_down?: boolean
+}
 
 export interface AppSettings {
   autoDownloadUpdates: boolean
