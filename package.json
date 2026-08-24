@@ -11,6 +11,8 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "pnpm run build:cli && electron-vite build",
+    "build:server": "vite build --config vite.config.server.ts",
+    "start:server": "TERMSPRAWL_SERVER_ENTRY=1 node out/server/index.js",
     "build:cli": "node scripts/build-context-cli.mjs",
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
@@ -31,6 +33,7 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "reactflow": "^11.11.4",
+    "ws": "^8.21.3",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
@@ -38,6 +41,7 @@
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^5.1.4",
     "canvas": "^3.2.3",
     "electron": "^43.4.0",
