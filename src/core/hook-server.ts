@@ -11,7 +11,7 @@
 
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { normalizeClaudeHook, type AgentStatusEvent } from '../../core/agent-status'
+import { normalizeClaudeHook, type AgentStatusEvent } from './agent-status'
 
 export type HookListener = (event: AgentStatusEvent) => void
 

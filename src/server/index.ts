@@ -16,6 +16,7 @@ import { WebSocketServer, WebSocket } from 'ws'
 import { ServerPlatform } from './platform'
 import { buildHandlers } from './handlers'
 import { createDispatcher } from './rpc'
+import { startAgentBridge } from './agent-bridge'
 
 const PORT = Number(process.env.PORT ?? process.argv[2] ?? 3110)
 const RENDERER_DIR = resolve('out/renderer')
@@ -40,12 +41,13 @@ function contentType(path: string): string {
   return MIME[extname(path)] ?? 'application/octet-stream'
 }
 
-export function createApp(): {
+export async function createApp(): Promise<{
   server: ReturnType<typeof createServer>
   platform: ServerPlatform
   port: number
+  hookUrl: string
   close: () => Promise<void>
-} {
+}> {
   const clients = new Set<WebSocket>()
   const platform = new ServerPlatform((channel, payload) => {
     const frame = JSON.stringify({ t: 'evt', channel, payload })
@@ -54,6 +56,7 @@ export function createApp(): {
     }
   })
   const dispatch = createDispatcher(buildHandlers(platform))
+  const agents = await startAgentBridge(platform)
 
   const shimSource = existsSync(SHIM_PATH) ? readFileSync(SHIM_PATH, 'utf8') : ''
 
@@ -118,7 +121,9 @@ export function createApp(): {
     server,
     platform,
     port: PORT,
+    hookUrl: agents.hookUrl,
     close: async () => {
+      agents.stop()
       for (const client of [...clients]) client.close()
       await new Promise<void>((resolveClose) => wss.close(() => resolveClose()))
       await new Promise<void>((resolveClose) => server.close(() => resolveClose()))
@@ -129,9 +134,11 @@ export function createApp(): {
 // Start only when run directly (the test imports createApp without booting a
 // listener). Run via `TERMSPRAWL_SERVER_ENTRY=1 node out/server/index.js`.
 if (process.env.TERMSPRAWL_SERVER_ENTRY === '1') {
-  const { server, port, platform } = createApp()
+  const app = await createApp()
+  const { server, port, platform } = app
   server.listen(port, () => {
     console.log(`termsprawl Server Edition listening on http://localhost:${port}`)
     console.log(`data dir: ${platform.userDataPath}`)
+    console.log(`agent hooks: ${app.hookUrl}`)
   })
 }
