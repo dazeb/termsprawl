@@ -102,7 +102,49 @@
       deleteProject: function (id) { return invoke('project:delete', [id]) },
       updateSettings: function (id, patch) { return invoke('project:update-settings', [id, patch]) },
       renameProject: function (id, name) { return invoke('project:rename', [id, name]) },
-      selectFolder: function () { return Promise.resolve(null) }
+      // No native folder picker in a browser: show a small in-page modal to
+      // enter the directory ON THE SERVER HOST where the project's terminals
+      // will run. Returns the trimmed path, or null when cancelled.
+      selectFolder: function () {
+        return new Promise(function (resolve) {
+          var overlay = document.createElement('div')
+          overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999'
+          var box = document.createElement('div')
+          box.style.cssText = 'background:#0e0e10;border:1px solid #333;border-radius:8px;padding:16px;width:min(420px,90vw);color:#e6e6e6;font:13px/1.4 -apple-system,Segoe UI,Roboto,sans-serif'
+          var title = document.createElement('div')
+          title.textContent = 'New folder project'
+          title.style.cssText = 'font-weight:600;margin-bottom:8px'
+          var hint = document.createElement('div')
+          hint.textContent = 'Directory on the server host where this project\u2019s terminals will run.'
+          hint.style.cssText = 'color:#8a8a8a;margin-bottom:10px;font-size:12px'
+          var input = document.createElement('input')
+          input.type = 'text'
+          input.placeholder = '/home/user/project'
+          input.style.cssText = 'width:100%;background:#161619;border:1px solid #333;border-radius:6px;color:#e6e6e6;padding:8px 10px;box-sizing:border-box'
+          var row = document.createElement('div')
+          row.style.cssText = 'margin-top:12px;display:flex;gap:8px;justify-content:flex-end'
+          var cancel = document.createElement('button')
+          cancel.textContent = 'Cancel'
+          cancel.style.cssText = 'background:transparent;border:1px solid #333;color:#8a8a8a;border-radius:6px;padding:6px 12px;cursor:pointer'
+          var open = document.createElement('button')
+          open.textContent = 'Open'
+          open.style.cssText = 'background:#c6f135;color:#0e0e10;font-weight:600;border:0;border-radius:6px;padding:6px 12px;cursor:pointer'
+          function done(v) { if (overlay.parentNode) document.body.removeChild(overlay); resolve(v) }
+          function submit() { done(input.value.trim() || null) }
+          open.addEventListener('click', submit)
+          cancel.addEventListener('click', function () { done(null) })
+          input.addEventListener('keydown', function (e) { if (e.key === 'Enter') submit() })
+          row.appendChild(cancel)
+          row.appendChild(open)
+          box.appendChild(title)
+          box.appendChild(hint)
+          box.appendChild(input)
+          box.appendChild(row)
+          overlay.appendChild(box)
+          document.body.appendChild(overlay)
+          input.focus()
+        })
+      }
     },
 
     pty: {
