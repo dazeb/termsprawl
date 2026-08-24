@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { HookServer } from './hook-server'
-import type { AgentStatusEvent } from '../../core/agent-status'
+import type { AgentStatusEvent } from './agent-status'
 
 // The hook server is a loopback HTTP endpoint agent CLIs POST to. It must be
 // fail-open: unknown tokens/agents/payloads get a fast 200 and never crash.

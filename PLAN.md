@@ -332,6 +332,20 @@ extension, one feature at a time.**
 - **Status: DONE.** Phase 7 complete (7.1–7.7); version bump / AppImage /
   release only on request.
 
+### Task 7.8: Extensible settings panel
+- A proper, sectioned settings panel (the app-gear modal) driven by a section
+  registry, so new sections are added by appending to an array ("space to add
+  more stuff"). Sections: user (display name; cloud/account sign-in is the
+  extension point when the cloud feature lands), agents (primary: codex + grok),
+  agent accounts (existing), a2a peers (config only), api providers (non-secret
+  endpoints; keys deliberately not stored), updates (auto-download).
+- Model: `AppSettings.displayName`, `a2aPeers`, `apiProviders` (optional, added
+  to normalize + defaults). Focus: codex + grok are the primary agents
+  (PRIMARY_AGENTS); claude stays registered but secondary.
+- **Status: DONE (commit pending) on `phase-10-server`.** app-settings normalize
+  round-trips the new fields (13 tests); typecheck, build, build:server,
+  originality all green (325 tests).
+
 ## Phase 8 — Source control
 
 ### Task 8.1: Git service
@@ -413,6 +427,23 @@ extension, one feature at a time.**
   WS-RPC protocol; browser shim fills the same API as the desktop preload.
 - Boot same core services via a platform implementation.
 - Verify: browser session opens project, runs terminals, sees agent status.
+- **Status: PARTIAL (web shell + terminals + agent status live-verified; commits
+  89243f3/…/5fabfdf on branch `phase-10-server`).** `server/rpc.ts` (RPC
+  dispatcher), `server/platform.ts` (ServerPlatform over ws), `server/handlers.ts`
+  (IPC channel -> core services: workspace, terminals, settings, updates idle,
+  announcements, file list/read/write), `server/index.ts` (node:http static +
+  WebSocketServer /ws + agent bridge), `server/shim.js` (browser
+  window.termsprawl over WS), `server/agent-bridge.ts` (HookServer -> normalized
+  broadcast on agent:status:<sid>). The HookServer moved main/agents -> core so
+  main + server share it (no-electron guard holds). `pnpm run build && pnpm run
+  build:server` then `TERMSPRAWL_SERVER_ENTRY=1 PORT=3110 node out/server/index.js`.
+  Live-verified on :3110: shim served; pty:create spawned a real terminal
+  (`echo SERVER_EDITION_OK`/`pwd` streamed back); "New folder project" modal
+  works in a real browser; POST /hook/claude -> agent:status:<sid> broadcast
+  received over WS. git/accounts/cloud not wired (shim rejects gracefully).
+  **Remaining:** install agent CLI hooks on the host for a live agent (only codex
+  present), persistence refinements, platform-impl parity, a real browser boot
+  polish pass.
 
 ### Task 10.2: Commit
 - `git commit -m "feat: server edition"`

@@ -34,18 +34,16 @@ describe('app-settings', () => {
 
   it('round-trips auto-download through disk', () => {
     const dir = scratch()
-    expect(saveAppSettings(dir, { autoDownloadUpdates: true })).toEqual({
+    const base = {
       autoDownloadUpdates: true,
       accounts: [],
       activeAccountId: null,
-      dismissedAnnouncementVersion: null
-    })
-    expect(loadAppSettings(dir)).toEqual({
-      autoDownloadUpdates: true,
-      accounts: [],
-      activeAccountId: null,
-      dismissedAnnouncementVersion: null
-    })
+      dismissedAnnouncementVersion: null,
+      a2aPeers: [],
+      apiProviders: []
+    }
+    expect(saveAppSettings(dir, { autoDownloadUpdates: true })).toEqual(base)
+    expect(loadAppSettings(dir)).toEqual(base)
     const raw = JSON.parse(readFileSync(join(dir, 'settings.json'), 'utf8')) as {
       autoDownloadUpdates: boolean
     }
@@ -94,5 +92,45 @@ describe('app-settings', () => {
     })
     expect(saved.accounts).toHaveLength(1)
     expect(loadAppSettings(dir).activeAccountId).toBe('acc-1')
+  })
+
+  it('defaults a2aPeers and apiProviders to empty arrays', () => {
+    const s = normalizeAppSettings({})
+    expect(s.a2aPeers).toEqual([])
+    expect(s.apiProviders).toEqual([])
+  })
+
+  it('normalizes and keeps valid a2aPeers + apiProviders', () => {
+    const s = normalizeAppSettings({
+      a2aPeers: [{ id: 'p1', label: 'Peer One', endpoint: 'http://127.0.0.1:8777' }],
+      apiProviders: [{ id: 'xai', name: 'xAI', baseUrl: 'https://api.x.ai/v1' }]
+    })
+    expect(s.a2aPeers).toEqual([{ id: 'p1', label: 'Peer One', endpoint: 'http://127.0.0.1:8777' }])
+    expect(s.apiProviders).toEqual([{ id: 'xai', name: 'xAI', baseUrl: 'https://api.x.ai/v1' }])
+  })
+
+  it('drops malformed peers/providers', () => {
+    const s = normalizeAppSettings({
+      a2aPeers: [{ id: 'p1', label: 'Peer One' }, { id: 'p2', label: '', endpoint: 'x' }],
+      apiProviders: [{ id: '', name: 'x', baseUrl: 'y' }, { id: 'ok', name: 'n', baseUrl: 'u' }]
+    })
+    expect(s.a2aPeers).toEqual([])
+    expect(s.apiProviders).toEqual([{ id: 'ok', name: 'n', baseUrl: 'u' }])
+  })
+
+  it('save -> load round-trips the new fields', () => {
+    const dir = scratch()
+    saveAppSettings(dir, {
+      a2aPeers: [{ id: 'p', label: 'Peer', endpoint: 'http://127.0.0.1:8787' }],
+      apiProviders: [{ id: 'g', name: 'Grok', baseUrl: 'http://127.0.0.1:8080' }]
+    })
+    const loaded = loadAppSettings(dir)
+    expect(loaded.a2aPeers).toEqual([{ id: 'p', label: 'Peer', endpoint: 'http://127.0.0.1:8787' }])
+    expect(loaded.apiProviders).toEqual([{ id: 'g', name: 'Grok', baseUrl: 'http://127.0.0.1:8080' }])
+  })
+
+  it('DEFAULT_APP_SETTINGS has the new empty arrays', () => {
+    expect(DEFAULT_APP_SETTINGS.a2aPeers).toEqual([])
+    expect(DEFAULT_APP_SETTINGS.apiProviders).toEqual([])
   })
 })

@@ -1,0 +1,211 @@
+// termsprawl Server Edition — browser shim.
+// Served at /termsprawl-shim.js. Defines `window.termsprawl` over a WebSocket
+// to the server's RPC endpoint, mirroring the desktop preload API. Methods the
+// server does not implement (git, cloud writes, managed accounts, agent hooks)
+// resolve/reject gracefully so the renderer boots and the unsupported feature
+// panels show an error state instead of crashing.
+(function () {
+  'use strict'
+  var proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
+  var url = proto + '//' + location.host + '/ws'
+  var ws = null
+  var seq = 0
+  var pending = new Map()
+  var listeners = new Map()
+
+  function ensure() {
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return
+    ws = new WebSocket(url)
+    ws.addEventListener('message', function (ev) {
+      var msg
+      try { msg = JSON.parse(ev.data) } catch (e) { return }
+      if (!msg || typeof msg !== 'object') return
+      if (msg.t === 'res') {
+        var p = pending.get(msg.id)
+        if (!p) return
+        pending.delete(msg.id)
+        if (msg.ok) p.resolve(msg.result)
+        else p.reject(new Error(msg.error || 'rpc error'))
+      } else if (msg.t === 'evt') {
+        var arr = listeners.get(msg.channel)
+        if (arr) for (var i = 0; i < arr.length; i++) arr[i](msg.payload)
+      }
+    })
+    ws.addEventListener('close', function () {
+      pending.forEach(function (p) { p.reject(new Error('disconnected')) })
+      pending.clear()
+      setTimeout(ensure, 500)
+    })
+  }
+
+  function invoke(method, args) {
+    ensure()
+    return new Promise(function (resolve, reject) {
+      var id = ++seq
+      pending.set(id, { resolve: resolve, reject: reject })
+      var payload = JSON.stringify({ t: 'req', id: id, method: method, args: args || [] })
+      if (ws.readyState === WebSocket.OPEN) ws.send(payload)
+      else ws.addEventListener('open', function () { ws.send(payload) }, { once: true })
+    })
+  }
+
+  function send(method, args) {
+    ensure()
+    var payload = JSON.stringify({ t: 'send', method: method, args: args || [] })
+    if (ws.readyState === WebSocket.OPEN) ws.send(payload)
+    else ws.addEventListener('open', function () { ws.send(payload) }, { once: true })
+  }
+
+  function on(channel, cb) {
+    var arr = listeners.get(channel)
+    if (!arr) { arr = []; listeners.set(channel, arr) }
+    arr.push(cb)
+    return function () {
+      var a = listeners.get(channel)
+      if (a) { var i = a.indexOf(cb); if (i >= 0) a.splice(i, 1) }
+    }
+  }
+
+  function notAvailable(what) {
+    return function () { return Promise.reject(new Error(what + ' not available in server edition')) }
+  }
+
+  window.termsprawl = {
+    appVersion: function () { return invoke('app:version') },
+
+    settings: {
+      get: function () { return invoke('app:settings-get') },
+      set: function (patch) { return invoke('app:settings-set', [patch]) },
+      createAccount: notAvailable('managed accounts'),
+      deleteAccount: notAvailable('managed accounts'),
+      permissionSupported: function () { return Promise.resolve(false) },
+      loginCommand: function () { return Promise.resolve('') }
+    },
+
+    updates: {
+      check: function () { return invoke('update:check') },
+      download: function () { return invoke('update:download') },
+      install: function () { return invoke('update:install') },
+      dismiss: function () { return invoke('update:dismiss') },
+      onStatus: function (cb) { return on('update:status', cb) }
+    },
+
+    announcements: { get: function () { return invoke('announcement:get') } },
+
+    workspace: {
+      snapshot: function () { return invoke('workspace:snapshot') },
+      saveNodes: function (id, nodes) { return invoke('workspace:save-nodes', [id, nodes]) },
+      addProject: function (name, cwd, remote) { return invoke('project:add', [name, cwd, remote]) },
+      closeProject: function (id) { return invoke('project:close', [id]) },
+      archiveProject: function (id) { return invoke('project:archive', [id]) },
+      reopenProject: function (id) { return invoke('project:reopen', [id]) },
+      deleteProject: function (id) { return invoke('project:delete', [id]) },
+      updateSettings: function (id, patch) { return invoke('project:update-settings', [id, patch]) },
+      renameProject: function (id, name) { return invoke('project:rename', [id, name]) },
+      // No native folder picker in a browser: show a small in-page modal to
+      // enter the directory ON THE SERVER HOST where the project's terminals
+      // will run. Returns the trimmed path, or null when cancelled.
+      selectFolder: function () {
+        return new Promise(function (resolve) {
+          var overlay = document.createElement('div')
+          overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999'
+          var box = document.createElement('div')
+          box.style.cssText = 'background:#0e0e10;border:1px solid #333;border-radius:8px;padding:16px;width:min(420px,90vw);color:#e6e6e6;font:13px/1.4 -apple-system,Segoe UI,Roboto,sans-serif'
+          var title = document.createElement('div')
+          title.textContent = 'New folder project'
+          title.style.cssText = 'font-weight:600;margin-bottom:8px'
+          var hint = document.createElement('div')
+          hint.textContent = 'Directory on the server host where this project\u2019s terminals will run.'
+          hint.style.cssText = 'color:#8a8a8a;margin-bottom:10px;font-size:12px'
+          var input = document.createElement('input')
+          input.type = 'text'
+          input.placeholder = '/home/user/project'
+          input.style.cssText = 'width:100%;background:#161619;border:1px solid #333;border-radius:6px;color:#e6e6e6;padding:8px 10px;box-sizing:border-box'
+          var row = document.createElement('div')
+          row.style.cssText = 'margin-top:12px;display:flex;gap:8px;justify-content:flex-end'
+          var cancel = document.createElement('button')
+          cancel.textContent = 'Cancel'
+          cancel.style.cssText = 'background:transparent;border:1px solid #333;color:#8a8a8a;border-radius:6px;padding:6px 12px;cursor:pointer'
+          var open = document.createElement('button')
+          open.textContent = 'Open'
+          open.style.cssText = 'background:#c6f135;color:#0e0e10;font-weight:600;border:0;border-radius:6px;padding:6px 12px;cursor:pointer'
+          function done(v) { if (overlay.parentNode) document.body.removeChild(overlay); resolve(v) }
+          function submit() { done(input.value.trim() || null) }
+          open.addEventListener('click', submit)
+          cancel.addEventListener('click', function () { done(null) })
+          input.addEventListener('keydown', function (e) { if (e.key === 'Enter') submit() })
+          row.appendChild(cancel)
+          row.appendChild(open)
+          box.appendChild(title)
+          box.appendChild(hint)
+          box.appendChild(input)
+          box.appendChild(row)
+          overlay.appendChild(box)
+          document.body.appendChild(overlay)
+          input.focus()
+        })
+      }
+    },
+
+    pty: {
+      create: function (req) { return invoke('pty:create', [req]) },
+      write: function (id, data) { send('pty:write', [id, data]) },
+      resize: function (id, cols, rows) { send('pty:resize', [id, cols, rows]) },
+      destroy: function (id) { return invoke('pty:destroy', [id]) },
+      closeNode: function (projectId, id) { return invoke('terminal:close', [projectId, id]) },
+      readScrollback: function (id) { return invoke('pty:read-scrollback', [id]) },
+      onData: function (id, cb) { return on('pty:data:' + id, cb) },
+      onExit: function (id, cb) { return on('pty:exit:' + id, cb) }
+    },
+
+    diff: {
+      info: function () {
+        return Promise.resolve({ original: null, modified: null, error: { code: 'NO_REPO', message: 'not available in server edition' } })
+      }
+    },
+
+    files: {
+      openDialog: function () { return Promise.resolve(null) },
+      read: function (path) { return invoke('file:read', [path]) },
+      write: function (path, content) { return invoke('file:write', [path, content]) },
+      list: function (root, rel) { return invoke('file:list', [root, rel]) }
+    },
+
+    agent: {
+      onStatus: function (sid, cb) { return on('agent:status:' + sid, cb) },
+      onSessionName: function (sid, cb) { return on('agent:session-name:' + sid, cb) }
+    },
+
+    contextLinks: {
+      list: function () { return Promise.resolve({ ok: true, links: [] }) },
+      add: function () { return Promise.resolve({ ok: false, error: 'NO_FOLDER' }) },
+      remove: function () { return Promise.resolve({ ok: false, error: 'NO_FOLDER' }) }
+    },
+
+    git: {
+      snapshot: notAvailable('source control'),
+      stage: notAvailable('source control'),
+      unstage: notAvailable('source control'),
+      discard: notAvailable('source control'),
+      commit: notAvailable('source control'),
+      commitMessage: notAvailable('source control'),
+      createBranch: notAvailable('source control'),
+      checkout: notAvailable('source control'),
+      push: notAvailable('source control'),
+      pull: notAvailable('source control'),
+      publish: notAvailable('source control'),
+      worktrees: function () { return Promise.resolve([]) },
+      worktreeAdd: notAvailable('source control'),
+      worktreeRemove: notAvailable('source control')
+    },
+
+    cloud: {
+      status: function () { return Promise.resolve(null) },
+      deviceStart: notAvailable('cloud'),
+      devicePoll: notAvailable('cloud'),
+      signOut: function () { return Promise.resolve() },
+      backupNow: notAvailable('cloud'),
+      listBackups: function () { return Promise.resolve([]) }
+    }
+  }
+})()
