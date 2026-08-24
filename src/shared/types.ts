@@ -15,6 +15,17 @@ export interface PtyCreateRequest {
   cols: number
   rows: number
   env?: Record<string, string>
+  /** Remote project (Phase 9): when set, the terminal runs on the remote host
+   * via ssh -tt + remote tmux instead of a local node-pty. */
+  remote?: ProjectRemote
+}
+
+/** A remote project's ssh destination + the path on the remote host (Phase 9). */
+export interface ProjectRemote {
+  user?: string
+  host: string
+  port?: number
+  path: string
 }
 
 export interface PtyCreateResult {
@@ -52,6 +63,9 @@ export interface ProjectMeta {
   id: string
   name: string
   cwd: string | null
+  /** Remote project (Phase 9): when set, cwd is null and the project's
+   * terminal/git/file ops run over ssh on this host at `path`. */
+  remote?: ProjectRemote
   closed: boolean
   /** Archived = hidden from the tab bar, preserved; reopen restores it. */
   archived?: boolean

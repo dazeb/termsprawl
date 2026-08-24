@@ -21,6 +21,8 @@ import type { PtyCreateRequest, PtyCreateResult, PtyExitInfo } from '../shared/t
 import { resolveCommandLine } from './command-resolver'
 import { stripAuthEnv } from './agent-accounts'
 import { ensureTmuxConfig, hasSession, sessionNameFor, type TmuxConfig } from './tmux'
+import { remoteTmuxSpawnArgv, remoteTmuxHasSessionSync, remoteTmuxKillSessionSync } from './remote-pty'
+import type { RemoteHost } from './ssh'
 import { ScrollbackStore } from './scrollback-store'
 
 const TERMINAL_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/
@@ -40,6 +42,7 @@ export function isMissingTmuxSessionError(error: unknown): boolean {
 export class PtyManager {
   private readonly sessions = new Map<string, pty.IPty>()
   private readonly projectBySession = new Map<string, string>()
+  private readonly remoteBySession = new Map<string, RemoteHost>()
   private readonly destroying = new Set<string>()
   private readonly scrollback: ScrollbackStore
   private tmux: TmuxConfig | null
@@ -52,7 +55,10 @@ export class PtyManager {
   create(req: PtyCreateRequest): PtyCreateResult {
     assertTerminalId(req.id)
     const shell = req.shell ?? process.env.SHELL ?? '/bin/bash'
-    const cwd = req.cwd ?? process.cwd()
+    // For a remote request, `req.cwd` is the REMOTE path (may not exist here);
+    // the local ssh client must run in a valid local dir, so fall back to the
+    // local cwd. The remote cwd is set on the remote side.
+    const cwd = req.remote ? process.cwd() : req.cwd ?? process.cwd()
     const sessionName = sessionNameFor(req.id)
 
     // Commands are written as `exec <command>` after PTY listeners attach.
@@ -66,7 +72,23 @@ export class PtyManager {
     let spawnFile = shell
     let spawnArgs: string[] = []
 
-    if (this.tmux) {
+    if (req.remote) {
+      // Remote project: run the terminal over ssh -tt + remote tmux. The remote
+      // shell starts in the remote project path (or the provided cwd). The local
+      // node-pty just hosts the ssh client, which multiplexes the remote PTY.
+      const remoteHost: RemoteHost = {
+        host: req.remote.host,
+        ...(req.remote.user ? { user: req.remote.user } : {}),
+        ...(req.remote.port ? { port: req.remote.port } : {})
+      }
+      const remoteShell = req.shell ?? '/bin/bash'
+      fresh = !remoteTmuxHasSessionSync(remoteHost, sessionName)
+      spawnFile = 'ssh'
+      // cwd is intentionally omitted: `tmux -c <dir>` under `ssh -tt` fails on
+      // first tmux-server start (chdir race), so the remote shell starts in the
+      // remote user's home. Project-path cwd is a later refinement.
+      spawnArgs = remoteTmuxSpawnArgv(remoteHost, sessionName, remoteShell)
+    } else if (this.tmux) {
       fresh = !hasSession(this.tmux, req.id)
       spawnFile = this.tmux.tmuxPath
       spawnArgs = [
@@ -106,7 +128,18 @@ export class PtyManager {
     this.sessions.set(req.id, session)
     if (req.projectId) this.projectBySession.set(req.id, req.projectId)
     else this.projectBySession.delete(req.id)
-    if (this.tmux) this.scrollback.start(req.id, this.tmux)
+    if (req.remote) {
+      this.remoteBySession.set(req.id, {
+        host: req.remote.host,
+        ...(req.remote.user ? { user: req.remote.user } : {}),
+        ...(req.remote.port ? { port: req.remote.port } : {})
+      })
+    } else {
+      this.remoteBySession.delete(req.id)
+    }
+    // Remote terminals keep their scrollback in the remote tmux; local scrollback
+    // snapshots are local-tmux-scoped only.
+    if (this.tmux && !req.remote) this.scrollback.start(req.id, this.tmux)
 
     session.onData((data) => {
       if (this.sessions.get(req.id) === session) {
@@ -123,13 +156,14 @@ export class PtyManager {
       if (this.destroying.has(req.id)) return
       this.sessions.delete(req.id)
       this.projectBySession.delete(req.id)
-      this.scrollback.stop(req.id, this.tmux ?? undefined)
+      this.remoteBySession.delete(req.id)
+      if (!req.remote) this.scrollback.stop(req.id, this.tmux ?? undefined)
     })
 
     // Start one-shot presets only after listeners are attached, otherwise a
     // fast command can print and exit before node-pty delivers its first data
     // event. Warm tmux reattachments must not launch the command a second time.
-    if (command && fresh && this.tmux) session.write(`exec ${command}\r`)
+    if (command && fresh && (req.remote || this.tmux)) session.write(`exec ${command}\r`)
 
     return { id: req.id, pid: session.pid, fresh }
   }
@@ -147,7 +181,15 @@ export class PtyManager {
     assertTerminalId(id)
     const session = this.sessions.get(id)
     this.destroying.add(id)
-    if (this.tmux) {
+    const remote = this.remoteBySession.get(id)
+    if (remote) {
+      try {
+        session?.kill()
+      } catch {
+        // The remote tmux session remains authoritative.
+      }
+      remoteTmuxKillSessionSync(remote, sessionNameFor(id))
+    } else if (this.tmux) {
       try {
         session?.kill()
       } catch {
@@ -168,7 +210,8 @@ export class PtyManager {
     }
     this.sessions.delete(id)
     this.projectBySession.delete(id)
-    this.scrollback.destroy(id)
+    this.remoteBySession.delete(id)
+    if (!remote) this.scrollback.destroy(id)
     this.destroying.delete(id)
   }
 
@@ -198,6 +241,7 @@ export class PtyManager {
     }
     this.sessions.clear()
     this.projectBySession.clear()
+    this.remoteBySession.clear()
     this.destroying.clear()
     if (this.tmux) this.scrollback.stopAll(this.tmux)
   }
