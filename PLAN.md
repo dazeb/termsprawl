@@ -413,18 +413,23 @@ extension, one feature at a time.**
   WS-RPC protocol; browser shim fills the same API as the desktop preload.
 - Boot same core services via a platform implementation.
 - Verify: browser session opens project, runs terminals, sees agent status.
-- **Status: PARTIAL (server shell + bridge + terminals live-verified; commit
-  89243f3 on branch `phase-10-server`).** `server/rpc.ts` (RPC dispatcher), `server/platform.ts` (ServerPlatform over ws),
-  `server/handlers.ts` (IPC channel -> core services: workspace, terminals,
-  settings, updates idle, announcements, file list/read/write), `server/index.ts`
-  (node:http static + WebSocketServer /ws), `server/shim.js` (browser
-  window.termsprawl over WS). `pnpm run build && pnpm run build:server` then
-  `TERMSPRAWL_SERVER_ENTRY=1 PORT=3110 node out/server/index.js`. Live-verified
-  on :3110: shim served, pty:create spawned a real terminal, `echo
-  SERVER_EDITION_OK` streamed back, pty:destroy worked. git/accounts/cloud/
-  agent-hooks not wired (shim rejects gracefully). **Remaining:** agent status
-  wiring, persistence refinements, a real browser boot pass, and the
-  platform-impl parity check.
+- **Status: PARTIAL (web shell + terminals + agent status live-verified; commits
+  89243f3/…/5fabfdf on branch `phase-10-server`).** `server/rpc.ts` (RPC
+  dispatcher), `server/platform.ts` (ServerPlatform over ws), `server/handlers.ts`
+  (IPC channel -> core services: workspace, terminals, settings, updates idle,
+  announcements, file list/read/write), `server/index.ts` (node:http static +
+  WebSocketServer /ws + agent bridge), `server/shim.js` (browser
+  window.termsprawl over WS), `server/agent-bridge.ts` (HookServer -> normalized
+  broadcast on agent:status:<sid>). The HookServer moved main/agents -> core so
+  main + server share it (no-electron guard holds). `pnpm run build && pnpm run
+  build:server` then `TERMSPRAWL_SERVER_ENTRY=1 PORT=3110 node out/server/index.js`.
+  Live-verified on :3110: shim served; pty:create spawned a real terminal
+  (`echo SERVER_EDITION_OK`/`pwd` streamed back); "New folder project" modal
+  works in a real browser; POST /hook/claude -> agent:status:<sid> broadcast
+  received over WS. git/accounts/cloud not wired (shim rejects gracefully).
+  **Remaining:** install agent CLI hooks on the host for a live agent (only codex
+  present), persistence refinements, platform-impl parity, a real browser boot
+  polish pass.
 
 ### Task 10.2: Commit
 - `git commit -m "feat: server edition"`
