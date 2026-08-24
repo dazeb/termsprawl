@@ -386,16 +386,22 @@ extension, one feature at a time.**
 - Renderer keeps using the terminal transport interface — remote is a second
   implementation, canvas untouched.
 - Verify: open project on a test host; terminal/git/file ops run remotely.
-- **Status: PARTIAL (transport stack complete + live-verified; commits
-  75dd7b3/…/4f13869).** `core/ssh.ts` (remote spec + runSsh), `core/remote-git.ts`
-  (`git -C`), `core/remote-file.ts` (quoted remote read), and
-  `core/remote-pty.ts` + PtyManager remote routing (`ssh -tt` + remote tmux;
-  create/destroy/fresh over ssh, local spawn cwd fixed, remote sessions skip
-  local scrollback). All verified against a real host (hermes-box): remote
-  terminal spawns + streams. Remaining surface wiring: a remote-project entry
-  (host/path) in the renderer/main, routing the source-control and file panel to
-  the remote transports for `remote` projects, passing `remote` through the
-  terminal-create flow, and ControlMaster multiplexing.
+- **Status: PARTIAL (transport stack + remote-project surface DONE; commits
+  75dd7b3/…/0e3e78a).** `core/ssh.ts` (remote spec + runSsh), `core/remote-git.ts`
+  (`git -C`), `core/remote-file.ts` (quoted remote read), `core/remote-pty.ts` +
+  PtyManager remote routing (`ssh -tt` + remote tmux; create/destroy/fresh over
+  ssh, local spawn cwd fixed, remote sessions skip local scrollback) — all
+  verified against a real host (hermes-box): remote terminal spawns + streams.
+  Surface added: `ProjectMeta.remote` + `addProject(name, cwd, remote?)`
+  (persists, round-trip tested), `@shared/remote-project` helpers
+  (isRemoteProject/remoteLabel/normalizeRemote), the add-project IPC wired main
+  + preload + renderer store, `TerminalNode` passes the owning project's remote
+  on pty.create (so a remote terminal spawns over ssh), and a TabBar "New
+  remote (SSH) project" dialog (validate via normalizeRemote).
+  **Remaining:** route the source-control + file panel to the remote transports
+  (remote repoRoot/branch/sync/list/recent-commits + stage/unstage/discard/
+  commit), client controlMaster multiplexing, and the end-to-end "open project
+  on a test host" verify — all of which need a running-app pass.
 
 ### Task 9.2: Commit
 - `git commit -m "feat: ssh remote projects"`
