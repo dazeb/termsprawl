@@ -176,6 +176,12 @@ export async function gitStatus(repoRoot: string): Promise<GitFileChange[]> {
   return res.code === 0 ? parseGitStatus(res.stdout) : []
 }
 
+/** Staged diff text (what the next commit would include). Empty when nothing is staged. */
+export async function stagedDiff(repoRoot: string): Promise<string> {
+  const res = await runGit(repoRoot, ['diff', '--cached'])
+  return res.code === 0 ? res.stdout : ''
+}
+
 export async function currentBranch(repoRoot: string): Promise<string> {
   const res = await runGit(repoRoot, ['branch', '--show-current'])
   return res.code === 0 ? res.stdout.trim() : ''

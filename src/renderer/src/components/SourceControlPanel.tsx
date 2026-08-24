@@ -23,6 +23,7 @@ export function SourceControlPanel({ cwd, onClose }: SourceControlPanelProps): R
   const [newWtName, setNewWtName] = useState('')
   const [newWtBranch, setNewWtBranch] = useState('')
   const [confirmRemoveWt, setConfirmRemoveWt] = useState<string | null>(null)
+  const [aiBusy, setAiBusy] = useState(false)
 
   const refresh = useCallback(async () => {
     const [next, wt] = await Promise.all([
@@ -67,6 +68,22 @@ export function SourceControlPanel({ cwd, onClose }: SourceControlPanelProps): R
     if (!text) return
     void run(() => window.termsprawl.git.commit(cwd, text), 'committed')
     setMsg('')
+  }
+
+  // Phase 8.4 — ask a local agent CLI for a conventional commit message. The
+  // message fills the input (not committed), so the user can review/edit first.
+  const generateCommitMsg = async (): Promise<void> => {
+    setAiBusy(true)
+    setError(null)
+    setStatus(null)
+    const res = await window.termsprawl.git.commitMessage(cwd)
+    setAiBusy(false)
+    if (!res.ok) {
+      setError(res.error ?? 'could not generate a commit message')
+      return
+    }
+    if (res.message) setMsg(res.message)
+    setStatus(`message from ${res.tool ?? 'agent'}`)
   }
 
   const createWorktree = (): void => {
@@ -181,6 +198,14 @@ export function SourceControlPanel({ cwd, onClose }: SourceControlPanelProps): R
             />
             <button disabled={!msg.trim()} onClick={commit}>
               commit
+            </button>
+            <button
+              className="source-control-ai"
+              disabled={aiBusy}
+              onClick={() => void generateCommitMsg()}
+              title="generate a commit message with your local agent CLI"
+            >
+              {aiBusy ? '…' : 'ai'}
             </button>
           </div>
 

@@ -17,7 +17,8 @@ import type {
   ContextLinkWriteResult,
   GitPanelSnapshot,
   GitResult,
-  GitWorktree
+  GitWorktree,
+  CommitMessageResult
 } from '@shared/types'
 import type { AgentStatusEvent } from '@shared/agent-status'
 import type { UpdateStatus } from '@shared/update-status'
@@ -91,6 +92,7 @@ declare global {
         unstage(cwd: string, paths: string[]): Promise<GitResult>
         discard(cwd: string, paths: string[]): Promise<GitResult>
         commit(cwd: string, message: string): Promise<GitResult>
+        commitMessage(cwd: string): Promise<CommitMessageResult>
         createBranch(cwd: string, name: string): Promise<GitResult>
         checkout(cwd: string, name: string): Promise<GitResult>
         push(cwd: string): Promise<GitResult>

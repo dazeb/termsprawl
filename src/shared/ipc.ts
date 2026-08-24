@@ -62,6 +62,7 @@ export const IPC = {
   gitUnstage: 'git:unstage',
   gitDiscard: 'git:discard',
   gitCommit: 'git:commit',
+  gitCommitMessage: 'git:commit-message',
   gitCreateBranch: 'git:branch-create',
   gitCheckout: 'git:branch-checkout',
   gitPush: 'git:push',

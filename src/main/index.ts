@@ -4,9 +4,10 @@ import { homedir } from 'node:os'
 import { dirname, isAbsolute, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { IPC } from '../shared/ipc'
-import type { ContextLinkListResult, ContextLinkWriteResult, DiffBase, DiffInfoResult, ProjectSettings, PtyCreateRequest, PtyExitInfo, SerializedNode, AppSettings, GitPanelSnapshot, GitResult } from '../shared/types'
+import type { ContextLinkListResult, ContextLinkWriteResult, DiffBase, DiffInfoResult, ProjectSettings, PtyCreateRequest, PtyExitInfo, SerializedNode, AppSettings, GitPanelSnapshot, GitResult, CommitMessageResult } from '../shared/types'
 import type { CorePlatform } from '../core/platform'
 import { diffInfo, findRepoRoot, currentBranch, remoteUrl, syncState, gitStatus, listBranches, recentCommits, ghAuthed, stageChanges, unstageChanges, discardChanges, commitChanges, createBranch, checkoutBranch, push as gitPush, pull as gitPull, publish as gitPublish, listWorktrees, addWorktree, removeWorktree } from '../core/git-service'
+import { generateCommitMessage } from '../core/commit-message'
 import { classifyFile, listProjectDir, readProjectFile, writeProjectFile } from '../core/file-service'
 import { addLink, listLinks, removeLink } from '../core/context-links'
 import { ensureContextDiscovery } from '../core/context-discovery'
@@ -282,6 +283,17 @@ function registerGitIpc(): void {
   )
   ipcMain.handle(IPC.gitCommit, (_event, cwd: string, message: string) =>
     guarded(cwd, (r) => commitChanges(r, message))
+  )
+  ipcMain.handle(
+    IPC.gitCommitMessage,
+    (_event, cwd: string): Promise<CommitMessageResult> => {
+      if (!isKnownProjectCwd(cwd)) {
+        return Promise.resolve({ ok: false, error: 'no project folder' })
+      }
+      const root = findRepoRoot(cwd)
+      if (!root) return Promise.resolve({ ok: false, error: 'not a git repository' })
+      return generateCommitMessage(root)
+    }
   )
   ipcMain.handle(IPC.gitCreateBranch, (_event, cwd: string, name: string) =>
     guarded(cwd, (r) => createBranch(r, name))

@@ -160,6 +160,19 @@ export interface GitResult {
   stderr: string
 }
 
+// Phase 8.4 — AI commit message generation.
+export type CommitAgentCli = 'claude' | 'codex'
+
+export interface CommitMessageResult {
+  ok: boolean
+  /** Suggested conventional-commit subject; present only when ok === true. */
+  message?: string
+  /** Failure reason; present only when ok === false. */
+  error?: string
+  /** Which agent CLI produced the message (or none when unavailable). */
+  tool?: CommitAgentCli | 'none'
+}
+
 export interface GitWorktree {
   path: string
   /** Branch name (e.g. "feature/x"), or null when detached. */

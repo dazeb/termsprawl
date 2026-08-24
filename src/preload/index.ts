@@ -20,7 +20,8 @@ import type {
   ContextLinkWriteResult,
   GitPanelSnapshot,
   GitResult,
-  GitWorktree
+  GitWorktree,
+  CommitMessageResult
 } from '../shared/types'
 import type { UpdateStatus } from '../shared/update-status'
 
@@ -164,6 +165,8 @@ const api = {
       ipcRenderer.invoke(IPC.gitDiscard, cwd, paths),
     commit: (cwd: string, message: string): Promise<GitResult> =>
       ipcRenderer.invoke(IPC.gitCommit, cwd, message),
+    commitMessage: (cwd: string): Promise<CommitMessageResult> =>
+      ipcRenderer.invoke(IPC.gitCommitMessage, cwd),
     createBranch: (cwd: string, name: string): Promise<GitResult> =>
       ipcRenderer.invoke(IPC.gitCreateBranch, cwd, name),
     checkout: (cwd: string, name: string): Promise<GitResult> =>
