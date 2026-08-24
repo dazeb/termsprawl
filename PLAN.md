@@ -386,6 +386,11 @@ extension, one feature at a time.**
 - Renderer keeps using the terminal transport interface — remote is a second
   implementation, canvas untouched.
 - Verify: open project on a test host; terminal/git/file ops run remotely.
+- **Status: PARTIAL (foundation committed c4a65da).** `core/ssh.ts` remote
+  spec + argv-array `runSsh` (verified against a real host) and
+  `core/remote-git.ts` (`git -C <path>` remotely). Remaining: remote PTY/tmux
+  transport, remote file ops, remote project config + renderer wiring,
+  ControlMaster multiplexing.
 
 ### Task 9.2: Commit
 - `git commit -m "feat: ssh remote projects"`
