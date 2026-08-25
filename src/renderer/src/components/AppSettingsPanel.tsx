@@ -81,7 +81,7 @@ interface SectionCtx {
   cloudBackupNow: () => Promise<void>
 }
 
-type TabId = 'general' | 'models' | 'plugins' | 'agentPresets'
+type TabId = 'general' | 'user' | 'agents' | 'connections' | 'updates'
 
 interface SettingsTab {
   id: TabId
@@ -101,39 +101,44 @@ const TABS: SettingsTab[] = [
     )
   },
   {
-    id: 'models',
-    title: 'Models',
+    id: 'user',
+    title: 'User',
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <rect x="3" y="6" width="18" height="12" rx="2" />
-        <path d="M7 3v3M12 3v3M17 3v3M7 18v3M12 18v3M17 18v3" />
+        <circle cx="12" cy="8" r="3.5" />
+        <path d="M4.5 20a7.5 7.5 0 0 1 15 0" />
       </svg>
     )
   },
   {
-    id: 'plugins',
-    title: 'Plugins',
+    id: 'agents',
+    title: 'Agents',
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <line x1="4" y1="21" x2="4" y2="14" />
-        <line x1="4" y1="10" x2="4" y2="3" />
-        <line x1="12" y1="21" x2="12" y2="12" />
-        <line x1="12" y1="8" x2="12" y2="3" />
-        <line x1="20" y1="21" x2="20" y2="16" />
-        <line x1="20" y1="12" x2="20" y2="3" />
-        <line x1="1" y1="14" x2="7" y2="14" />
-        <line x1="9" y1="8" x2="15" y2="8" />
-        <line x1="17" y1="16" x2="23" y2="16" />
+        <rect x="3" y="4" width="18" height="16" rx="2" />
+        <path d="M7 9l3 3-3 3" />
+        <path d="M13 15h4" />
       </svg>
     )
   },
   {
-    id: 'agentPresets',
-    title: 'Agent presets',
+    id: 'connections',
+    title: 'Connections',
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <rect x="4" y="9" width="16" height="9" rx="2" />
-        <path d="M9 5h6M9 5a2 2 0 0 0-2 2M15 5a2 2 0 0 1 2 2M9 21h6M12 9v2M8 15h.01M16 15h.01" />
+        <circle cx="6" cy="12" r="2.5" />
+        <circle cx="18" cy="12" r="2.5" />
+        <path d="M8.5 12h7" />
+      </svg>
+    )
+  },
+  {
+    id: 'updates',
+    title: 'Updates',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+        <path d="M21 4v5h-5" />
       </svg>
     )
   }
@@ -302,8 +307,8 @@ export function AppSettingsPanel({ onClose }: AppSettingsPanelProps): React.JSX.
     cloudBackupNow
   }
 
-  // Sidebar tabs. General holds the preference rows + the user section; the
-  // other tabs host the existing functional sections.
+  // Sidebar tabs, grouped by termsprawl domain. Each tab hosts the sections
+  // that actually belong to it; adding one to a tab's array adds content there.
   const tabSections: Record<TabId, SettingsSection[]> = {
     general: [
       {
@@ -314,7 +319,7 @@ export function AppSettingsPanel({ onClose }: AppSettingsPanelProps): React.JSX.
             <div className="settings-pref-row">
               <div className="settings-pref-copy">
                 <span className="settings-pref-label">Agent preset</span>
-                <span className="settings-pref-sub">Failed to fetch</span>
+                <span className="settings-pref-sub">Tuning for new agent sessions (standard / fast / full)</span>
               </div>
               <select
                 className="settings-select"
@@ -392,49 +397,16 @@ export function AppSettingsPanel({ onClose }: AppSettingsPanelProps): React.JSX.
             </div>
           </>
         )
-      },
-      { id: 'user', title: 'user', render: (c) => <UserSection ctx={c} /> },
-      { id: 'updates', title: 'updates', render: (c) => <UpdatesSection ctx={c} /> }
-    ],
-    models: [
-      {
-        id: 'api',
-        title: 'api providers',
-        render: (c) => (
-          <ApiSection
-            providers={c.settings.apiProviders ?? []}
-            providerName={providerName}
-            providerBaseUrl={providerBaseUrl}
-            setProviderName={setProviderName}
-            setProviderBaseUrl={setProviderBaseUrl}
-            addProvider={addProvider}
-            removeProvider={removeProvider}
-          />
-        )
       }
     ],
-    plugins: [
-      {
-        id: 'a2a',
-        title: 'a2a peers',
-        render: (c) => (
-          <A2ASection
-            peers={c.settings.a2aPeers ?? []}
-            peerLabel={peerLabel}
-            peerEndpoint={peerEndpoint}
-            setPeerLabel={setPeerLabel}
-            setPeerEndpoint={setPeerEndpoint}
-            addPeer={addPeer}
-            removePeer={removePeer}
-          />
-        )
-      }
+    user: [
+      { id: 'user', title: 'User & cloud', render: (c) => <UserSection ctx={c} /> }
     ],
-    agentPresets: [
-      { id: 'agents', title: 'agents', render: () => <AgentsSection /> },
+    agents: [
+      { id: 'agents', title: 'Agents', render: () => <AgentsSection /> },
       {
         id: 'accounts',
-        title: 'agent accounts',
+        title: 'Agent accounts',
         render: (c) => (
           <AccountsSection
             settings={c.settings}
@@ -451,6 +423,41 @@ export function AppSettingsPanel({ onClose }: AppSettingsPanelProps): React.JSX.
           />
         )
       }
+    ],
+    connections: [
+      {
+        id: 'a2a',
+        title: 'A2A peers',
+        render: (c) => (
+          <A2ASection
+            peers={c.settings.a2aPeers ?? []}
+            peerLabel={peerLabel}
+            peerEndpoint={peerEndpoint}
+            setPeerLabel={setPeerLabel}
+            setPeerEndpoint={setPeerEndpoint}
+            addPeer={addPeer}
+            removePeer={removePeer}
+          />
+        )
+      },
+      {
+        id: 'api',
+        title: 'API providers',
+        render: (c) => (
+          <ApiSection
+            providers={c.settings.apiProviders ?? []}
+            providerName={providerName}
+            providerBaseUrl={providerBaseUrl}
+            setProviderName={setProviderName}
+            setProviderBaseUrl={setProviderBaseUrl}
+            addProvider={addProvider}
+            removeProvider={removeProvider}
+          />
+        )
+      }
+    ],
+    updates: [
+      { id: 'updates', title: 'Updates', render: (c) => <UpdatesSection ctx={c} /> }
     ]
   }
 
