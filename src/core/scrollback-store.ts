@@ -53,11 +53,14 @@ export class ScrollbackStore {
       { maxBuffer: MAX_BYTES * 2, encoding: 'utf8', timeout: 2000 },
       (err, out) => {
         if (err) return // session gone or tmux busy — keep the last good snapshot
-        const capped = out.length > MAX_BYTES ? out.slice(out.length - MAX_BYTES) : out
         try {
+          // The async capture can land after the store dir was removed (app quit
+          // racing exit, or test teardown) — recreate it rather than crash.
+          mkdirSync(this.dir, { recursive: true })
+          const capped = out.length > MAX_BYTES ? out.slice(out.length - MAX_BYTES) : out
           writeFileSync(this.fileFor(nodeId), capped, 'utf8')
         } catch {
-          // Shutdown/test cleanup can remove userData while capture-pane is in flight.
+          // store dir gone — drop the snapshot, keep whatever was last written
         }
       }
     )
