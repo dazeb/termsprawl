@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { CloudClient, CloudError } from './cloud'
-import type { CloudBackup, CloudUser } from '../shared/types'
+import type { CloudBackup, CloudSyncStatus, CloudUser } from '../shared/types'
 
 const ORIGIN = 'http://127.0.0.1:8787'
 const USER: CloudUser = {
@@ -116,5 +116,25 @@ describe('CloudClient', () => {
     expect(body.device_code).toBe('dc1')
     expect(poll.status).toBe('ok')
     expect(poll.user?.github_login).toBe('dazeb')
+  })
+
+  it('syncStatus() surfaces backup_requested_at (web -> app backup request)', async () => {
+    const fetchFn = vi.fn(async (url: RequestInfo | URL) => {
+      expect(String(url)).toBe(`${ORIGIN}/api/v1/sync/status`)
+      return jsonResponse(
+        {
+          state: 'synced',
+          last_backup_at: '2026-08-24T00:00:00Z',
+          storage_used_bytes: 128,
+          storage_quota_bytes: 5_368_709_120,
+          encryption: true,
+          backup_requested_at: '2026-08-24T01:00:00Z',
+        },
+        200
+      )
+    })
+    const client = new CloudClient({ apiBase: ORIGIN, fetchFn, keepCookie: () => {}, getCookie: () => 'ts_session=x' })
+    const st = (await client.syncStatus()) as CloudSyncStatus
+    expect(st.backup_requested_at).toBe('2026-08-24T01:00:00Z')
   })
 })

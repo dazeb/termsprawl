@@ -2,6 +2,11 @@
 // Wraps the core (Electron-free) CloudClient with the Electron bits: the
 // system browser open (device flow) and the workspace snapshot for backups.
 // The renderer never sees the GitHub token or the session cookie.
+//
+// While signed in, a background poller watches sync/status and auto-fulfils a
+// web-dashboard "Back up now" request (backup_requested_at) by running
+// backupNow() — the honest end-to-end path, since the web never holds the
+// workspace content itself.
 import { shell } from 'electron'
 import { CloudClient, CloudError } from '../core/cloud'
 import type { CloudBackup, CloudDevicePoll, CloudDeviceStart, CloudUser, WorkspaceSnapshot } from '../shared/types'
@@ -29,6 +34,8 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+const POLL_INTERVAL_MS = 30_000
+
 export function createCloudRuntime(opts: CloudRuntimeOptions): CloudRuntime {
   // The session cookie is held here, in the main process. The renderer sandbox
   // never reads it; every cloud request to /api/v1/* is credentialed with it.
@@ -42,9 +49,14 @@ export function createCloudRuntime(opts: CloudRuntimeOptions): CloudRuntime {
     getCookie: () => cookie,
   })
 
+  let backupPoller: ReturnType<typeof setInterval> | null = null
+  let backupPolling = false
+
   async function getUser(): Promise<CloudUser | null> {
     try {
-      return await client.me()
+      const user = await client.me()
+      if (user) startBackupPolling()
+      return user
     } catch (e) {
       if (CloudClient.isUnauthorized(e)) return null
       throw e
@@ -59,10 +71,13 @@ export function createCloudRuntime(opts: CloudRuntimeOptions): CloudRuntime {
   }
 
   async function devicePoll(deviceCode: string): Promise<CloudDevicePoll> {
-    return client.devicePoll(deviceCode)
+    const poll = await client.devicePoll(deviceCode)
+    if (poll.status === 'ok') startBackupPolling()
+    return poll
   }
 
   async function signOut(): Promise<void> {
+    stopBackupPolling()
     await client.signOut()
   }
 
@@ -82,6 +97,36 @@ export function createCloudRuntime(opts: CloudRuntimeOptions): CloudRuntime {
 
   async function listBackups(limit?: number): Promise<CloudBackup[]> {
     return client.listBackups(limit)
+  }
+
+  // Fulfil a "Back up now" requested from the web dashboard. The web raises
+  // backup_requested_at via POST /api/v1/sync/now; the app (which owns the
+  // workspace content) sees it here, runs a real backup, and the server clears
+  // the flag when the new backup lands.
+  async function maybeRunPendingBackup(): Promise<void> {
+    if (backupPolling) return
+    backupPolling = true
+    try {
+      const st = await client.syncStatus()
+      const pending = !!st.backup_requested_at && (!st.last_backup_at || st.backup_requested_at > st.last_backup_at)
+      if (pending) await backupNow()
+    } catch {
+      // Transient network / auth errors — the next poll retries.
+    } finally {
+      backupPolling = false
+    }
+  }
+
+  function startBackupPolling(): void {
+    if (backupPoller) return
+    backupPoller = setInterval(() => void maybeRunPendingBackup(), POLL_INTERVAL_MS)
+  }
+
+  function stopBackupPolling(): void {
+    if (backupPoller) {
+      clearInterval(backupPoller)
+      backupPoller = null
+    }
   }
 
   return { getUser, deviceStart, devicePoll, signOut, backupNow, listBackups }

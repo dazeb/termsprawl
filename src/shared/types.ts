@@ -149,6 +149,8 @@ export interface CloudSyncStatus {
   storage_used_bytes: number
   storage_quota_bytes: number
   encryption: boolean
+  /** Non-null while the web dashboard has asked this account to back up now. */
+  backup_requested_at: string | null
 }
 /** GitHub device-flow start response (the app shows user_code + verification_uri). */
 export interface CloudDeviceStart {
