@@ -40,7 +40,12 @@ describe('app-settings', () => {
       activeAccountId: null,
       dismissedAnnouncementVersion: null,
       a2aPeers: [],
-      apiProviders: []
+      apiProviders: [],
+      theme: 'system' as const,
+      language: 'en',
+      agentPreset: 'standard',
+      defaultPermission: 'workspaceWrite',
+      enterBehavior: 'queue'
     }
     expect(saveAppSettings(dir, { autoDownloadUpdates: true })).toEqual(base)
     expect(loadAppSettings(dir)).toEqual(base)

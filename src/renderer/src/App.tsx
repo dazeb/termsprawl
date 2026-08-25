@@ -9,6 +9,7 @@ import { SourceControlPanel } from './components/SourceControlPanel'
 import { CogMenu } from './components/CogMenu'
 import { HelpBadge } from './components/HelpBadge'
 import { useProjects } from './state/projects'
+import { applyTheme } from './state/theme'
 
 export function App(): React.JSX.Element {
   const [version, setVersion] = useState<string>('…')
@@ -24,6 +25,7 @@ export function App(): React.JSX.Element {
 
   useEffect(() => {
     void window.termsprawl?.appVersion().then(setVersion)
+    void window.termsprawl?.settings.get().then((s) => applyTheme(s.theme ?? 'system'))
     void load()
   }, [load])
 

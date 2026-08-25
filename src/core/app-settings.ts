@@ -14,7 +14,12 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   activeAccountId: null,
   dismissedAnnouncementVersion: null,
   a2aPeers: [],
-  apiProviders: []
+  apiProviders: [],
+  theme: 'system',
+  language: 'en',
+  agentPreset: 'standard',
+  defaultPermission: 'workspaceWrite',
+  enterBehavior: 'queue'
 }
 
 const SETTINGS_FILE = 'settings.json'
@@ -102,7 +107,17 @@ export function normalizeAppSettings(raw: unknown): AppSettings {
         : null,
     ...(typeof obj.displayName === 'string' && obj.displayName.length > 0 ? { displayName: obj.displayName } : {}),
     a2aPeers,
-    apiProviders
+    apiProviders,
+    theme: obj.theme === 'light' || obj.theme === 'dark' || obj.theme === 'system' ? obj.theme : 'system',
+    language: typeof obj.language === 'string' && obj.language.length > 0 ? obj.language : 'en',
+    agentPreset:
+      typeof obj.agentPreset === 'string' && obj.agentPreset.length > 0 ? obj.agentPreset : 'standard',
+    defaultPermission:
+      typeof obj.defaultPermission === 'string' && obj.defaultPermission.length > 0
+        ? obj.defaultPermission
+        : 'workspaceWrite',
+    enterBehavior:
+      typeof obj.enterBehavior === 'string' && obj.enterBehavior.length > 0 ? obj.enterBehavior : 'queue'
   }
 }
 

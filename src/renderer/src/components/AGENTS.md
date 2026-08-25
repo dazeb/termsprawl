@@ -10,10 +10,14 @@ Shared UI components (non-node chrome).
 - `FileTree.tsx` — hover a canvas edge to slide out one project file tree.
   Header icons: move left/right (single panel) and pin open.
 - `UpdateToast.tsx` — packaged-app update notice (download / restart).
-- `AppSettingsPanel.tsx` — app-wide settings (auto-download updates, managed
-  agent accounts) as a centered modal (`modal-backdrop` + `settings-modal`).
-  Closes on Escape / backdrop click; the footer `done` button is the primary
-  confirm.
+- `AppSettingsPanel.tsx` — app-wide settings as a full-width sheet
+  (`settings-sheet`): a head row (title + open-config + close), a left sidebar
+  nav (`General` / `Models` / `Plugins` / `Agent presets`), and a scrollable
+  content column. General carries the preference rows (agent preset, default
+  permission, language, appearance, enter behavior) plus the user/updates
+  sections; the other tabs host managed agent accounts, A2A peers, and API
+  providers. Theme choices are persisted and applied via `state/theme.ts`.
+  Closes on Escape / backdrop click.
 - `CogMenu.tsx` — toolbar cog button + dropdown (source control / settings).
   Closes on Escape or outside click; source control is disabled without a
   folder project.

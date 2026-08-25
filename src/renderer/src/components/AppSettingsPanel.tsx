@@ -3,6 +3,7 @@ import type { AgentAccount, A2APeer, ApiProviderConfig, AppSettings, CloudBackup
 import { AGENT_REGISTRY } from '@shared/agents/config'
 import { HelpBadge } from './HelpBadge'
 import { useCanvasRequests } from '../state/canvas-requests'
+import { applyTheme } from '../state/theme'
 
 interface AppSettingsPanelProps {
   onClose: () => void
@@ -12,8 +13,46 @@ interface AppSettingsPanelProps {
  * agents section). Claude stays registered but is optional/secondary. */
 const PRIMARY_AGENTS = ['codex', 'grok'] as const
 
-/** A settings-panel section. Add a new object to the registry to add a section
- * — this is the extension point for future settings ("space to add more"). */
+// The two panel rows that make up the General tab's pref selects.
+type PresetMode = 'standard' | 'fast' | 'full'
+type PermissionMode = 'workspaceWrite' | 'readOnly' | 'fullAccess'
+type EnterBehavior = 'queue' | 'send' | 'prompt'
+type ThemeChoice = 'light' | 'dark' | 'system'
+
+const PRESET_MODES: { value: PresetMode; label: string }[] = [
+  { value: 'standard', label: 'Standard mode' },
+  { value: 'fast', label: 'Fast mode' },
+  { value: 'full', label: 'Full mode' }
+]
+
+const PERMISSION_MODES: { value: PermissionMode; label: string }[] = [
+  { value: 'workspaceWrite', label: 'Workspace Write' },
+  { value: 'readOnly', label: 'Read Only' },
+  { value: 'fullAccess', label: 'Full Access' }
+]
+
+const ENTER_BEHAVIORS: { value: EnterBehavior; label: string }[] = [
+  { value: 'queue', label: 'Queue' },
+  { value: 'send', label: 'Send' },
+  { value: 'prompt', label: 'Prompt' }
+]
+
+const LANGUAGES: { value: string; label: string }[] = [
+  { value: 'en', label: 'English' },
+  { value: 'de', label: 'Deutsch' },
+  { value: 'es', label: 'Español' },
+  { value: 'fr', label: 'Français' },
+  { value: 'ja', label: '日本語' }
+]
+
+const THEMES: { value: ThemeChoice; label: string }[] = [
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+  { value: 'system', label: 'System' }
+]
+
+/** A settings-panel section. Adding one to a tab's render array adds content
+ * to that sidebar tab — the extension point for future settings. */
 interface SettingsSection {
   id: string
   title: string
@@ -22,7 +61,7 @@ interface SettingsSection {
 
 interface SectionCtx {
   settings: AppSettings
-  update: (patch: Partial<AppSettings>) => Promise<void>
+  update: (patch: Partial<AppSettings>) => Promise<AppSettings>
   permissionSupported: boolean
   addAccount: () => Promise<void>
   deleteAccount: (id: string) => Promise<void>
@@ -42,6 +81,64 @@ interface SectionCtx {
   cloudBackupNow: () => Promise<void>
 }
 
+type TabId = 'general' | 'models' | 'plugins' | 'agentPresets'
+
+interface SettingsTab {
+  id: TabId
+  title: string
+  icon: React.JSX.Element
+}
+
+const TABS: SettingsTab[] = [
+  {
+    id: 'general',
+    title: 'General',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+    )
+  },
+  {
+    id: 'models',
+    title: 'Models',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect x="3" y="6" width="18" height="12" rx="2" />
+        <path d="M7 3v3M12 3v3M17 3v3M7 18v3M12 18v3M17 18v3" />
+      </svg>
+    )
+  },
+  {
+    id: 'plugins',
+    title: 'Plugins',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <line x1="4" y1="21" x2="4" y2="14" />
+        <line x1="4" y1="10" x2="4" y2="3" />
+        <line x1="12" y1="21" x2="12" y2="12" />
+        <line x1="12" y1="8" x2="12" y2="3" />
+        <line x1="20" y1="21" x2="20" y2="16" />
+        <line x1="20" y1="12" x2="20" y2="3" />
+        <line x1="1" y1="14" x2="7" y2="14" />
+        <line x1="9" y1="8" x2="15" y2="8" />
+        <line x1="17" y1="16" x2="23" y2="16" />
+      </svg>
+    )
+  },
+  {
+    id: 'agentPresets',
+    title: 'Agent presets',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect x="4" y="9" width="16" height="9" rx="2" />
+        <path d="M9 5h6M9 5a2 2 0 0 0-2 2M15 5a2 2 0 0 1 2 2M9 21h6M12 9v2M8 15h.01M16 15h.01" />
+      </svg>
+    )
+  }
+]
+
 export function AppSettingsPanel({ onClose }: AppSettingsPanelProps): React.JSX.Element {
   const [settings, setSettings] = useState<AppSettings>({
     autoDownloadUpdates: false,
@@ -49,7 +146,12 @@ export function AppSettingsPanel({ onClose }: AppSettingsPanelProps): React.JSX.
     activeAccountId: null,
     dismissedAnnouncementVersion: null,
     a2aPeers: [],
-    apiProviders: []
+    apiProviders: [],
+    theme: 'system',
+    language: 'en',
+    agentPreset: 'standard',
+    defaultPermission: 'workspaceWrite',
+    enterBehavior: 'queue'
   })
   const [permissionSupported, setPermissionSupported] = useState(false)
   const [newLabel, setNewLabel] = useState('')
@@ -58,6 +160,7 @@ export function AppSettingsPanel({ onClose }: AppSettingsPanelProps): React.JSX.
   const [cloudBusy, setCloudBusy] = useState(false)
   const [device, setDevice] = useState<CloudDeviceStart | null>(null)
   const [lastBackup, setLastBackup] = useState<CloudBackup | null>(null)
+  const [tab, setTab] = useState<TabId>('general')
   // Drafts for the A2A + API add forms.
   const [peerLabel, setPeerLabel] = useState('')
   const [peerEndpoint, setPeerEndpoint] = useState('')
@@ -65,7 +168,10 @@ export function AppSettingsPanel({ onClose }: AppSettingsPanelProps): React.JSX.
   const [providerBaseUrl, setProviderBaseUrl] = useState('')
 
   useEffect(() => {
-    void window.termsprawl.settings.get().then(setSettings)
+    void window.termsprawl.settings.get().then((s) => {
+      setSettings(s)
+      applyTheme(s.theme ?? 'system')
+    })
     void window.termsprawl.settings.permissionSupported().then(setPermissionSupported)
     void window.termsprawl.cloud.status().then(setCloudUser).catch(() => setCloudUser(null))
   }, [])
@@ -78,8 +184,11 @@ export function AppSettingsPanel({ onClose }: AppSettingsPanelProps): React.JSX.
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  const update = async (patch: Partial<AppSettings>): Promise<void> => {
-    setSettings(await window.termsprawl.settings.set(patch))
+  const update = async (patch: Partial<AppSettings>): Promise<AppSettings> => {
+    const next = await window.termsprawl.settings.set(patch)
+    setSettings(next)
+    if (patch.theme) applyTheme(patch.theme)
+    return next
   }
 
   const toggleAutoDownload = async (checked: boolean): Promise<void> => {
@@ -193,111 +302,222 @@ export function AppSettingsPanel({ onClose }: AppSettingsPanelProps): React.JSX.
     cloudBackupNow
   }
 
-  // The section registry — add a new object here to surface a new settings
-  // section. Each section reads/writes only through ctx.
-  const sections: SettingsSection[] = [
-    { id: 'user', title: 'user', render: (c) => <UserSection ctx={c} /> },
-    { id: 'agents', title: 'agents', render: () => <AgentsSection /> },
-    {
-      id: 'accounts',
-      title: 'agent accounts',
-      render: () => (
-        <AccountsSection
-          settings={settings}
-          permissionSupported={permissionSupported}
-          addAccount={addAccount}
-          deleteAccount={deleteAccount}
-          setActive={setActive}
-          setPermissionMode={setPermissionMode}
-          loginInto={loginInto}
-          newLabel={newLabel}
-          setNewLabel={setNewLabel}
-          confirmDelete={confirmDelete}
-          setConfirmDelete={setConfirmDelete}
-        />
-      )
-    },
-    {
-      id: 'a2a',
-      title: 'a2a peers',
-      render: () => (
-        <A2ASection
-          peers={settings.a2aPeers ?? []}
-          peerLabel={peerLabel}
-          peerEndpoint={peerEndpoint}
-          setPeerLabel={setPeerLabel}
-          setPeerEndpoint={setPeerEndpoint}
-          addPeer={addPeer}
-          removePeer={removePeer}
-        />
-      )
-    },
-    {
-      id: 'api',
-      title: 'api providers',
-      render: () => (
-        <ApiSection
-          providers={settings.apiProviders ?? []}
-          providerName={providerName}
-          providerBaseUrl={providerBaseUrl}
-          setProviderName={setProviderName}
-          setProviderBaseUrl={setProviderBaseUrl}
-          addProvider={addProvider}
-          removeProvider={removeProvider}
-        />
-      )
-    },
-    {
-      id: 'updates',
-      title: 'updates',
-      render: () => (
-        <div className="settings-section">
-          <label className="app-settings-toggle">
-            <input
-              type="checkbox"
-              checked={settings.autoDownloadUpdates}
-              onChange={(e) => void toggleAutoDownload(e.target.checked)}
-            />
-            auto download updates when available
-            <HelpBadge
-              label="about auto download"
-              text="Off (default): a toast appears when a newer GitHub release exists; you choose when to download. On: the AppImage/.deb downloads in the background, then the toast asks you to restart."
-            />
-          </label>
-          <p className="app-settings-hint">When off, you get a toast and choose when to download. When on, updates download in the background and you restart to install.</p>
-        </div>
-      )
-    }
-  ]
+  // Sidebar tabs. General holds the preference rows + the user section; the
+  // other tabs host the existing functional sections.
+  const tabSections: Record<TabId, SettingsSection[]> = {
+    general: [
+      {
+        id: 'prefs',
+        title: 'Preferences',
+        render: (c) => (
+          <>
+            <div className="settings-pref-row">
+              <div className="settings-pref-copy">
+                <span className="settings-pref-label">Agent preset</span>
+                <span className="settings-pref-sub">Failed to fetch</span>
+              </div>
+              <select
+                className="settings-select"
+                value={c.settings.agentPreset ?? 'standard'}
+                onChange={(e) => void c.update({ agentPreset: e.target.value })}
+              >
+                {PRESET_MODES.map((m) => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="settings-pref-row">
+              <div className="settings-pref-copy">
+                <span className="settings-pref-label">Permission</span>
+                <span className="settings-pref-sub">Choose the default permission mode for new sessions</span>
+              </div>
+              <select
+                className="settings-select"
+                value={c.settings.defaultPermission ?? 'workspaceWrite'}
+                onChange={(e) => void c.update({ defaultPermission: e.target.value })}
+              >
+                {PERMISSION_MODES.map((m) => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="settings-pref-row">
+              <div className="settings-pref-copy">
+                <span className="settings-pref-label">Language</span>
+              </div>
+              <select
+                className="settings-select"
+                value={c.settings.language ?? 'en'}
+                onChange={(e) => void c.update({ language: e.target.value })}
+              >
+                {LANGUAGES.map((l) => (
+                  <option key={l.value} value={l.value}>{l.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="settings-group">
+              <div className="settings-group-title">Appearance</div>
+              <div className="settings-theme-cards">
+                {THEMES.map((t) => (
+                  <button
+                    key={t.value}
+                    type="button"
+                    className={`settings-theme-card${(c.settings.theme ?? 'system') === t.value ? ' is-active' : ''}`}
+                    onClick={() => void c.update({ theme: t.value })}
+                  >
+                    <span className="settings-theme-icon">{themeIcon(t.value)}</span>
+                    <span className="settings-theme-label">{t.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="settings-pref-row">
+              <div className="settings-pref-copy">
+                <span className="settings-pref-label">Enter behavior while busy</span>
+                <span className="settings-pref-sub">Busy only. Cmd/Ctrl+Enter uses the other behavior</span>
+              </div>
+              <select
+                className="settings-select"
+                value={c.settings.enterBehavior ?? 'queue'}
+                onChange={(e) => void c.update({ enterBehavior: e.target.value })}
+              >
+                {ENTER_BEHAVIORS.map((b) => (
+                  <option key={b.value} value={b.value}>{b.label}</option>
+                ))}
+              </select>
+            </div>
+          </>
+        )
+      },
+      { id: 'user', title: 'user', render: (c) => <UserSection ctx={c} /> },
+      { id: 'updates', title: 'updates', render: (c) => <UpdatesSection ctx={c} /> }
+    ],
+    models: [
+      {
+        id: 'api',
+        title: 'api providers',
+        render: (c) => (
+          <ApiSection
+            providers={c.settings.apiProviders ?? []}
+            providerName={providerName}
+            providerBaseUrl={providerBaseUrl}
+            setProviderName={setProviderName}
+            setProviderBaseUrl={setProviderBaseUrl}
+            addProvider={addProvider}
+            removeProvider={removeProvider}
+          />
+        )
+      }
+    ],
+    plugins: [
+      {
+        id: 'a2a',
+        title: 'a2a peers',
+        render: (c) => (
+          <A2ASection
+            peers={c.settings.a2aPeers ?? []}
+            peerLabel={peerLabel}
+            peerEndpoint={peerEndpoint}
+            setPeerLabel={setPeerLabel}
+            setPeerEndpoint={setPeerEndpoint}
+            addPeer={addPeer}
+            removePeer={removePeer}
+          />
+        )
+      }
+    ],
+    agentPresets: [
+      { id: 'agents', title: 'agents', render: () => <AgentsSection /> },
+      {
+        id: 'accounts',
+        title: 'agent accounts',
+        render: (c) => (
+          <AccountsSection
+            settings={c.settings}
+            permissionSupported={permissionSupported}
+            addAccount={addAccount}
+            deleteAccount={deleteAccount}
+            setActive={setActive}
+            setPermissionMode={setPermissionMode}
+            loginInto={loginInto}
+            newLabel={newLabel}
+            setNewLabel={setNewLabel}
+            confirmDelete={confirmDelete}
+            setConfirmDelete={setConfirmDelete}
+          />
+        )
+      }
+    ]
+  }
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="settings-modal" role="dialog" aria-modal="true" aria-label="app settings">
-        <div className="settings-modal-head">
-          <span className="settings-modal-title">
-            app settings
-            <HelpBadge
-              label="about app settings"
-              text="These apply to the whole app, not one project. Sections are extensible — new ones are added to a registry."
-            />
-          </span>
-          <button className="settings-modal-close" onClick={onClose} title="Close settings">×</button>
+      <div className="settings-sheet" role="dialog" aria-modal="true" aria-label="settings">
+        <div className="settings-sheet-head">
+          <span className="settings-sheet-title">Settings</span>
+          <div className="settings-sheet-head-actions">
+            <button className="settings-sheet-config" title="Open configuration file" onClick={onClose}>
+              open config file
+            </button>
+            <button className="settings-modal-close" onClick={onClose} title="Close settings">×</button>
+          </div>
         </div>
 
-        <div className="settings-modal-body">
-          {sections.map((section) => (
-            <div key={section.id}>
-              <div className="settings-section-title">{section.title}</div>
-              {section.render(ctx)}
-            </div>
-          ))}
-        </div>
+        <div className="settings-sheet-body">
+          <nav className="settings-nav" aria-label="settings sections">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                className={`settings-nav-item${tab === t.id ? ' is-active' : ''}`}
+                onClick={() => setTab(t.id)}
+              >
+                <span className="settings-nav-icon">{t.icon}</span>
+                <span>{t.title}</span>
+              </button>
+            ))}
+          </nav>
 
-        <div className="settings-modal-foot">
-          <button className="settings-modal-done" onClick={onClose}>done</button>
+          <div className="settings-content">
+            {tabSections[tab].map((section) => (
+              <div key={section.id} className="settings-section">
+                <div className="settings-section-title">{section.title}</div>
+                {section.render(ctx)}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
+  )
+}
+
+function themeIcon(theme: ThemeChoice): React.JSX.Element {
+  if (theme === 'light') {
+    return (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+      </svg>
+    )
+  }
+  if (theme === 'dark') {
+    return (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+      </svg>
+    )
+  }
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="2" y="4" width="20" height="14" rx="2" />
+      <line x1="8" y1="21" x2="16" y2="21" />
+      <line x1="12" y1="18" x2="12" y2="21" />
+    </svg>
   )
 }
 
@@ -344,6 +564,27 @@ function UserSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
         />
       </label>
       <p className="app-settings-hint">Termsprawl Cloud account (sign in to back up projects) and a basic display name. More user controls are added here later.</p>
+    </div>
+  )
+}
+
+function UpdatesSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
+  const { settings, update } = ctx
+  return (
+    <div className="settings-section">
+      <label className="app-settings-toggle">
+        <input
+          type="checkbox"
+          checked={settings.autoDownloadUpdates}
+          onChange={(e) => void update({ autoDownloadUpdates: e.target.checked })}
+        />
+        auto download updates when available
+        <HelpBadge
+          label="about auto download"
+          text="Off (default): a toast appears when a newer GitHub release exists; you choose when to download. On: the AppImage/.deb downloads in the background, then the toast asks you to restart."
+        />
+      </label>
+      <p className="app-settings-hint">When off, you get a toast and choose when to download. When on, updates download in the background and you restart to install.</p>
     </div>
   )
 }

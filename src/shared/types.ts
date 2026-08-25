@@ -186,6 +186,16 @@ export interface AppSettings {
   /** OSS/provider API endpoints (settings: API details). Non-secret config only —
    * keys are NOT stored here (would land plaintext in the settings JSON). */
   apiProviders?: ApiProviderConfig[]
+  /** UI theme. 'system' follows the OS preference. Defaults to 'system'. */
+  theme?: 'light' | 'dark' | 'system'
+  /** UI language code (BCP-47). Cosmetic for now — English is the only shipped locale. */
+  language?: string
+  /** Default agent preset mode for new agents (e.g. 'standard'). */
+  agentPreset?: string
+  /** Default permission mode for new sessions. */
+  defaultPermission?: string
+  /** Enter behavior while an agent is busy: 'queue' | 'send' | 'prompt'. */
+  enterBehavior?: string
 }
 
 /** An A2A (agent-to-agent) peer the user may route tasks to. */

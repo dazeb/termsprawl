@@ -10,6 +10,11 @@ Development/verification tooling. Not shipped in the app.
 - `make-icon.mjs` — regenerates `build/icon.png` (`pnpm run make-icon`).
 - `test-live-hooks.sh` — live hook-server gate: boots the app, POSTs lifecycle
   events, verifies fail-open behavior. Manual integration check.
+- `run-dev-nosandbox.sh` — container/CI dev launcher. Termsprawl can't boot
+  when the root fs is read-only (`$HOME/.config` EROFS) or chrome-sandbox isn't
+  setuid (no-new-privileges), so this redirects `HOME`/`XDG_*` to a writable
+  project-local `.runtime` and sets `ELECTRON_DISABLE_SANDBOX=1`. Dev only —
+  never ship it as the production launcher (production keeps the SUID sandbox).
 
 ## Rules
 
