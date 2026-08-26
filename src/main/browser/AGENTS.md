@@ -17,6 +17,17 @@ uses to drive it.
   blocks non-web `will-navigate`/`will-redirect`, denies all popups, and keeps a
   node-id → guest-id map so `navigateBrowserNode()` can drive a node by its
   stable canvas id while enforcing the URL policy in one place.
+- `agent-server.ts` — loopback, token-gated agent-control server: `GET /info`,
+  `POST /open` (URL validated by core/browser-policy), discovery file
+  `userData/browser-agent.json`. State-changing only; never open.
+- `cdp-facade.ts` — "virtual browser" on its own loopback port that re-exposes
+  every live guest as a standard `page` target so Playwright's `connectOverCDP`
+  (and Puppeteer) can drive the exact page the user watches. See the big header
+  comment: it implements Playwright's auto-attach model and — critically —
+  reports each guest's REAL target id (== its main frame id, learned from the
+  guest's own `Page.getFrameTree` at attach), because Playwright resolves frame
+  sessions by that id and silently degrades the page to a dummy frame on
+  mismatch.
 
 ## Rules
 

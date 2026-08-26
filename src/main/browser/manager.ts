@@ -32,6 +32,11 @@ export function unregisterBrowserGuest(nodeId: string): void {
   guests.delete(nodeId)
 }
 
+/** Live guest webContents ids for every browser node (used by the CDP facade). */
+export function browserGuestIds(): GuestId[] {
+  return Array.from(guests.values())
+}
+
 /** Force the safe prefs on a guest at the moment the parent attaches it. By
  * the time web-contents-created fires the webPreferences are already baked, so
  * this is the only reliable place to strip a preload and force isolation. */

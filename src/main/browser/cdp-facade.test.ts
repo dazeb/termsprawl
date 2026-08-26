@@ -1,0 +1,337 @@
+// cdp-facade.test.ts — CDP facade protocol tests (electron + manager mocked).
+//
+// The facade is main-process code; electron is mocked so the HTTP/WS protocol
+// can be exercised end-to-end in-process: /json/version discovery, target
+// enumeration, attach + page-command proxying, and the Playwright/Puppeteer
+// connect paths (auto-attach events, no-arg getTargetInfo, unsupported
+// commands failing cleanly).
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import WebSocket from 'ws'
+import { startCdpFacade, type CdpFacadeHandle } from './cdp-facade'
+
+interface FakeGuest {
+  id: number
+  title: string
+  url: string
+  isDestroyed(): boolean
+  getTitle(): string
+  getURL(): string
+  debugger: {
+    attached: boolean
+    attach: ReturnType<typeof vi.fn>
+    detach: ReturnType<typeof vi.fn>
+    on: ReturnType<typeof vi.fn>
+    sendCommand: ReturnType<typeof vi.fn>
+  }
+}
+
+const mockGuests = new Map<number, FakeGuest>()
+const mockRegisteredIds: number[] = []
+
+vi.mock('electron', () => ({
+  app: { getVersion: () => '0.6.0' },
+  webContents: {
+    fromId: (id: number) => mockGuests.get(id) ?? null
+  }
+}))
+
+vi.mock('./manager', () => ({
+  browserGuestIds: () => [...mockRegisteredIds]
+}))
+
+function fakeGuest(id: number, title = 'Example Domain', url = 'https://example.com/'): FakeGuest {
+  const guest: FakeGuest = {
+    id,
+    title,
+    url,
+    isDestroyed: () => false,
+    getTitle: () => guest.title,
+    getURL: () => guest.url,
+    debugger: {
+      attached: false,
+      attach: vi.fn(() => {
+        guest.debugger.attached = true
+      }),
+      detach: vi.fn(() => {
+        guest.debugger.attached = false
+      }),
+      on: vi.fn(),
+      sendCommand: vi.fn(async (method: string) => {
+        if (method === 'Page.getFrameTree') {
+          return { frameTree: { frame: { id: `FRAME${id}` } } }
+        }
+        return {}
+      })
+    }
+  }
+  mockGuests.set(id, guest)
+  return guest
+}
+
+/** Minimal CDP client over the facade's browser WS. */
+class CdpClient {
+  private ws: WebSocket
+  private nextId = 0
+  private pending = new Map<number, (m: unknown) => void>()
+  events: { method: string; params: unknown }[] = []
+
+  constructor(url: string) {
+    this.ws = new WebSocket(url)
+  }
+
+  async open(): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+      this.ws.on('open', () => resolve())
+      this.ws.on('error', reject)
+    })
+    this.ws.on('message', (data) => {
+      const msg = JSON.parse(String(data))
+      if (msg.id !== undefined && this.pending.has(msg.id)) {
+        this.pending.get(msg.id)?.(msg)
+        this.pending.delete(msg.id)
+      } else if (msg.method !== undefined) {
+        this.events.push({ method: msg.method, params: msg.params })
+      }
+    })
+  }
+
+  send(method: string, params: Record<string, unknown> = {}, sessionId?: string): Promise<unknown> {
+    const id = ++this.nextId
+    return new Promise((resolve) => {
+      this.pending.set(id, resolve)
+      this.ws.send(
+        JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) })
+      )
+    })
+  }
+
+  close(): void {
+    this.ws.close()
+  }
+}
+
+describe('cdp-facade HTTP surface', () => {
+  let handle: CdpFacadeHandle
+
+  beforeEach(async () => {
+    mockGuests.clear()
+    mockRegisteredIds.length = 0
+    handle = await startCdpFacade({
+      cdpInfo: { wsUrl: 'ws://127.0.0.1:9999/raw', host: '127.0.0.1', port: 9999 }
+    })
+  })
+
+  afterEach(async () => {
+    await handle.close()
+  })
+
+  it('serves /json/version with and without a trailing slash (Playwright uses /json/version/)', async () => {
+    for (const path of ['/json/version', '/json/version/']) {
+      const res = await fetch(`http://127.0.0.1:${handle.port}${path}`)
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as {
+        Browser: string
+        webSocketDebuggerUrl: string
+        cdp: { port: number }
+      }
+      expect(body.Browser).toContain('Electron')
+      expect(body.webSocketDebuggerUrl).toContain(`127.0.0.1:${handle.port}`)
+      expect(body.cdp.port).toBe(9999)
+    }
+  })
+
+  it('404s unknown paths', async () => {
+    const res = await fetch(`http://127.0.0.1:${handle.port}/json/list`)
+    expect(res.status).toBe(404)
+  })
+})
+
+describe('cdp-facade CDP protocol', () => {
+  let handle: CdpFacadeHandle
+  let client: CdpClient
+
+  beforeEach(async () => {
+    mockGuests.clear()
+    mockRegisteredIds.length = 0
+    handle = await startCdpFacade({
+      cdpInfo: { wsUrl: 'ws://127.0.0.1:9999/raw', host: '127.0.0.1', port: 9999 }
+    })
+    const version = (await (
+      await fetch(`http://127.0.0.1:${handle.port}/json/version`)
+    ).json()) as { webSocketDebuggerUrl: string }
+    client = new CdpClient(version.webSocketDebuggerUrl)
+    await client.open()
+  })
+
+  afterEach(async () => {
+    client.close()
+    await handle.close()
+  })
+
+  it('enumerates no targets when no browser nodes exist', async () => {
+    const res = (await client.send('Target.getTargets')) as {
+      result?: { targetInfos?: unknown[] }
+    }
+    expect(res.result?.targetInfos).toEqual([])
+  })
+
+  it('surfaces each live guest as a `page` target with its real target id', async () => {
+    mockRegisteredIds.push(7)
+    fakeGuest(7, 'Example Domain', 'https://example.com/')
+    // Playwright's connect order: auto-attach first (learns the real target
+    // id), then enumerate.
+    await client.send('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: true, flatten: true })
+    await new Promise((r) => setTimeout(r, 20))
+
+    const res = (await client.send('Target.getTargets')) as {
+      result?: { targetInfos?: { targetId: string; type: string; browserContextId: string | null }[] }
+    }
+    expect(res.result?.targetInfos).toHaveLength(1)
+    const info = res.result!.targetInfos![0]
+    expect(info.type).toBe('page')
+    // The target id must be the guest's REAL frame id (what Page.getFrameTree
+    // reports), not the numeric webContents id — Playwright resolves frame
+    // sessions by it and degrades to a dummy frame on mismatch.
+    expect(info.targetId).toBe('FRAME7')
+    expect(info.browserContextId).toBeTruthy()
+  })
+
+  it('answers a no-arg Target.getTargetInfo with the first live guest (Playwright connect path)', async () => {
+    mockRegisteredIds.push(7)
+    fakeGuest(7)
+    await client.send('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: true, flatten: true })
+    await new Promise((r) => setTimeout(r, 20))
+
+    const res = (await client.send('Target.getTargetInfo')) as {
+      result?: { targetInfo?: { targetId: string; type: string } }
+    }
+    expect(res.result?.targetInfo?.targetId).toBe('FRAME7')
+    expect(res.result?.targetInfo?.type).toBe('page')
+  })
+
+  it('answers Target.getTargetInfo for a known targetId and rejects unknown ones', async () => {
+    mockRegisteredIds.push(7)
+    fakeGuest(7)
+    await client.send('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: true, flatten: true })
+    await new Promise((r) => setTimeout(r, 20))
+
+    const known = (await client.send('Target.getTargetInfo', { targetId: 'FRAME7' })) as {
+      result?: { targetInfo?: { targetId: string } }
+    }
+    expect(known.result?.targetInfo?.targetId).toBe('FRAME7')
+
+    const unknown = (await client.send('Target.getTargetInfo', { targetId: 'NOPE' })) as {
+      error?: { code: number }
+    }
+    expect(unknown.error?.code).toBe(-32000)
+  })
+
+  it('attaches a session and proxies page commands to the guest debugger', async () => {
+    mockRegisteredIds.push(7)
+    const guest = fakeGuest(7)
+
+    // Puppeteer's connect order: enumerate (numeric fallback id), attach by it.
+    const att = (await client.send('Target.attachToTarget', { targetId: '7', flatten: true })) as {
+      result?: { sessionId: string }
+    }
+    const sid = att.result?.sessionId
+    expect(sid).toBeTruthy()
+
+    // The same guest attached again (now by its real id) returns the same session.
+    const att2 = (await client.send('Target.attachToTarget', { targetId: 'FRAME7', flatten: true })) as {
+      result?: { sessionId: string }
+    }
+    expect(att2.result?.sessionId).toBe(sid)
+
+    const evalRes = (await client.send(
+      'Runtime.evaluate',
+      { expression: 'document.title' },
+      sid
+    )) as { sessionId?: string; result?: unknown }
+    expect(guest.debugger.sendCommand).toHaveBeenCalledWith('Runtime.evaluate', { expression: 'document.title' })
+    expect(evalRes.sessionId).toBe(sid)
+    expect(evalRes.result).toEqual({})
+  })
+
+  it('answers Playwright page-init commands locally instead of proxying them', async () => {
+    mockRegisteredIds.push(7)
+    const guest = fakeGuest(7)
+
+    const att = (await client.send('Target.attachToTarget', { targetId: '7', flatten: true })) as {
+      result?: { sessionId: string }
+    }
+    const sid = att.result!.sessionId!
+
+    const rr = (await client.send('Runtime.runIfWaitingForDebugger', {}, sid)) as { result?: unknown }
+    expect(rr.result).toEqual({})
+    expect(guest.debugger.sendCommand).not.toHaveBeenCalledWith('Runtime.runIfWaitingForDebugger', expect.anything())
+
+    const aa = (await client.send(
+      'Target.setAutoAttach',
+      { autoAttach: true, waitForDebuggerOnStart: true, flatten: true },
+      sid
+    )) as { result?: unknown }
+    expect(aa.result).toEqual({})
+  })
+
+  it('rejects attach to an unknown target', async () => {
+    const res = (await client.send('Target.attachToTarget', { targetId: 'NOPE' })) as {
+      error?: { code: number }
+    }
+    expect(res.error?.code).toBe(-32000)
+  })
+
+  it('rejects Target.createTarget with a pointer to opening a browser node', async () => {
+    const res = (await client.send('Target.createTarget', { url: 'https://example.com' })) as {
+      error?: { code: number; message: string }
+    }
+    expect(res.error?.code).toBe(-32601)
+    expect(res.error?.message).toContain('open a browser node')
+  })
+
+  it('emits Target.attachedToTarget for live guests when auto-attach is enabled (Playwright connect model)', async () => {
+    mockRegisteredIds.push(7)
+    fakeGuest(7)
+
+    const res = (await client.send('Target.setAutoAttach', {
+      autoAttach: true,
+      waitForDebuggerOnStart: true,
+      flatten: true
+    })) as { result?: unknown }
+    expect(res.result).toEqual({})
+
+    await new Promise((r) => setTimeout(r, 50))
+    const attachEvents = client.events.filter((e) => e.method === 'Target.attachedToTarget')
+    expect(attachEvents).toHaveLength(1)
+    const params = attachEvents[0].params as {
+      sessionId: string
+      targetInfo: { targetId: string; type: string }
+    }
+    expect(params.sessionId).toBeTruthy()
+    expect(params.targetInfo.targetId).toBe('FRAME7')
+    expect(params.targetInfo.type).toBe('page')
+
+    // The advertised session must actually proxy a command.
+    const evalRes = (await client.send(
+      'Runtime.evaluate',
+      { expression: '1 + 1' },
+      params.sessionId
+    )) as { sessionId?: string }
+    expect(evalRes.sessionId).toBe(params.sessionId)
+  })
+
+  it('tolerates browser-level commands Playwright sends at connect', async () => {
+    const results = await Promise.all([
+      client.send('Browser.getVersion'),
+      client.send('Browser.setDownloadBehavior', { behavior: 'deny' }),
+      client.send('Target.setDiscoverTargets', { discover: true }),
+      client.send('Target.setAutoAttachIgnoreOrigin', { ignore: true }),
+      client.send('Target.closeTarget', { targetId: 'x' }),
+      client.send('Browser.getWindowForTarget', { targetId: 'x' }),
+      client.send('Target.getBrowserContexts')
+    ])
+    for (const r of results) {
+      expect((r as { error?: unknown }).error).toBeUndefined()
+    }
+  })
+})

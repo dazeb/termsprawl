@@ -572,6 +572,53 @@ and Puppeteer). The mitigation for a Playwright-only agent:
   control — prefer the CDP path for real automation.
 Recommended: (A) so the common Playwright/Browser-Use path works unchanged.
 
+### Task 13.2.1: Playwright-compat CDP facade (DONE, verified 2026-08-26)
+
+Mitigation (A) implemented + verified end-to-end with real clients against a
+headless boot.
+
+- `src/main/browser/cdp-facade.ts` (+ test, `cdp-facade.test.ts`) — a minimal
+  "virtual browser" on its own loopback port (random high port, 127.0.0.1 only):
+  presents every live browser-node guest as a standard `page` target and proxies
+  page-level CDP through the guest's `webContents.debugger`. Started in
+  `whenReady`; `browser:cdp-info` and the agent-server discovery file now point
+  at the facade, and `before-quit` closes it.
+- **Playwright connect model implemented**: connectOverCDP drives pages through
+  `Target.setAutoAttach` + `Target.attachedToTarget` events (it never calls
+  `attachToTarget`), so the facade auto-attaches every live guest, emits the
+  event with a sessionId, and polls (500ms) so guests opened later appear live.
+  Puppeteer's `getTargets` + `attachToTarget` path works unchanged.
+- **The frame-id trap (hard-won)**: Chromium reports a webview guest's CDP
+  target id AS its main frame id, and Playwright resolves frame sessions by
+  walking `frame._id` through its targetId-keyed session map. Reporting the
+  numeric webContents id while getFrameTree reports the hex frame id made
+  Playwright's `_sessionForFrame` throw "Frame has been detached", silently
+  degrading the page to a dummy frame (empty URL, no utility world, title()
+  hangs forever). Fix: the facade learns each guest's real target id from its
+  own debugger's `Page.getFrameTree` at attach and uses it in every
+  `targetInfo`. Pre-attach enumeration falls back to the numeric id; both
+  resolve.
+- **No hung agents**: every proxied page command races a 15s timeout
+  (`webContents.debugger.sendCommand` has none and can wedge against a frame
+  mid-navigation); Playwright page-init commands the guest debugger can't
+  answer (`Runtime.runIfWaitingForDebugger`, page-level `Target.setAutoAttach`)
+  are answered locally; connect-time browser commands (`setDownloadBehavior`,
+  `grantPermissions`, `getBrowserContexts`, …) are tolerated; a no-arg
+  `Target.getTargetInfo` answers with the first live guest; `createTarget` is
+  rejected with a pointer to the agent-control `/open` endpoint.
+- `TERMSPRAWL_FACADE_DEBUG=1` logs every CDP message/event (verification aid,
+  off by default).
+
+Verified (headless boot, real clients against the facade):
+- Playwright `chromium.connectOverCDP(facadeUrl)`: sees the guest as the only
+  page; `page.title()` → "Example Domain"; `page.evaluate` sets the title
+  (read back); `page.goto('https://example.com/?from=playwright')` navigates
+  the visible guest (URL + h1 verified); exactly one page enumerated (no
+  Electron internals leaked).
+- Puppeteer `connect({browserWSEndpoint})`: page target visible, title read,
+  evaluate sticks.
+- Gates: typecheck clean; 357 tests (12 new facade tests); originality OK.
+
 ### Task 13.3: Agent-driven auto-open (DONE, verified 2026-08-26)
 
 When an agent wants to use the browser, it can open a node without the user
@@ -582,7 +629,8 @@ manually adding one, and drive exactly what appears on the canvas.
   endpoint; `POST /open` `{url?}` validates via core/browser-policy and
   broadcasts `browser:agent-open` to the renderer. Writes a discovery file
   `userData/browser-agent.json` (port, token, cdp, open URL) the agent reads to
-  find the endpoint. Started in `whenReady`.
+  find the endpoint. Started in `whenReady`. The discovery file's `cdp.wsUrl`
+  is the CDP facade (13.2.1) — the endpoint agents actually connect to.
 - Preload `browser.onAgentOpen`, `canvas-requests` gained a `{kind:'browser'}` 
   spawn, and Canvas subscribes + spawns a browser node on the event.
 

@@ -37,6 +37,7 @@ import {
   navigateBrowserNode
 } from './browser/manager'
 import { startAgentServer, type AgentServerHandle } from './browser/agent-server'
+import { startCdpFacade, type CdpFacadeHandle } from './browser/cdp-facade'
 import type { BrowserCdpInfo, BrowserNavigateResult } from '../shared/types'
 
 // ── Wayland → X11 ozone fix ─────────────────────────────────────────────────
@@ -177,8 +178,11 @@ const hookServer = new HookServer((event) => {
 
 // Loopback agent-control server (13.3): lets an external agent open a browser
 // node so the user watches the agent's page. Started in whenReady; see
-// browser/agent-server.ts.
+// browser/agent-server.ts. The CDP facade (see browser/cdp-facade.ts) is the
+// endpoint agents actually connect to — it re-exposes guests as `page` targets
+// so Playwright (not just Puppeteer) sees them.
 let agentServer: AgentServerHandle | null = null
+let cdpFacade: CdpFacadeHandle | null = null
 
 function registerWorkspaceIpc(): void {
   ipcMain.handle(IPC.workspaceSnapshot, () => workspaceStore.snapshot())
@@ -440,9 +444,9 @@ function registerCloudIpc(): void {
 
 function registerBrowserIpc(): void {
   ipcMain.handle(IPC.browserCdpInfo, (): BrowserCdpInfo => ({
-    port: browserRuntime.port,
-    token: browserRuntime.token,
-    wsUrl: browserRuntime.wsUrl,
+    port: cdpFacade?.port ?? browserRuntime.port,
+    token: agentServer?.token ?? browserRuntime.token,
+    wsUrl: cdpFacade?.url ?? browserRuntime.wsUrl,
     host: '127.0.0.1'
   }))
   ipcMain.handle(IPC.browserRegister, (_event, nodeId: string, guestId: number): void => {
@@ -614,15 +618,20 @@ void app.whenReady().then(async () => {
     console.error('[hooks] install failed:', err)
   }
 
-  // 13.3 — start the reachable agent-control endpoint (localhost-only + token).
+  // 13.3 — start the playable CDP facade + the reachable agent-control endpoint
+  // (both localhost-only + token). The facade is the endpoint agents connect to:
+  // it re-exposes the embedded guests as `page` targets so Playwright sees them.
   try {
+    cdpFacade = await startCdpFacade({
+      cdpInfo: { wsUrl: browserRuntime.wsUrl, host: '127.0.0.1', port: browserRuntime.port }
+    })
     agentServer = await startAgentServer({
       userDataPath: platform.userDataPath,
       broadcast: (channel, payload) => platform.broadcast(channel, payload),
-      cdp: { wsUrl: browserRuntime.wsUrl, host: '127.0.0.1', port: browserRuntime.port }
+      cdp: { wsUrl: cdpFacade.url, host: '127.0.0.1', port: cdpFacade.port }
     })
   } catch (err) {
-    console.error('[browser] agent-control server failed to start:', err)
+    console.error('[browser] agent-control facade failed to start:', err)
   }
 
   createWindow()
@@ -643,4 +652,5 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   ptyManager.killAll()
   void agentServer?.close()
+  void cdpFacade?.close()
 })
