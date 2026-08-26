@@ -126,6 +126,7 @@ declare global {
         register(nodeId: string, guestId: number): Promise<void>
         unregister(nodeId: string): Promise<void>
         navigate(nodeId: string, url: string): Promise<BrowserNavigateResult>
+        onAgentOpen(cb: (info: { url: string }) => void): () => void
       }
     }
   }

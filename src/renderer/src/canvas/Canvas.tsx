@@ -459,9 +459,22 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
       const node = createAgentLoginNode(spawnRequest.command, cwd)
       appendOnTop(node)
       push()
+    } else if (spawnRequest.kind === 'browser') {
+      const node = createBrowserNode(spawnRequest.url)
+      appendOnTop(node)
+      push()
     }
     useCanvasRequests.getState().consume()
   }, [spawnRequest, cwd, appendOnTop, push])
+
+  // An external agent (via the loopback agent-control server) can ask the app to
+  // open a browser node; route it through the same one-shot spawn store so the
+  // user sees the agent's page appear on the canvas automatically.
+  useEffect(() => {
+    return window.termsprawl.browser.onAgentOpen((info) => {
+      useCanvasRequests.getState().spawn({ kind: 'browser', url: info.url })
+    })
+  }, [])
 
   // Context links (7.5): link files on disk are the source of truth; `linkedIds`
   // is a cache we keep in sync here. Undo is intentionally NOT pushed for links

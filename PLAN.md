@@ -572,11 +572,25 @@ and Puppeteer). The mitigation for a Playwright-only agent:
   control — prefer the CDP path for real automation.
 Recommended: (A) so the common Playwright/Browser-Use path works unchanged.
 
-### Task 13.3: Agent-driven auto-open
-When an agent wants to use the browser (Hermes `browser_exec` / computer-use),
-auto-open a browser node (if none) and hand it a stable node id, so the user sees
-the agent's page without manually adding a node. Needs an app→agent handshake
-(the agent reads the CDP endpoint + node id, e.g. from an env var / settings).
+### Task 13.3: Agent-driven auto-open (DONE, verified 2026-08-26)
+
+When an agent wants to use the browser, it can open a node without the user
+manually adding one, and drive exactly what appears on the canvas.
+
+- `src/main/browser/agent-server.ts` (+ test) — a loopback (127.0.0.1), token-
+  gated control server (random per-session token). `GET /info` returns the CDP
+  endpoint; `POST /open` `{url?}` validates via core/browser-policy and
+  broadcasts `browser:agent-open` to the renderer. Writes a discovery file
+  `userData/browser-agent.json` (port, token, cdp, open URL) the agent reads to
+  find the endpoint. Started in `whenReady`.
+- Preload `browser.onAgentOpen`, `canvas-requests` gained a `{kind:'browser'}` 
+  spawn, and Canvas subscribes + spawns a browser node on the event.
+
+Verified (headless, end-to-end): external agent read `browser-agent.json`, `POST
+/open {url:'https://example.com'}` → 200; a browser node auto-appeared and the
+guest loaded the page (`webview` target, title "Example Domain") on the CDP
+endpoint, ready for a client to attach. `file:///etc/passwd` → 400, missing auth
+→ 401 over the real server. Gates: typecheck clean; 345 tests (7 agent-server).
 
 ### Task 13.4: Follow-ups
 - Settings gate to enable/disable the CDP endpoint (off by default = default

@@ -217,7 +217,16 @@ const api = {
       ipcRenderer.invoke(IPC.browserUnregister, nodeId),
     /** Navigate a browser node; main enforces the URL policy. */
     navigate: (nodeId: string, url: string): Promise<BrowserNavigateResult> =>
-      ipcRenderer.invoke(IPC.browserNavigate, nodeId, url)
+      ipcRenderer.invoke(IPC.browserNavigate, nodeId, url),
+    /** Subscribe to an external agent's "open a browser node" request. */
+    onAgentOpen: (cb: (info: { url: string }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, info: { url: string }): void =>
+        cb(info)
+      ipcRenderer.on(IPC.browserAgentOpen, listener)
+      return () => {
+        ipcRenderer.removeListener(IPC.browserAgentOpen, listener)
+      }
+    }
   }
 }
 

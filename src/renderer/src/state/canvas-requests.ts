@@ -7,7 +7,9 @@
 
 import { create } from 'zustand'
 
-export type CanvasSpawnRequest = { kind: 'agentLogin'; command: string }
+export type CanvasSpawnRequest =
+  | { kind: 'agentLogin'; command: string }
+  | { kind: 'browser'; url: string }
 
 interface CanvasRequestsState {
   request: CanvasSpawnRequest | null

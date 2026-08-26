@@ -87,7 +87,10 @@ export const IPC = {
   browserCdpInfo: 'browser:cdp-info',
   browserRegister: 'browser:register',
   browserUnregister: 'browser:unregister',
-  browserNavigate: 'browser:navigate'
+  browserNavigate: 'browser:navigate',
+  // Push channel main → renderer when an external agent asks to open a browser
+  // node (from the reachable loopback agent-control server).
+  browserAgentOpen: 'browser:agent-open'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

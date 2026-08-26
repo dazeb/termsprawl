@@ -36,6 +36,7 @@ import {
   unregisterBrowserGuest,
   navigateBrowserNode
 } from './browser/manager'
+import { startAgentServer, type AgentServerHandle } from './browser/agent-server'
 import type { BrowserCdpInfo, BrowserNavigateResult } from '../shared/types'
 
 // ── Wayland → X11 ozone fix ─────────────────────────────────────────────────
@@ -173,6 +174,11 @@ const hookServer = new HookServer((event) => {
     notification.show()
   }
 })
+
+// Loopback agent-control server (13.3): lets an external agent open a browser
+// node so the user watches the agent's page. Started in whenReady; see
+// browser/agent-server.ts.
+let agentServer: AgentServerHandle | null = null
 
 function registerWorkspaceIpc(): void {
   ipcMain.handle(IPC.workspaceSnapshot, () => workspaceStore.snapshot())
@@ -608,6 +614,17 @@ void app.whenReady().then(async () => {
     console.error('[hooks] install failed:', err)
   }
 
+  // 13.3 — start the reachable agent-control endpoint (localhost-only + token).
+  try {
+    agentServer = await startAgentServer({
+      userDataPath: platform.userDataPath,
+      broadcast: (channel, payload) => platform.broadcast(channel, payload),
+      cdp: { wsUrl: browserRuntime.wsUrl, host: '127.0.0.1', port: browserRuntime.port }
+    })
+  } catch (err) {
+    console.error('[browser] agent-control server failed to start:', err)
+  }
+
   createWindow()
 
   setTimeout(() => {
@@ -625,4 +642,5 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   ptyManager.killAll()
+  void agentServer?.close()
 })
