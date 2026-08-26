@@ -23,6 +23,10 @@ sprawls, nothing hides in tabs.
   notifications when an agent finishes.
 - **Sticky, group, editor, and diff nodes** — notes, frames, and Monaco-based
   editors/diffs as first-class canvas citizens.
+- **Embedded browser nodes** — a real sandboxed Chromium browser on the canvas,
+  one guest per tab, hardened (no Node/preload, navigation policy), with an
+  opt-in, localhost-only CDP surface so an external agent (Playwright/Puppeteer)
+  can drive the exact page you're watching.
 - **Source control** — stage, commit, branch, push/pull, and manage worktrees
   from a panel bound to the active project.
 - **Undo/redo, command palette, dark lime-on-black UI.**
@@ -33,7 +37,8 @@ Actively developed. Phases 0–7 of [PLAN.md](PLAN.md) are shipped (scaffold,
 terminal nodes, canvas, tmux continuity, projects/persistence, sticky/group/
 editor/diff nodes, agents with context links and managed accounts); Phase 8
 (source control panel with git status, staging, commits, branches, sync, and
-worktrees) is shipped through 8.3. Current version: **0.6.0**.
+worktrees) is shipped through 8.3. Phase 13 (embedded browser nodes with
+opt-in agent control) is shipped. Current version: **0.7.0**.
 
 Linux only — AppImage and `.deb` artifacts. No macOS support, by design.
 
