@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { NodeProps } from 'reactflow'
 import type { BrowserNodeData, BrowserTab } from '../state/workspace'
 import {
@@ -58,6 +58,36 @@ export function BrowserNode({ id, data }: NodeProps<BrowserNodeData>): React.JSX
   const [canForward, setCanForward] = useState(false)
   const [crashed, setCrashed] = useState(false)
   const [guestId, setGuestId] = useState<number | null>(null)
+  // Body drag layer: the webview swallows mouse events, so to move the node by
+  // its page area we overlay a transparent layer that is ARMED (grabs pointer)
+  // by default — press = drag the node. Hovering WITHOUT pressing for a short
+  // dwell disarms it so the page becomes interactive (the terminal's
+  // "drag = move, dwell = focus" pattern). Leaving the node re-arms it.
+  const [bodyDragArmed, setBodyDragArmed] = useState(true)
+  const dwellTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const BODY_DWELL_MS = 350
+
+  const armBodyDrag = useCallback(() => {
+    if (dwellTimer.current) {
+      clearTimeout(dwellTimer.current)
+      dwellTimer.current = null
+    }
+    setBodyDragArmed(true)
+  }, [])
+
+  const startDwellDisarm = useCallback(() => {
+    if (dwellTimer.current) clearTimeout(dwellTimer.current)
+    dwellTimer.current = setTimeout(() => setBodyDragArmed(false), BODY_DWELL_MS)
+  }, [])
+
+  const cancelDwell = useCallback(() => {
+    if (dwellTimer.current) {
+      clearTimeout(dwellTimer.current)
+      dwellTimer.current = null
+    }
+  }, [])
+
+  useEffect(() => () => cancelDwell(), [cancelDwell])
 
   // Refs mirroring the live state so event closures always read current values.
   const activeTabIdRef = useRef(activeTabId)
@@ -255,11 +285,11 @@ export function BrowserNode({ id, data }: NodeProps<BrowserNodeData>): React.JSX
 
   return (
     <div className="browser-node">
-      <div className="browser-tabs nodrag">
+      <div className="browser-tabs">
         {tabs.map((t) => (
           <div
             key={t.id}
-            className={`browser-tab${t.id === activeTabId ? ' is-active' : ''}`}
+            className={`browser-tab nodrag${t.id === activeTabId ? ' is-active' : ''}`}
             title={t.url}
             onClick={() => activateTab(t.id)}
           >
@@ -277,7 +307,7 @@ export function BrowserNode({ id, data }: NodeProps<BrowserNodeData>): React.JSX
             </button>
           </div>
         ))}
-        <button className="browser-tab-add" title="New tab" aria-label="New tab" onClick={openTab}>
+        <button className="browser-tab-add nodrag" title="New tab" aria-label="New tab" onClick={openTab}>
           +
         </button>
       </div>
@@ -329,7 +359,17 @@ export function BrowserNode({ id, data }: NodeProps<BrowserNodeData>): React.JSX
           ×
         </button>
       </div>
-      <div className="browser-node-host nodrag" ref={hostRef}>
+      <div
+        className="browser-node-host"
+        ref={hostRef}
+        onPointerEnter={startDwellDisarm}
+        onPointerLeave={armBodyDrag}
+      >
+        <div
+          className={`browser-drag-layer${bodyDragArmed ? ' is-armed' : ''}`}
+          onPointerDown={cancelDwell}
+          title={bodyDragArmed ? 'drag to move · wait to interact' : undefined}
+        />
         {crashed && (
           <div className="browser-crashed">
             <p>This page crashed.</p>
@@ -349,4 +389,4 @@ export function BrowserNode({ id, data }: NodeProps<BrowserNodeData>): React.JSX
 }
 
 const browserHelp =
-  'A real, sandboxed Chromium page embedded on the canvas — one guest per tab. It is isolated from the rest of termsprawl (no Node, no preload). Drag the header to move it; the address bar navigates through a policy that blocks file:, devtools: and other privileged schemes. Tabs share cookies (persistent profile) and each tab is its own CDP target if an agent is attached, so you watch exactly what it does. The × button closes the node.'
+  'A real, sandboxed Chromium page embedded on the canvas — one guest per tab. It is isolated from the rest of termsprawl (no Node, no preload). Drag the tab bar, the title, or the page itself to move the node (hover the page without pressing for a moment and it becomes interactive — the same "dwell" model as terminals). The address bar navigates through a policy that blocks file:, devtools: and other privileged schemes. Tabs share cookies (persistent profile) and each tab is its own CDP target if an agent is attached, so you watch exactly what it does. The × button closes the node.'
