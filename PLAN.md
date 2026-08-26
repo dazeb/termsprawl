@@ -644,19 +644,27 @@ endpoint, ready for a client to attach. `file:///etc/passwd` → 400, missing au
 
 - **Settings gate (agentBrowserControl, OFF by default).** New app setting
   `agentBrowserControl` (Settings → General → "Allow agents to control browser
-  nodes"). Off (default): browser nodes work manually, but NO facade, NO
-  agent-control server, and no `browser-agent.json` — an agent has no endpoint
-  to find (verified headless: default boot writes no discovery file). On: the
-  CDP facade + token-gated `/open` server start in `whenReady`; toggling the
-  setting mid-session starts/stops them live (`syncAgentBrowserControl`), and
-  `agent-server.close()` now removes the discovery file so a stopped endpoint
-  is never advertised. Full Playwright + Puppeteer regression re-verified
-  against a gate-on boot.
+  nodes"). Off (default): browser nodes work manually, and there is NO browser
+  debug surface at all — no CDP facade, no `/open` server, no
+  `browser-agent.json`, AND no raw `--remote-debugging-port` (the port is now
+  gated too, not merely unadvertised; `ensureBrowserDebugPort()` and the
+  Wayland-respawn argv injection run only when enabled). On: everything starts.
+  Toggling the setting mid-session starts/stops the facade + `/open` server
+  live (`syncAgentBrowserControl`, with an epoch guard so a rapid off→on→off
+  can't leave endpoints running while off); `cdpFacade.close()` terminates
+  connected clients and releases guest debuggers so a later re-enable re-attaches
+  cleanly, and `agent-server.close()` removes the discovery file so a stopped
+  endpoint is never advertised. Verified headless: default boot has no
+  `DevTools listening` line, no discovery file, no debug listener (only the
+  Phase 7 hook server); gate-on boot opens the raw port + facade + `/open` and
+  passes the full Playwright + Puppeteer regression. The live re-attach path is
+  covered by a facade unit test (close→reopen re-attaches the same guest).
 - **Tabs within a browser node.** Each tab is its own sandboxed `<webview>`
   guest (tab strip + `+`, close-last-tab closes the node, active tab drives the
-  toolbar). Tabs share the persistent cookie partition; each tab is its own CDP
-  `page` target, so an agent sees every tab. Main-side node→guest map is now
-  keyed `nodeId::tabId` (`browser:register`/`unregister`/`navigate` carry a
+  toolbar; open/close show+hide the right webviews so exactly the active guest
+  is visible). Tabs share the persistent cookie partition; each tab is its own
+  CDP `page` target, so an agent sees every tab. Main-side node→guest map is
+  now keyed `nodeId::tabId` (`browser:register`/`unregister`/`navigate` carry a
   tabId). Legacy persisted nodes (no `tabs` field) deserialize to a single tab.
   Pure helpers in `state/workspace.ts` (`addBrowserTab`, `closeBrowserTab`,
   `activateBrowserTab`, `setBrowserTabUrl`) + tests.
@@ -670,9 +678,11 @@ endpoint, ready for a client to attach. `file:///etc/passwd` → 400, missing au
   `browserGuestIds()` now filters dead guests so the CDP facade never
   advertises a corpse after a renderer crash.
 
-Gates: typecheck clean; 368 tests (11 new: tabs/history, settings gate,
-discovery-file removal); originality OK; headless boot verified gate-off (no
-endpoint) and gate-on (facade + /open + Playwright/Puppeteer regression).
+Gates: typecheck clean; 369 tests (12 new: tabs/history, settings gate,
+discovery-file removal, facade close→reopen re-attach); originality OK;
+headless boots verified — gate-off has no debug surface at all (no
+`DevTools listening`, no discovery file, no debug listener), gate-on opens the
+raw port + facade + `/open` and passes the full Playwright/Puppeteer regression.
 
 ---
 

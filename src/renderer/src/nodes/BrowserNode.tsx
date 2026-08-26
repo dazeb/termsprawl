@@ -193,6 +193,9 @@ export function BrowserNode({ id, data }: NodeProps<BrowserNodeData>): React.JSX
 
   const openTab = (): void => {
     const res = addBrowserTab(tabsRef.current, 'about:blank')
+    // Hide the previous active guest so the new tab is the only visible one
+    // (activateTab does the same dance when switching back).
+    webviewsRef.current.get(activeTabIdRef.current)?.style.setProperty('display', 'none')
     setTabs(res.tabs)
     setActiveTabId(res.activeTabId)
     setCrashed(false)
@@ -219,6 +222,8 @@ export function BrowserNode({ id, data }: NodeProps<BrowserNodeData>): React.JSX
     setActiveTabId(res.activeTabId)
     setCrashed(false)
     setGuestId(null)
+    // Show the newly-active neighbour (it was display:none while in the background).
+    webviewsRef.current.get(res.activeTabId)?.style.setProperty('display', 'block')
     syncToolbar(res.activeTabId)
     persist(res.tabs, res.activeTabId)
   }

@@ -40,6 +40,15 @@ import { startAgentServer, type AgentServerHandle } from './browser/agent-server
 import { startCdpFacade, type CdpFacadeHandle } from './browser/cdp-facade'
 import type { BrowserCdpInfo, BrowserNavigateResult } from '../shared/types'
 
+// App settings must be readable BEFORE the ozone-respawn / debug-port decision
+// below: the agent-browser-control gate decides whether we open ANY browser
+// debug surface, the raw `--remote-debugging-port` included (13.4). Off means
+// no debug endpoint exists — not just "unadvertised".
+// `app.getPath('userData')` is valid at module load.
+const appSettings = { current: loadAppSettings(app.getPath('userData')) }
+const agentBrowserControlEnabled = (): boolean =>
+  appSettings.current.agentBrowserControl === true
+
 // ── Wayland → X11 ozone fix ─────────────────────────────────────────────────
 // Electron chooses the browser (main) process's ozone platform during native
 // startup, BEFORE this JS module runs. So `app.commandLine.appendSwitch(
@@ -62,7 +71,7 @@ if (needsX11Respawn) {
   // reliable path, and ensureBrowserDebugPort() reconciles cdp-info to whatever
   // is actually in effect.
   const extra = ['--ozone-platform=x11']
-  if (!process.argv.some((a) => a.startsWith('--remote-debugging-port'))) {
+  if (agentBrowserControlEnabled() && !process.argv.some((a) => a.startsWith('--remote-debugging-port'))) {
     extra.push(`--remote-debugging-port=${browserRuntime.port}`)
   }
   spawn(process.execPath, [...process.argv.slice(1), ...extra], {
@@ -73,11 +82,11 @@ if (needsX11Respawn) {
   process.exit(0)
 }
 
-// Expose the browser-node CDP endpoint. On the Wayland respawn path the flag is
-// already on the child's real argv (kept identical). On a native X11 session
-// this appends it via the command line — which IS honoured for the debug port
-// (unlike the ozone flag, see note above).
-ensureBrowserDebugPort()
+// Expose the browser-node CDP endpoint — only when agent control is enabled
+// (13.4). On the Wayland respawn path the flag is already on the child's real
+// argv (kept identical); on a native X11 session this appends it via the
+// command line, which IS honoured for the debug port (unlike the ozone flag).
+if (agentBrowserControlEnabled()) ensureBrowserDebugPort()
 // Harden every <webview> guest that the browser nodes create, before any exists.
 installBrowserSecurity()
 
@@ -120,7 +129,6 @@ const platform: CorePlatform = {
 
 const ptyManager = new PtyManager(platform)
 const workspaceStore = new WorkspaceStore(platform)
-const appSettings = { current: loadAppSettings(platform.userDataPath) }
 const updateBridge = createUpdateBridge({
   isPackaged: app.isPackaged,
   autoDownload: appSettings.current.autoDownloadUpdates,
@@ -184,19 +192,34 @@ const hookServer = new HookServer((event) => {
 // endpoint). See browser/cdp-facade.ts + browser/agent-server.ts.
 let agentServer: AgentServerHandle | null = null
 let cdpFacade: CdpFacadeHandle | null = null
+// Generation counter: a stop() invalidates any in-flight start() so a rapid
+// off→on→off toggle can't leave endpoints running while the setting is off.
+let browserControlEpoch = 0
 
 /** Start the agent-control surface. Idempotent; no-ops when already running. */
 async function startBrowserControlEndpoints(): Promise<void> {
   if (cdpFacade) return
+  const epoch = ++browserControlEpoch
   try {
-    cdpFacade = await startCdpFacade({
+    const facade = await startCdpFacade({
       cdpInfo: { wsUrl: browserRuntime.wsUrl, host: '127.0.0.1', port: browserRuntime.port }
     })
-    agentServer = await startAgentServer({
+    if (epoch !== browserControlEpoch) {
+      void facade.close()
+      return
+    }
+    const server = await startAgentServer({
       userDataPath: platform.userDataPath,
       broadcast: (channel, payload) => platform.broadcast(channel, payload),
-      cdp: { wsUrl: cdpFacade.url, host: '127.0.0.1', port: cdpFacade.port }
+      cdp: { wsUrl: facade.url, host: '127.0.0.1', port: facade.port }
     })
+    if (epoch !== browserControlEpoch) {
+      void server.close()
+      void facade.close()
+      return
+    }
+    cdpFacade = facade
+    agentServer = server
   } catch (err) {
     console.error('[browser] agent-control facade failed to start:', err)
     void cdpFacade?.close()
@@ -206,6 +229,7 @@ async function startBrowserControlEndpoints(): Promise<void> {
 }
 
 function stopBrowserControlEndpoints(): void {
+  browserControlEpoch += 1 // invalidate any in-flight start
   if (agentServer) {
     void agentServer.close()
     agentServer = null

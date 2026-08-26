@@ -20,6 +20,7 @@ interface FakeGuest {
     attached: boolean
     attach: ReturnType<typeof vi.fn>
     detach: ReturnType<typeof vi.fn>
+    isAttached: ReturnType<typeof vi.fn>
     on: ReturnType<typeof vi.fn>
     sendCommand: ReturnType<typeof vi.fn>
   }
@@ -55,6 +56,7 @@ function fakeGuest(id: number, title = 'Example Domain', url = 'https://example.
       detach: vi.fn(() => {
         guest.debugger.attached = false
       }),
+      isAttached: vi.fn(() => guest.debugger.attached),
       on: vi.fn(),
       sendCommand: vi.fn(async (method: string) => {
         if (method === 'Page.getFrameTree') {
@@ -333,5 +335,55 @@ describe('cdp-facade CDP protocol', () => {
     for (const r of results) {
       expect((r as { error?: unknown }).error).toBeUndefined()
     }
+  })
+})
+
+describe('cdp-facade restart (settings toggle off→on)', () => {
+  it('re-attaches the same guest after close() releases its debugger', async () => {
+    mockGuests.clear()
+    mockRegisteredIds.length = 0
+    mockRegisteredIds.push(7)
+    const guest = fakeGuest(7)
+
+    // First instance: attach the guest, then close (as a toggle-off would).
+    const first = await startCdpFacade({
+      cdpInfo: { wsUrl: 'ws://127.0.0.1:9999/raw', host: '127.0.0.1', port: 9999 }
+    })
+    const v1 = (await (
+      await fetch(`http://127.0.0.1:${first.port}/json/version`)
+    ).json()) as { webSocketDebuggerUrl: string }
+    const c1 = new CdpClient(v1.webSocketDebuggerUrl)
+    await c1.open()
+    const att1 = (await c1.send('Target.attachToTarget', { targetId: '7', flatten: true })) as {
+      result?: { sessionId: string }
+    }
+    expect(att1.result?.sessionId).toBeTruthy()
+    c1.close()
+    await first.close()
+    // The debugger must be detached on close, so a second instance can attach.
+    expect(guest.debugger.attached).toBe(false)
+
+    // Second instance: attach the SAME guest again — must succeed.
+    const second = await startCdpFacade({
+      cdpInfo: { wsUrl: 'ws://127.0.0.1:9999/raw', host: '127.0.0.1', port: 9999 }
+    })
+    const v2 = (await (
+      await fetch(`http://127.0.0.1:${second.port}/json/version`)
+    ).json()) as { webSocketDebuggerUrl: string }
+    const c2 = new CdpClient(v2.webSocketDebuggerUrl)
+    await c2.open()
+    // Second instance: attach the SAME guest again (pre-attach → numeric
+    // fallback id, like Puppeteer's enumerate-then-attach) — must succeed.
+    const att2 = (await c2.send('Target.attachToTarget', { targetId: '7', flatten: true })) as {
+      result?: { sessionId: string }
+    }
+    expect(att2.result?.sessionId).toBeTruthy()
+    // And the session actually proxies a command.
+    const evalRes = (await c2.send('Runtime.evaluate', { expression: '1 + 1' }, att2.result!.sessionId!)) as {
+      result?: unknown
+    }
+    expect(evalRes.result).toEqual({})
+    c2.close()
+    await second.close()
   })
 })

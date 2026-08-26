@@ -138,7 +138,10 @@ async function attachGuest(guestId: number): Promise<string> {
   const sessionId = randomBytes(16).toString('hex')
   sessionToGuest.set(sessionId, guestId)
   guestToSession.set(guestId, sessionId)
-  c.debugger.attach()
+  // Idempotent: a previous facade instance may have left the debugger attached
+  // (Electron allows only one debugger per webContents). Reuse it rather than
+  // throwing — resetFacadeState() detaches on close, so this is belt-and-suspenders.
+  if (!c.debugger.isAttached()) c.debugger.attach()
   ensureGuestEventForwarder(guestId)
   try {
     const { frameTree } = (await c.debugger.sendCommand('Page.getFrameTree')) as {
@@ -164,6 +167,27 @@ function detachGuest(guestId: number, sessionId?: string): void {
   } catch {
     /* already detached */
   }
+}
+
+/** Reset all per-instance routing state and release the guest debuggers so a
+ * subsequent start (settings toggle off→on) attaches cleanly. Keeps the
+ * per-guest event-forwarder marker (`forwardedGuests`) — the forwarder reads
+ * live maps and no-ops once `guestToSession` is empty, and reinstalling it
+ * would double-fire events. */
+function resetFacadeState(): void {
+  autoAttach = false
+  currentWs = null
+  for (const guestId of Array.from(guestToSession.keys())) {
+    try {
+      liveGuest(guestId)?.debugger.detach()
+    } catch {
+      /* already detached */
+    }
+  }
+  sessionToGuest.clear()
+  guestToSession.clear()
+  autoAttachedGuests.clear()
+  guestTargetIds.clear()
 }
 
 /** Emit Target.attachedToTarget for a guest to the current client. */
@@ -253,12 +277,7 @@ export async function startCdpFacade(
       void route(ws, msg)
     })
     ws.on('close', () => {
-      if (currentWs === ws) currentWs = null
-      // Full reset for the next client: drop auto-attach state, sessions and
-      // debugger attachments so a fresh connect starts clean.
-      autoAttach = false
-      for (const guestId of Array.from(guestToSession.keys())) detachGuest(guestId)
-      autoAttachedGuests.clear()
+      if (currentWs === ws) resetFacadeState()
     })
     ws.on('error', () => {})
   })
@@ -304,6 +323,11 @@ export async function startCdpFacade(
       new Promise<void>((resolve) => {
         if (guestPollTimer) clearInterval(guestPollTimer)
         guestPollTimer = null
+        // Terminate connected clients so (a) the server can close promptly and
+        // (b) turning the setting off actually cuts off an already-connected
+        // agent rather than leaving its socket alive.
+        for (const client of wss.clients) client.terminate()
+        resetFacadeState()
         wss.close(() => {
           server.close(() => resolve())
         })
