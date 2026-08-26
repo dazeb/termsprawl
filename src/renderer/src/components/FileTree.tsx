@@ -106,37 +106,46 @@ export function FileTree({ cwd, onOpenFile, openEditors = [] }: FileTreeProps): 
         onMouseEnter={cancelClose}
         onMouseLeave={scheduleClose}
       >
-        <div className="file-tree-rail" role="tablist" aria-label="sidebar sections">
-          <button
-            type="button"
-            className={`file-tree-rail-btn${section === 'files' ? ' is-active' : ''}`}
-            title="Explorer — open tabs and files"
-            aria-label="Explorer"
-            onClick={() => switchSection('files')}
-          >
-            <FilesIcon />
-          </button>
-          <button
-            type="button"
-            className={`file-tree-rail-btn${section === 'source' ? ' is-active' : ''}`}
-            title="Source control"
-            aria-label="Source control"
-            onClick={() => switchSection('source')}
-          >
-            <SourceIcon />
-          </button>
-          <button
-            type="button"
-            className={`file-tree-rail-btn${section === 'plugins' ? ' is-active' : ''}`}
-            title="Plugins"
-            aria-label="Plugins"
-            onClick={() => switchSection('plugins')}
-          >
-            <PluginsIcon />
-          </button>
-        </div>
-
         <div className="file-tree-main">
+          <div className="file-tree-tabs" role="tablist" aria-label="sidebar sections">
+            <button
+              type="button"
+              className={`file-tree-tab${section === 'files' ? ' is-active' : ''}`}
+              title="Explorer — open tabs and files"
+              aria-label="Explorer"
+              role="tab"
+              aria-selected={section === 'files'}
+              onClick={() => switchSection('files')}
+            >
+              <FilesIcon />
+              <span>Explorer</span>
+            </button>
+            <button
+              type="button"
+              className={`file-tree-tab${section === 'source' ? ' is-active' : ''}`}
+              title="Source control"
+              aria-label="Source control"
+              role="tab"
+              aria-selected={section === 'source'}
+              onClick={() => switchSection('source')}
+            >
+              <SourceIcon />
+              <span>Source</span>
+            </button>
+            <button
+              type="button"
+              className={`file-tree-tab${section === 'plugins' ? ' is-active' : ''}`}
+              title="Plugins"
+              aria-label="Plugins"
+              role="tab"
+              aria-selected={section === 'plugins'}
+              onClick={() => switchSection('plugins')}
+            >
+              <PluginsIcon />
+              <span>Plugins</span>
+            </button>
+          </div>
+
           <div className="file-tree-head">
             <span className="file-tree-title" title={cwd ?? 'no folder'}>
               {section === 'files' && (rootName ?? 'explorer')}
@@ -146,7 +155,7 @@ export function FileTree({ cwd, onOpenFile, openEditors = [] }: FileTreeProps): 
             {section === 'files' && (
               <HelpBadge
                 label="about the sidebar"
-                text="One sidebar for this project. Hover the left or right canvas edge to open it. The dock icon moves this same panel to the other side. Pin keeps it open. The tabs section lists the files open in editor nodes; click one to focus it. Dotfiles, .git, and node_modules are hidden. The rail switches between Explorer, Source control, and (soon) Plugins."
+                text="One sidebar for this project. Hover the left or right canvas edge to open it. The dock icon moves this same panel to the other side. Pin keeps it open. The tabs section lists the files open in editor nodes; click one to focus it. Dotfiles, .git, and node_modules are hidden. The tabs at the top switch between Explorer, Source control, and (soon) Plugins."
               />
             )}
             {open && (

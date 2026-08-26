@@ -2328,7 +2328,7 @@ html[data-theme='light'] .settings-nav-item:hover {
   bottom: 0;
   z-index: 40;
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   background: var(--panel);
   border: 1px solid var(--border);
   pointer-events: none;
@@ -2417,45 +2417,44 @@ html[data-theme='light'] .settings-nav-item:hover {
   overflow: auto;
 }
 
-/* VS Code-style activity rail: switches the sidebar's section. */
-.file-tree-rail {
+/* Horizontal section tabs (browser-style): Explorer | Source | Plugins. */
+.file-tree-tabs {
   flex-shrink: 0;
-  width: 30px;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 8px 0;
+  gap: 2px;
+  padding: 4px 6px 0;
   background: var(--bg);
-  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
 }
 
-.file-tree-rail-btn {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border: 0;
-  border-radius: 5px;
+.file-tree-tab {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
   background: transparent;
   color: var(--muted);
+  font-size: 11px;
   cursor: pointer;
-  padding: 0;
 }
 
-.file-tree-rail-btn:hover {
+.file-tree-tab:hover {
   color: var(--fg);
-  background: rgba(198, 241, 53, 0.08);
+  background: rgba(198, 241, 53, 0.06);
 }
 
-.file-tree-rail-btn.is-active {
+.file-tree-tab.is-active {
   color: var(--accent);
-  background: rgba(198, 241, 53, 0.12);
+  background: var(--panel);
+  border-color: var(--border);
 }
 
 .file-tree-main {
   flex: 1;
-  min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
