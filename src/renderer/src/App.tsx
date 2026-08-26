@@ -10,9 +10,11 @@ import { CogMenu } from './components/CogMenu'
 import { HelpBadge } from './components/HelpBadge'
 import { useProjects } from './state/projects'
 import { applyTheme } from './state/theme'
+import type { AppSettings } from '@shared/types'
 
 export function App(): React.JSX.Element {
   const [version, setVersion] = useState<string>('…')
+  const [settings, setSettings] = useState<AppSettings | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [sourceControlOpen, setSourceControlOpen] = useState(false)
@@ -25,7 +27,10 @@ export function App(): React.JSX.Element {
 
   useEffect(() => {
     void window.termsprawl?.appVersion().then(setVersion)
-    void window.termsprawl?.settings.get().then((s) => applyTheme(s.theme ?? 'system'))
+    void window.termsprawl?.settings.get().then((s) => {
+      setSettings(s)
+      applyTheme(s.theme ?? 'system')
+    })
     void load()
   }, [load])
 
@@ -64,7 +69,9 @@ export function App(): React.JSX.Element {
         />
         <span className="version">v{version}</span>
       </div>
-      {settingsOpen && <AppSettingsPanel onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && (
+        <AppSettingsPanel onClose={() => setSettingsOpen(false)} onSettingsChange={setSettings} />
+      )}
       {sourceControlOpen && activeCwd && (
         <SourceControlPanel cwd={activeCwd} onClose={() => setSourceControlOpen(false)} />
       )}
@@ -77,7 +84,7 @@ export function App(): React.JSX.Element {
       )}
       {loaded ? (
         <ReactFlowProvider>
-          <Canvas cwd={activeCwd} />
+          <Canvas cwd={activeCwd} invertWheelZoom={settings?.invertWheelZoom ?? false} />
         </ReactFlowProvider>
       ) : (
         <div className="canvas" />

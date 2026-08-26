@@ -7,6 +7,9 @@ import { applyTheme } from '../state/theme'
 
 interface AppSettingsPanelProps {
   onClose: () => void
+  /** Notify the parent (App) whenever settings change, so live-settings like
+   * invert-wheel-zoom propagate without reopening the panel. */
+  onSettingsChange?: (settings: AppSettings) => void
 }
 
 /** The primary agent CLIs the product is built around (shown first in the
@@ -144,7 +147,7 @@ const TABS: SettingsTab[] = [
   }
 ]
 
-export function AppSettingsPanel({ onClose }: AppSettingsPanelProps): React.JSX.Element {
+export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanelProps): React.JSX.Element {
   const [settings, setSettings] = useState<AppSettings>({
     autoDownloadUpdates: false,
     accounts: [],
@@ -193,6 +196,7 @@ export function AppSettingsPanel({ onClose }: AppSettingsPanelProps): React.JSX.
   const update = async (patch: Partial<AppSettings>): Promise<AppSettings> => {
     const next = await window.termsprawl.settings.set(patch)
     setSettings(next)
+    onSettingsChange?.(next)
     if (patch.theme) applyTheme(patch.theme)
     return next
   }
@@ -410,6 +414,22 @@ export function AppSettingsPanel({ onClose }: AppSettingsPanelProps): React.JSX.
                   type="checkbox"
                   checked={c.settings.agentBrowserControl === true}
                   onChange={(e) => void c.update({ agentBrowserControl: e.target.checked })}
+                />
+              </label>
+            </div>
+
+            <div className="settings-pref-row">
+              <div className="settings-pref-copy">
+                <span className="settings-pref-label">Invert mousewheel zoom</span>
+                <span className="settings-pref-sub">
+                  Off (default): scroll up zooms in. On: scroll up zooms out
+                </span>
+              </div>
+              <label className="app-settings-toggle">
+                <input
+                  type="checkbox"
+                  checked={c.settings.invertWheelZoom === true}
+                  onChange={(e) => void c.update({ invertWheelZoom: e.target.checked })}
                 />
               </label>
             </div>
