@@ -42,17 +42,22 @@ export function unregisterBrowserGuest(nodeId: string, tabId: string): void {
 }
 
 /** Live guest webContents ids for every browser node (used by the CDP facade).
- * Filters out guests that died out-of-band (renderer crash before unregister)
- * so the facade never advertises a corpse as a driveable target. */
+ * Reaps dead entries (renderer crash before unregister) as it goes, so the map
+ * stays bounded and the facade never advertises a corpse as a driveable target. */
 export function browserGuestIds(): GuestId[] {
-  return Array.from(guests.values()).filter((guestId) => {
+  const live: GuestId[] = []
+  for (const [key, guestId] of guests) {
+    let alive = false
     try {
       const c = webContents.fromId(guestId)
-      return c !== undefined && !c.isDestroyed()
+      alive = c !== undefined && !c.isDestroyed()
     } catch {
-      return false
+      alive = false
     }
-  })
+    if (alive) live.push(guestId)
+    else guests.delete(key)
+  }
+  return live
 }
 
 /** Force the safe prefs on a guest at the moment the parent attaches it. By

@@ -68,6 +68,9 @@ const sessionToGuest = new Map<string, number>()
 const guestToSession = new Map<number, string>()
 const forwardedGuests = new Set<number>()
 let currentWs: Ws | null = null
+// The facade is deliberately single-client: currentWs is a singleton and a
+// second connection evicts the first (matching Chromium's own one-client debug
+// port). One agent at a time is the product's intent.
 
 // Guest webContents id -> the guest's REAL CDP target id. Chromium reports a
 // webview guest's target id as its main frame id, and Playwright resolves

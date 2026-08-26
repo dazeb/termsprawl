@@ -127,6 +127,16 @@ export function BrowserNode({ id, data }: NodeProps<BrowserNodeData>): React.JSX
     const onDidNavigate = (): void => {
       try {
         const url = webview.getURL()
+        const prev = tabsRef.current.find((t) => t.id === tab.id)?.url
+        if (prev === url) {
+          // Title-only change (page-title-updated fires without a navigation) —
+          // refresh back/forward cheaply, no tab rewrite or project write.
+          if (tab.id === activeTabIdRef.current) {
+            setCanBack(webview.canGoBack())
+            setCanForward(webview.canGoForward())
+          }
+          return
+        }
         // Update the tab's url + the node-level history (most recent first).
         const next = setBrowserTabUrl(tabsRef.current, tab.id, url)
         historyRef.current = pushBrowserHistory(historyRef.current, url)
