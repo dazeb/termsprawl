@@ -33,6 +33,7 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "reactflow": "^11.11.4",
+    "@reactflow/node-resizer": "^2.2.14",
     "ws": "^8.21.3",
     "zustand": "^5.0.15"
   },

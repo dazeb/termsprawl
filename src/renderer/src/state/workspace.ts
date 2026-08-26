@@ -237,15 +237,18 @@ export function createEditorNode(path: string | null = null): Node<EditorNodeDat
 export const DEFAULT_BROWSER_URL = 'https://duckduckgo.com'
 
 /** A browser node: a sandboxed <webview> guest rendered inline on the canvas.
- * Starts with a single tab at DuckDuckGo (a real, useful page — no surprise
- * data sent to a search engine until the user searches) until the user or an
- * agent navigates it. */
+ * Opens as a small "mini window" (it's primarily the agent's browser; the user
+ * can resize it up). Starts with a single tab at DuckDuckGo until the user or
+ * an agent navigates it. */
+export const BROWSER_NODE_SIZE = { width: 320, height: 240 } as const
+
 export function createBrowserNode(url: string = DEFAULT_BROWSER_URL): Node<BrowserNodeData> {
   const tab = { id: nextBrowserTabId(), url }
   return {
     id: nextId(),
     type: 'browser',
     position: { x: 60 + Math.random() * 240, y: 60 + Math.random() * 160 },
+    style: { width: BROWSER_NODE_SIZE.width, height: BROWSER_NODE_SIZE.height },
     data: { kind: 'browser', url, tabs: [tab], activeTabId: tab.id }
   }
 }
@@ -367,7 +370,7 @@ const DEFAULT_SIZE: Record<string, { w: number; h: number }> = {
   group: { w: 200, h: 130 },
   diff: { w: 560, h: 360 },
   editor: { w: 640, h: 420 },
-  browser: { w: 760, h: 480 }
+  browser: { w: 320, h: 240 }
 }
 
 function nodeSize(n: Node<SprawlNodeData>): { w: number; h: number } {

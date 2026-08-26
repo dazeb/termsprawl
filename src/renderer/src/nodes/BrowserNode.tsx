@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { NodeProps } from 'reactflow'
+import { NodeResizer } from '@reactflow/node-resizer'
 import type { BrowserNodeData, BrowserTab } from '../state/workspace'
 import {
   activateBrowserTab,
@@ -37,7 +38,7 @@ interface WebviewElement extends HTMLElement {
 // (every tab shows up as its own `page` target). The body is nodrag only
 // while unfocused; dragging happens via the header, exactly like the terminal
 // node.
-export function BrowserNode({ id, data }: NodeProps<BrowserNodeData>): React.JSX.Element {
+export function BrowserNode({ id, data, selected }: NodeProps<BrowserNodeData>): React.JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null)
   const webviewsRef = useRef<Map<string, WebviewElement>>(new Map())
   const { closeNode, updateNodeData } = useCanvas()
@@ -285,6 +286,13 @@ export function BrowserNode({ id, data }: NodeProps<BrowserNodeData>): React.JSX
 
   return (
     <div className="browser-node">
+      <NodeResizer
+        isVisible={selected}
+        minWidth={220}
+        minHeight={140}
+        color="#c6f135"
+        handleClassName="browser-resize-handle"
+      />
       <div className="browser-tabs">
         {tabs.map((t) => (
           <div
