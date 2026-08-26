@@ -734,8 +734,23 @@ export function Canvas({ cwd, invertWheelZoom = false }: CanvasProps): React.JSX
           ↪
         </button>
       </div>
-      <FileTree cwd={cwd} onOpenFile={openFileFromTree} />
+      <FileTree
+        cwd={cwd}
+        onOpenFile={openFileFromTree}
+        openEditors={openEditorTabs(nodes)}
+      />
       </div>
     </CanvasContext.Provider>
   )
+}
+
+// The sidebar's "tabs" section lists the files open in editor nodes (VS Code's
+// OPEN EDITORS). Derived from live canvas state so it tracks as editors open.
+function openEditorTabs(nodes: Node<SprawlNodeData>[]): { id: string; path: string }[] {
+  const tabs: { id: string; path: string }[] = []
+  for (const node of nodes) {
+    const data = node.data
+    if (data.kind === 'editor' && data.path) tabs.push({ id: node.id, path: data.path })
+  }
+  return tabs
 }

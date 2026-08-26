@@ -5,11 +5,11 @@ import { TabBar } from './components/TabBar'
 import { UpdateToast } from './components/UpdateToast'
 import { AnnouncementBanner } from './components/AnnouncementBanner'
 import { AppSettingsPanel } from './components/AppSettingsPanel'
-import { SourceControlPanel } from './components/SourceControlPanel'
 import { CogMenu } from './components/CogMenu'
 import { HelpBadge } from './components/HelpBadge'
 import { useProjects } from './state/projects'
 import { applyTheme } from './state/theme'
+import { useSidebarRequests } from './state/sidebar-requests'
 import type { AppSettings } from '@shared/types'
 
 export function App(): React.JSX.Element {
@@ -17,7 +17,6 @@ export function App(): React.JSX.Element {
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [sourceControlOpen, setSourceControlOpen] = useState(false)
   const loaded = useProjects((s) => s.loaded)
   const load = useProjects((s) => s.load)
   const activeProjectId = useProjects((s) => s.activeProjectId)
@@ -33,6 +32,12 @@ export function App(): React.JSX.Element {
     })
     void load()
   }, [load])
+
+  // Source control now lives in the sidebar (VS Code-style); the cog menu just
+  // opens that section. The sidebar consumes the request itself.
+  const openSourceControl = (): void => {
+    useSidebarRequests.getState().openSection('source')
+  }
 
   // Visible error surface: any uncaught renderer error shows as a banner so
   // failures are never silent (used for diagnosing machine-specific issues).
@@ -64,16 +69,13 @@ export function App(): React.JSX.Element {
         <TabBar />
         <CogMenu
           hasActiveProject={!!activeCwd}
-          onOpenSourceControl={() => setSourceControlOpen(true)}
+          onOpenSourceControl={openSourceControl}
           onOpenSettings={() => setSettingsOpen(true)}
         />
         <span className="version">v{version}</span>
       </div>
       {settingsOpen && (
         <AppSettingsPanel onClose={() => setSettingsOpen(false)} onSettingsChange={setSettings} />
-      )}
-      {sourceControlOpen && activeCwd && (
-        <SourceControlPanel cwd={activeCwd} onClose={() => setSourceControlOpen(false)} />
       )}
       <UpdateToast />
       <AnnouncementBanner />
