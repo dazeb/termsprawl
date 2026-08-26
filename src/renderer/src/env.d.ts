@@ -24,7 +24,9 @@ import type {
   CloudBackup,
   CloudDevicePoll,
   CloudDeviceStart,
-  CloudUser
+  CloudUser,
+  BrowserCdpInfo,
+  BrowserNavigateResult
 } from '@shared/types'
 import type { AgentStatusEvent } from '@shared/agent-status'
 import type { UpdateStatus } from '@shared/update-status'
@@ -118,6 +120,12 @@ declare global {
         signOut(): Promise<void>
         backupNow(): Promise<CloudBackup>
         listBackups(limit?: number): Promise<CloudBackup[]>
+      }
+      browser: {
+        cdpInfo(): Promise<BrowserCdpInfo>
+        register(nodeId: string, guestId: number): Promise<void>
+        unregister(nodeId: string): Promise<void>
+        navigate(nodeId: string, url: string): Promise<BrowserNavigateResult>
       }
     }
   }

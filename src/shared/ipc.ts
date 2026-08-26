@@ -79,7 +79,15 @@ export const IPC = {
   cloudDevicePoll: 'cloud:device-poll',
   cloudSignOut: 'cloud:sign-out',
   cloudBackupNow: 'cloud:backup-now',
-  cloudListBackups: 'cloud:list-backups'
+  cloudListBackups: 'cloud:list-backups',
+
+  // Embedded browser node (Phase — browser node). The debug endpoint lets an
+  // external agent drive the embedded guests; register maps a node id to its
+  // guest, navigate centralises the URL policy.
+  browserCdpInfo: 'browser:cdp-info',
+  browserRegister: 'browser:register',
+  browserUnregister: 'browser:unregister',
+  browserNavigate: 'browser:navigate'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

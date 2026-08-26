@@ -29,6 +29,14 @@ import { HookServer } from '../core/hook-server'
 import { claudeSettingsPath, installClaudeHooks } from './agents/hook-installer'
 import { SessionNameTracker } from '../core/session-name'
 import { agentSessionNameChannel } from '../shared/ipc'
+import { browserRuntime, ensureBrowserDebugPort } from './browser/runtime'
+import {
+  installBrowserSecurity,
+  registerBrowserGuest,
+  unregisterBrowserGuest,
+  navigateBrowserNode
+} from './browser/manager'
+import type { BrowserCdpInfo, BrowserNavigateResult } from '../shared/types'
 
 // ── Wayland → X11 ozone fix ─────────────────────────────────────────────────
 // Electron chooses the browser (main) process's ozone platform during native
@@ -46,13 +54,30 @@ const needsX11Respawn =
   !process.argv.some((a) => a.startsWith('--ozone-platform'))
 
 if (needsX11Respawn) {
-  spawn(process.execPath, [...process.argv.slice(1), '--ozone-platform=x11'], {
+  // Forward the ozone fix plus the browser-node CDP port. Only add a debug
+  // port when one isn't already on the real argv (a user/agent may pass
+  // --remote-debugging-port manually); putting it on the real argv is the
+  // reliable path, and ensureBrowserDebugPort() reconciles cdp-info to whatever
+  // is actually in effect.
+  const extra = ['--ozone-platform=x11']
+  if (!process.argv.some((a) => a.startsWith('--remote-debugging-port'))) {
+    extra.push(`--remote-debugging-port=${browserRuntime.port}`)
+  }
+  spawn(process.execPath, [...process.argv.slice(1), ...extra], {
     detached: true,
     stdio: 'inherit'
   }).unref()
   // Exit immediately so no window/IPC is set up in this wrong-ozone instance.
   process.exit(0)
 }
+
+// Expose the browser-node CDP endpoint. On the Wayland respawn path the flag is
+// already on the child's real argv (kept identical). On a native X11 session
+// this appends it via the command line — which IS honoured for the debug port
+// (unlike the ozone flag, see note above).
+ensureBrowserDebugPort()
+// Harden every <webview> guest that the browser nodes create, before any exists.
+installBrowserSecurity()
 
 // On some hosts the GPU (Chromium GPU process) segfaults at startup even over
 // X11/XWayland — `GPU process exited unexpectedly: exit_code=139` (SIGSEGV),
@@ -407,6 +432,28 @@ function registerCloudIpc(): void {
   ipcMain.handle(IPC.cloudListBackups, (_event, limit?: number): Promise<CloudBackup[]> => cloud.listBackups(limit))
 }
 
+function registerBrowserIpc(): void {
+  ipcMain.handle(IPC.browserCdpInfo, (): BrowserCdpInfo => ({
+    port: browserRuntime.port,
+    token: browserRuntime.token,
+    wsUrl: browserRuntime.wsUrl,
+    host: '127.0.0.1'
+  }))
+  ipcMain.handle(IPC.browserRegister, (_event, nodeId: string, guestId: number): void => {
+    if (typeof nodeId === 'string' && typeof guestId === 'number') {
+      registerBrowserGuest(nodeId, guestId)
+    }
+  })
+  ipcMain.handle(IPC.browserUnregister, (_event, nodeId: string): void => {
+    if (typeof nodeId === 'string') unregisterBrowserGuest(nodeId)
+  })
+  ipcMain.handle(
+    IPC.browserNavigate,
+    (_event, nodeId: string, url: string): Promise<BrowserNavigateResult> =>
+      navigateBrowserNode(nodeId, url)
+  )
+}
+
 function createWindow(): void {
   const win = new BrowserWindow({
     width: 1440,
@@ -419,7 +466,10 @@ function createWindow(): void {
       preload: join(__dirname, '../preload/index.mjs'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false
+      sandbox: false,
+      // Browser nodes embed a real <webview> guest on the canvas. Guests are
+      // hardened by installBrowserSecurity() (no node/preload, sandbox on).
+      webviewTag: true
     }
   })
 
@@ -519,6 +569,7 @@ void app.whenReady().then(async () => {
   registerUpdateIpc()
   registerAnnouncementIpc()
   registerCloudIpc()
+  registerBrowserIpc()
   if (app.isPackaged) void fetchLatestAnnouncement()
 
   for (const entry of workspaceStore.pendingTerminalNodeCleanup()) {

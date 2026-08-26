@@ -17,6 +17,7 @@ import { StickyNode } from '../nodes/StickyNode'
 import { GroupNode } from '../nodes/GroupNode'
 import { DiffNode } from '../nodes/DiffNode'
 import { EditorNode } from '../nodes/EditorNode'
+import { BrowserNode } from '../nodes/BrowserNode'
 import {
   createAgentLoginNode,
   createAgentNode,
@@ -27,6 +28,7 @@ import {
   createResumeAgentNode,
   createStickyNode,
   createTerminalNode,
+  createBrowserNode,
   isAgentCommand,
   removeNode,
   serializeNodes,
@@ -46,7 +48,8 @@ const nodeTypes = {
   sticky: StickyNode,
   group: GroupNode,
   diff: DiffNode,
-  editor: EditorNode
+  editor: EditorNode,
+  browser: BrowserNode
 }
 
 // Canvas context: lets custom nodes update their own data and record undo
@@ -324,6 +327,16 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
 
   const addEditor = useCallback(() => {
     const node = createEditorNode()
+    if (menu && wrapperRef.current) {
+      node.position = screenToFlowPosition({ x: menu.x, y: menu.y })
+    }
+    appendOnTop(node)
+    push()
+    setMenu(null)
+  }, [menu, push, screenToFlowPosition, appendOnTop])
+
+  const addBrowser = useCallback(() => {
+    const node = createBrowserNode()
     if (menu && wrapperRef.current) {
       node.position = screenToFlowPosition({ x: menu.x, y: menu.y })
     }
@@ -633,6 +646,7 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
           <button onClick={addSticky}>New sticky note</button>
           <button onClick={addDiff}>New diff</button>
           <button onClick={addEditor}>New editor</button>
+          <button onClick={addBrowser}>New browser</button>
           <button onClick={addDruk}>Open druk</button>
           <button
             className="context-submenu-toggle"

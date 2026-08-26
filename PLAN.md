@@ -496,6 +496,98 @@ concepts, not a porting source.*
 
 ---
 
+## Phase 13 — Embedded browser node (deviation from the plan)
+
+*User-directed deviation 2026-08-26. Goal: a real browser INSIDE termsprawl —
+a sandboxed `<webview>` guest node on the canvas — that a user opens manually AND
+that an external agent can drive, so the user literally watches what the agent
+does in a browser. Branch: `feature/browser-node`.*
+
+### Task 13.1: Browser node vertical slice (DONE, verified)
+
+Artifacts:
+- `src/core/browser-policy.ts` (+ test) — pure navigation policy (electron-free,
+  TDD): only http/https + about:blank/srcdoc; denies file:, termsprawl-file:,
+  javascript:, data:, devtools:, chrome:. `normalizeAddress` (bare host → https,
+  localhost → http).
+- `src/main/browser/runtime.ts` — provisions the ONE per-session CDP endpoint:
+  random high port (49152–65535), 48-hex token, localhost-only.
+  `ensureBrowserDebugPort()` puts `--remote-debugging-port` on the real argv
+  (reliable path) via the Wayland respawn, or appendSwitch on X11; reconciles
+  `cdp-info` to any manually-passed port.
+- `src/main/browser/manager.ts` (`installBrowserSecurity`) — hardens every
+  `<webview>` guest at attach: strips preload, forces nodeIntegration off +
+  contextIsolation/sandbox on, blocks non-web `will-navigate`/`will-redirect`,
+  denies all popups. Keeps a node-id → guest-id map; `navigateBrowserNode`
+  centralises the URL policy. (A1)
+- `src/main/index.ts` — wires the respawn port, `installBrowserSecurity()`,
+  `webviewTag: true`, and the browser IPC handlers. (A3)
+- `src/shared/ipc.ts` / `src/shared/types.ts` — `browser:cdp-info` /
+  `browser:register` / `browser:unregister` / `browser:navigate` +
+  `BrowserCdpInfo` / `BrowserNavigateResult`. (A2)
+- `src/preload/index.ts` + `src/renderer/src/env.d.ts` — `window.termsprawl.browser.*`.
+- `src/renderer/src/nodes/BrowserNode.tsx` + `state/workspace.ts` (new `browser`
+  kind: factory, NODE_TYPES, DEFAULT_SIZE, deserialize, nodeTitle) + Canvas
+  nodeTypes + "New browser" context menu + `styles.css`. (A4–A6)
+
+Verified (headless boot, Electron 43 / Chromium 150, CDP driven):
+- App boots; CDP endpoint live at `http://127.0.0.1:<port>` with a browser-level
+  WS target (`/json/version.webSocketDebuggerUrl`) — the `connectOverCDP` shape.
+- Right-click → "New browser" creates a `<webview>` guest (guestId=2,
+  nodeId=nmta7v3lj-1); the guest appears in `/json` as a `webview` target.
+- `window.termsprawl.browser.navigate(nodeId, 'https://example.com')` drives the
+  guest (its target URL → https://example.com/).
+- Policy enforced through the real IPC path: `file:///etc/passwd`,
+  `javascript:alert(1)`, `data:text/html,hi` all return
+  `{ok:false, reason:'DENIED'}`; `https://example.com` returns `{ok:true}`.
+- Gates: `pnpm run typecheck` clean; `pnpm test` 338 passed (10 new policy tests);
+  `./scripts/check-originality.sh` OK.
+
+### Task 13.2: Agent-attach reliability (SPIKE — DONE, 2026-08-26)
+
+Verified with a real client against a running headless app + a live browser node
+(guestID 2, page https://example.com, /json showed title "Example Domain"):
+
+- **Raw CDP attach + drive: WORKS.** Browser-level WS (`/json/version`) lets a
+  client `Target.attachToTarget` the guest, then `Page.navigate` /
+  `Runtime.evaluate`.
+- **Puppeteer `connect({ browserWSEndpoint })`: WORKS FULLY.** Connected, saw the
+  `webview` target, read H1 "Example Domain", ran `page.evaluate` (set
+  document.title → "CONTROLLED-BY-PUPPETEER"), and `page.goto` navigated it
+  (URL → ?from=puppeteer). Confirmed `puppeteer-core` 25.9.
+- **Playwright `connectOverCDP`: CONNECTS but does NOT see the embedded `webview`
+  guest** (`chromium.connectOverCDP('http://127.0.0.1:<port>')` enumerated only the
+  main renderer page, no example.com). Electron reports webview guests as target
+  type `webview`, which Playwright's connectOverCDP filters out. This is the
+  Hermes-relevant gap: `browser_exec` (Browser Use CLI) is Playwright-based.
+
+Conclusion: the control mechanism itself is reliable + secure (proven via raw CDP
+and Puppeteer). The mitigation for a Playwright-only agent:
+- (A) small in-main CDP adapter that re-exposes each guest as a standard
+  browser-context `page` target Playwright will surface; or
+- (B) route the agent's browser tooling through Puppeteer (`connect`), which
+  needs no app change; or
+- (C) for Hermes `computer_use` (cua-driver): it drives the termsprawl desktop
+  window, so the embedded browser is pixels it can click, but not CDP-level
+  control — prefer the CDP path for real automation.
+Recommended: (A) so the common Playwright/Browser-Use path works unchanged.
+
+### Task 13.3: Agent-driven auto-open
+When an agent wants to use the browser (Hermes `browser_exec` / computer-use),
+auto-open a browser node (if none) and hand it a stable node id, so the user sees
+the agent's page without manually adding a node. Needs an app→agent handshake
+(the agent reads the CDP endpoint + node id, e.g. from an env var / settings).
+
+### Task 13.4: Follow-ups
+- Settings gate to enable/disable the CDP endpoint (off by default = default
+  surface is a manual browser; on = agent controllable).
+- Tabs within a browser node (or multiple browser nodes sharing one guest
+  process). Currently one guest = one page per node.
+- Persist a small per-node history (back/forward stack already works via guest).
+- Cleanup of guests on project close (mirror terminal-close).
+
+---
+
 ## Testing strategy
 
 - Unit: vitest for core services (pty, workspace files, git ops, normalizers).

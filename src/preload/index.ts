@@ -27,7 +27,9 @@ import type {
   CloudBackup,
   CloudDevicePoll,
   CloudDeviceStart,
-  CloudUser
+  CloudUser,
+  BrowserCdpInfo,
+  BrowserNavigateResult
 } from '../shared/types'
 import type { UpdateStatus } from '../shared/update-status'
 
@@ -203,6 +205,19 @@ const api = {
     backupNow: (): Promise<CloudBackup> => ipcRenderer.invoke(IPC.cloudBackupNow),
     listBackups: (limit?: number): Promise<CloudBackup[]> =>
       ipcRenderer.invoke(IPC.cloudListBackups, limit)
+  },
+
+  browser: {
+    /** Localhost-only CDP endpoint an external agent can attach to. */
+    cdpInfo: (): Promise<BrowserCdpInfo> => ipcRenderer.invoke(IPC.browserCdpInfo),
+    /** Tell main which live guest this browser node owns (node id is stable). */
+    register: (nodeId: string, guestId: number): Promise<void> =>
+      ipcRenderer.invoke(IPC.browserRegister, nodeId, guestId),
+    unregister: (nodeId: string): Promise<void> =>
+      ipcRenderer.invoke(IPC.browserUnregister, nodeId),
+    /** Navigate a browser node; main enforces the URL policy. */
+    navigate: (nodeId: string, url: string): Promise<BrowserNavigateResult> =>
+      ipcRenderer.invoke(IPC.browserNavigate, nodeId, url)
   }
 }
 

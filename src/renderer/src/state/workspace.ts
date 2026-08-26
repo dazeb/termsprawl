@@ -6,7 +6,7 @@ import type { Node } from 'reactflow'
 import type { SerializedNode } from '@shared/types'
 import { agentConfig, agentIds, agentTitle, agentCommand, type AgentId } from '@shared/agents/config'
 
-export const NODE_TYPES = ['terminal', 'sticky', 'group', 'diff', 'editor'] as const
+export const NODE_TYPES = ['terminal', 'sticky', 'group', 'diff', 'editor', 'browser'] as const
 export type NodeKind = (typeof NODE_TYPES)[number]
 
 export interface TerminalNodeData {
@@ -52,12 +52,20 @@ export interface EditorNodeData {
   preview: boolean
 }
 
+export interface BrowserNodeData {
+  kind: 'browser'
+  /** Last known URL. The live <webview> guest owns the actual page; this mirrors
+   * it so the project file persists where the node was browsing. */
+  url: string
+}
+
 export type SprawlNodeData =
   | TerminalNodeData
   | StickyNodeData
   | GroupNodeData
   | DiffNodeData
   | EditorNodeData
+  | BrowserNodeData
 
 let counter = 0
 const TERMINAL_DIMENSIONS = { width: 720, height: 420 } as const
@@ -210,6 +218,18 @@ export function createEditorNode(path: string | null = null): Node<EditorNodeDat
   }
 }
 
+/** A browser node: a sandboxed <webview> guest rendered inline on the canvas.
+ * Starts at about:blank (no surprise network) until the user or an agent
+ * navigates it. */
+export function createBrowserNode(url: string = 'about:blank'): Node<BrowserNodeData> {
+  return {
+    id: nextId(),
+    type: 'browser',
+    position: { x: 60 + Math.random() * 240, y: 60 + Math.random() * 160 },
+    data: { kind: 'browser', url }
+  }
+}
+
 /** Project name from a chosen folder path (basename), or the fallback when no
  * folder was picked (cwd-less inline project). */
 export function projectNameFromPath(cwd: string | null, fallback: string): string {
@@ -225,8 +245,20 @@ export function nodeTitle(data: SprawlNodeData): string {
   if (data.kind === 'group') return data.title
   if (data.kind === 'diff') return data.path ? data.path.split('/').pop() ?? 'diff' : 'diff'
   if (data.kind === 'editor') return data.path ? data.path.split('/').pop() ?? 'editor' : 'editor'
+  if (data.kind === 'browser') return browserTitle(data.url)
   const firstLine = data.text.split('\n')[0].trim()
   return firstLine || 'sticky note'
+}
+
+/** A short label for a browser node from its current URL (host or about:blank). */
+export function browserTitle(url: string): string {
+  try {
+    const u = new URL(url)
+    if (u.protocol === 'about:') return 'browser'
+    return u.host || 'browser'
+  } catch {
+    return 'browser'
+  }
 }
 
 /**
@@ -248,7 +280,8 @@ const DEFAULT_SIZE: Record<string, { w: number; h: number }> = {
   sticky: { w: 200, h: 130 },
   group: { w: 200, h: 130 },
   diff: { w: 560, h: 360 },
-  editor: { w: 640, h: 420 }
+  editor: { w: 640, h: 420 },
+  browser: { w: 760, h: 480 }
 }
 
 function nodeSize(n: Node<SprawlNodeData>): { w: number; h: number } {
@@ -356,6 +389,12 @@ export function deserializeNodes(serialized: SerializedNode[]): Node<SprawlNodeD
       return {
         ...base,
         data: { kind: 'editor', path: null, preview: false, ...data } as EditorNodeData
+      }
+    }
+    if (data.kind === 'browser') {
+      return {
+        ...base,
+        data: { kind: 'browser', url: 'about:blank', ...data } as BrowserNodeData
       }
     }
     return {

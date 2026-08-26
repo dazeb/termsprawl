@@ -89,6 +89,23 @@ export interface WorkspaceSnapshot {
   projects: Record<string, SerializedNode[]>
 }
 
+// Embedded browser node (Phase — browser node). A browser node is a sandboxed
+// <webview> guest rendered inline in the canvas. The CDP endpoint (localhost
+// only, random high port) is how an external agent attaches to drive it.
+export interface BrowserCdpInfo {
+  port: number
+  /** Bearer token for a future gated CDP proxy; surfaced so the agent can carry it. */
+  token: string
+  /** http://127.0.0.1:<port> — hand this to connectOverCDP / puppeteer. */
+  wsUrl: string
+  /** 127.0.0.1 only — exposed for the agent's own trust decision. */
+  host: string
+}
+
+export type BrowserNavigateResult =
+  | { ok: true }
+  | { ok: false; reason: 'UNKNOWN_NODE' | 'DENIED' }
+
 // Diff node (Phase 6): original = git ref content, modified = working tree.
 export type DiffBase = 'staged' | 'HEAD'
 
