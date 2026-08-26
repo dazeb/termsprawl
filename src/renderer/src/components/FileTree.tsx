@@ -1,20 +1,45 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import type { DirEntry } from '@shared/types'
-import { applyFileTreeChrome, initialFileTreeChrome, type TreeSide } from '../state/edge-reveal'
+import {
+  applyFileTreeChrome,
+  initialFileTreeChrome,
+  type SidebarSection,
+  type TreeSide
+} from '../state/edge-reveal'
+import { useSidebarRequests } from '../state/sidebar-requests'
+import { SourceControlPanel } from './SourceControlPanel'
 import { HelpBadge } from './HelpBadge'
 
-const PANEL_WIDTH = 248
+const PANEL_WIDTH = 264
 const CLOSE_MS = 220
+
+interface OpenEditorTab {
+  id: string
+  path: string
+}
 
 interface FileTreeProps {
   cwd?: string
   onOpenFile: (path: string) => void
+  /** Open editor nodes on the canvas (the sidebar's "tabs" section). */
+  openEditors?: OpenEditorTab[]
 }
 
-export function FileTree({ cwd, onOpenFile }: FileTreeProps): React.JSX.Element {
+// VS Code-style sidebar: an activity rail switches between the FILES (explorer
+// with open tabs + tree), SOURCE CONTROL, and PLUGINS (coming soon) sections —
+// all in the same edge-hover popout panel users already know.
+export function FileTree({ cwd, onOpenFile, openEditors = [] }: FileTreeProps): React.JSX.Element {
   const [chrome, dispatch] = useReducer(applyFileTreeChrome, undefined, initialFileTreeChrome)
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const ignoreLeave = useRef(false)
+
+  // A section switch requested from outside the canvas (cog menu → source).
+  const sidebarRequest = useSidebarRequests((s) => s.request)
+  useEffect(() => {
+    if (!sidebarRequest) return
+    dispatch({ type: 'switchSection', section: sidebarRequest })
+    useSidebarRequests.getState().consume()
+  }, [sidebarRequest])
 
   const cancelClose = useCallback(() => {
     if (closeTimer.current) {
@@ -49,10 +74,14 @@ export function FileTree({ cwd, onOpenFile }: FileTreeProps): React.JSX.Element 
     [cancelClose]
   )
 
+  const switchSection = useCallback((section: SidebarSection) => {
+    dispatch({ type: 'switchSection', section })
+  }, [])
+
   useEffect(() => () => cancelClose(), [cancelClose])
 
   const rootName = cwd ? cwd.replace(/\/+$/, '').split('/').pop() || cwd : null
-  const { side, open, pinned } = chrome
+  const { side, open, pinned, section } = chrome
   const otherSide = side === 'left' ? 'right' : 'left'
 
   return (
@@ -62,12 +91,12 @@ export function FileTree({ cwd, onOpenFile }: FileTreeProps): React.JSX.Element 
           <div
             className="file-tree-hot file-tree-hot-left"
             onMouseEnter={() => reveal('left')}
-            title="project files"
+            title="project sidebar"
           />
           <div
             className="file-tree-hot file-tree-hot-right"
             onMouseEnter={() => reveal('right')}
-            title="project files"
+            title="project sidebar"
           />
         </>
       )}
@@ -77,48 +106,125 @@ export function FileTree({ cwd, onOpenFile }: FileTreeProps): React.JSX.Element 
         onMouseEnter={cancelClose}
         onMouseLeave={scheduleClose}
       >
-        <div className="file-tree-head">
-          <span className="file-tree-title" title={cwd ?? 'no folder'}>
-            {rootName ?? 'no folder'}
-          </span>
-          <HelpBadge
-            label="about the file tree"
-            text="One sidebar for this project's folder. Hover the left or right canvas edge to open it. The dock icon moves this same panel to the other side — it is never shown on both. Pin keeps it open; unpin and it closes when the pointer leaves. Click a file to open or focus an editor node. Dotfiles, .git, and node_modules are hidden."
-          />
-          {open && (
-            <div className="file-tree-actions">
-              <button
-                type="button"
-                className="file-tree-icon"
-                title={`move to ${otherSide}`}
-                aria-label={`move file tree to ${otherSide}`}
-                onClick={flipSide}
-              >
-                {side === 'left' ? (
-                  <DockRightIcon />
-                ) : (
-                  <DockLeftIcon />
-                )}
-              </button>
-              <button
-                type="button"
-                className={`file-tree-icon${pinned ? ' is-active' : ''}`}
-                title={pinned ? 'unpin sidebar' : 'pin sidebar open'}
-                aria-label={pinned ? 'unpin sidebar' : 'pin sidebar open'}
-                aria-pressed={pinned}
-                onClick={() => dispatch({ type: 'togglePin' })}
-              >
-                <PinIcon filled={pinned} />
-              </button>
-            </div>
-          )}
+        <div className="file-tree-rail" role="tablist" aria-label="sidebar sections">
+          <button
+            type="button"
+            className={`file-tree-rail-btn${section === 'files' ? ' is-active' : ''}`}
+            title="Explorer — open tabs and files"
+            aria-label="Explorer"
+            onClick={() => switchSection('files')}
+          >
+            <FilesIcon />
+          </button>
+          <button
+            type="button"
+            className={`file-tree-rail-btn${section === 'source' ? ' is-active' : ''}`}
+            title="Source control"
+            aria-label="Source control"
+            onClick={() => switchSection('source')}
+          >
+            <SourceIcon />
+          </button>
+          <button
+            type="button"
+            className={`file-tree-rail-btn${section === 'plugins' ? ' is-active' : ''}`}
+            title="Plugins"
+            aria-label="Plugins"
+            onClick={() => switchSection('plugins')}
+          >
+            <PluginsIcon />
+          </button>
         </div>
-        <div className="file-tree-body">
-          {!cwd ? (
-            <div className="file-tree-empty">this project has no folder</div>
-          ) : (
-            <TreeBranch root={cwd} rel="." depth={0} onOpenFile={onOpenFile} />
-          )}
+
+        <div className="file-tree-main">
+          <div className="file-tree-head">
+            <span className="file-tree-title" title={cwd ?? 'no folder'}>
+              {section === 'files' && (rootName ?? 'explorer')}
+              {section === 'source' && 'source control'}
+              {section === 'plugins' && 'plugins'}
+            </span>
+            {section === 'files' && (
+              <HelpBadge
+                label="about the sidebar"
+                text="One sidebar for this project. Hover the left or right canvas edge to open it. The dock icon moves this same panel to the other side. Pin keeps it open. The tabs section lists the files open in editor nodes; click one to focus it. Dotfiles, .git, and node_modules are hidden. The rail switches between Explorer, Source control, and (soon) Plugins."
+              />
+            )}
+            {open && (
+              <div className="file-tree-actions">
+                <button
+                  type="button"
+                  className="file-tree-icon"
+                  title={`move to ${otherSide}`}
+                  aria-label={`move sidebar to ${otherSide}`}
+                  onClick={flipSide}
+                >
+                  {side === 'left' ? (
+                    <DockRightIcon />
+                  ) : (
+                    <DockLeftIcon />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  className={`file-tree-icon${pinned ? ' is-active' : ''}`}
+                  title={pinned ? 'unpin sidebar' : 'pin sidebar open'}
+                  aria-label={pinned ? 'unpin sidebar' : 'pin sidebar open'}
+                  aria-pressed={pinned}
+                  onClick={() => dispatch({ type: 'togglePin' })}
+                >
+                  <PinIcon filled={pinned} />
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="file-tree-body">
+            {section === 'files' && (
+              <>
+                {/* Tabs — open editor nodes, VS Code's OPEN EDITORS. */}
+                <div className="sidebar-section-label">tabs</div>
+                {openEditors.length === 0 ? (
+                  <div className="file-tree-empty">no open tabs</div>
+                ) : (
+                  <ul className="sidebar-tabs">
+                    {openEditors.map((tab) => (
+                      <li key={tab.id}>
+                        <button
+                          type="button"
+                          className="file-tree-row sidebar-tab"
+                          onClick={() => onOpenFile(tab.path)}
+                          title={tab.path}
+                        >
+                          <span className="file-tree-mark">·</span>
+                          <span className="file-tree-name">{basenameOf(tab.path)}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="sidebar-section-label">files</div>
+                {!cwd ? (
+                  <div className="file-tree-empty">this project has no folder</div>
+                ) : (
+                  <TreeBranch root={cwd} rel="." depth={0} onOpenFile={onOpenFile} />
+                )}
+              </>
+            )}
+
+            {section === 'source' &&
+              (cwd ? (
+                <SourceControlPanel cwd={cwd} embedded />
+              ) : (
+                <div className="file-tree-empty">this project has no folder</div>
+              ))}
+
+            {section === 'plugins' && (
+              <div className="file-tree-empty">
+                plugins are coming soon — extensions for the sidebar, just like
+                VS Code.
+              </div>
+            )}
+          </div>
         </div>
       </aside>
     </>
@@ -206,6 +312,41 @@ function relFrom(root: string, abs: string): string {
   if (abs === root) return '.'
   const prefix = root.endsWith('/') ? root : `${root}/`
   return abs.startsWith(prefix) ? abs.slice(prefix.length) : abs
+}
+
+function basenameOf(path: string): string {
+  const parts = path.split('/').filter(Boolean)
+  return parts.length > 0 ? (parts[parts.length - 1] ?? '') : path
+}
+
+function FilesIcon(): React.JSX.Element {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+      <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+      <path d="M13 2v7h7" />
+    </svg>
+  )
+}
+
+function SourceIcon(): React.JSX.Element {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+      <circle cx="6" cy="6" r="2.5" />
+      <circle cx="6" cy="18" r="2.5" />
+      <circle cx="18" cy="12" r="2.5" />
+      <path d="M6 8.5v7M8.5 6H14a3 3 0 0 1 3 3v0.5M8.5 18H14a3 3 0 0 0 3-3v-0.5" />
+    </svg>
+  )
+}
+
+function PluginsIcon(): React.JSX.Element {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+      <path d="M9.5 3v2.5M9.5 18.5V21M14.5 3v2.5M14.5 18.5V21M5 8.5h2.5M5 15.5h2.5M16.5 8.5H19M16.5 15.5H19" />
+      <rect x="4" y="8.5" width="5" height="7" rx="1" />
+      <rect x="15" y="8.5" width="5" height="7" rx="1" />
+    </svg>
+  )
 }
 
 function DockRightIcon(): React.JSX.Element {

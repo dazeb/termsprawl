@@ -954,6 +954,19 @@ html[data-theme='light'] .settings-nav-item:hover {
   box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
   font-size: 12px;
 }
+
+/* In the sidebar: static, full-width, no chrome — the panel IS the section. */
+.source-control.source-control-embedded {
+  position: static;
+  width: auto;
+  max-height: none;
+  overflow: visible;
+  padding: 2px 12px 16px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
 .source-control-head {
   display: flex;
   align-items: center;
@@ -1116,8 +1129,118 @@ html[data-theme='light'] .settings-nav-item:hover {
 }
 .source-control-subtitle {
   margin-top: 14px;
-  font-size: 11px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--muted);
+}
+
+/* Remote + git-command rows (the easy push/pull panel). */
+.source-control-remote {
+  margin-top: 12px;
+}
+
+.source-control-remotebox {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.source-control-remoteurl {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 11px;
+  font-family: 'Geist Mono', monospace;
+}
+
+.source-control-cmdrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.source-control-cmd {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 6px;
+  color: var(--fg);
+  font-size: 11px;
+  font-family: 'Geist Mono', monospace;
+}
+
+.source-control-cmdbtn {
+  flex-shrink: 0;
+  background: rgba(198, 241, 53, 0.1);
+  border: 1px solid rgba(198, 241, 53, 0.35);
+  color: var(--accent);
+  border-radius: 4px;
+  font-size: 11px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.source-control-cmdbtn:hover {
+  background: rgba(198, 241, 53, 0.18);
+}
+
+/* History — the changelog as a list. */
+.source-control-history {
+  margin-top: 12px;
+}
+
+.source-control-hlist {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.source-control-hrow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 4px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--fg);
+}
+
+.source-control-hrow:hover {
+  background: rgba(198, 241, 53, 0.06);
+}
+
+.source-control-hash {
+  flex-shrink: 0;
+  color: var(--accent);
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px;
+}
+
+.source-control-hsubject {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source-control-hmeta {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 10px;
 }
 .source-control-branchrow {
   padding: 2px 0;
@@ -2140,7 +2263,7 @@ html[data-theme='light'] .settings-nav-item:hover {
   bottom: 0;
   z-index: 40;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   background: var(--panel);
   border: 1px solid var(--border);
   pointer-events: none;
@@ -2227,6 +2350,71 @@ html[data-theme='light'] .settings-nav-item:hover {
   flex: 1;
   min-height: 0;
   overflow: auto;
+}
+
+/* VS Code-style activity rail: switches the sidebar's section. */
+.file-tree-rail {
+  flex-shrink: 0;
+  width: 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0;
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+}
+
+.file-tree-rail-btn {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+}
+
+.file-tree-rail-btn:hover {
+  color: var(--fg);
+  background: rgba(198, 241, 53, 0.08);
+}
+
+.file-tree-rail-btn.is-active {
+  color: var(--accent);
+  background: rgba(198, 241, 53, 0.12);
+}
+
+.file-tree-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Section header labels (VS Code's collapsed section titles). */
+.sidebar-section-label {
+  padding: 10px 12px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Open-editor "tabs" list. */
+.sidebar-tabs {
+  list-style: none;
+  margin: 0;
+  padding: 2px 0 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar-tab {
+  width: 100%;
 }
 
 .file-tree-list {

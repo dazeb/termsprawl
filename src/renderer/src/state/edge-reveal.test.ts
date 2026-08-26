@@ -48,17 +48,23 @@ describe('shouldKeepTreeOpen', () => {
 })
 
 describe('file tree chrome', () => {
-  it('starts closed on the left, unpinned', () => {
-    expect(initialFileTreeChrome()).toEqual({ side: 'left', open: false, pinned: false })
+  it('starts closed on the left, unpinned, files section', () => {
+    expect(initialFileTreeChrome()).toEqual({
+      side: 'left',
+      open: false,
+      pinned: false,
+      section: 'files'
+    })
   })
 
   it('reveals on one side only', () => {
     const left = applyFileTreeChrome(initialFileTreeChrome(), { type: 'reveal', side: 'left' })
-    expect(left).toEqual({ side: 'left', open: true, pinned: false })
+    expect(left).toEqual({ side: 'left', open: true, pinned: false, section: 'files' })
     expect(applyFileTreeChrome(left, { type: 'reveal', side: 'right' })).toEqual({
       side: 'right',
       open: true,
-      pinned: false
+      pinned: false,
+      section: 'files'
     })
   })
 
@@ -80,5 +86,24 @@ describe('file tree chrome', () => {
   it('closes on mouse leave when unpinned', () => {
     const open = applyFileTreeChrome(initialFileTreeChrome(), { type: 'reveal', side: 'left' })
     expect(applyFileTreeChrome(open, { type: 'requestClose' }).open).toBe(false)
+  })
+
+  it('switches sections and keeps the panel open', () => {
+    const open = applyFileTreeChrome(initialFileTreeChrome(), { type: 'reveal', side: 'left' })
+    const source = applyFileTreeChrome(open, { type: 'switchSection', section: 'source' })
+    expect(source.section).toBe('source')
+    expect(source.open).toBe(true)
+    // The section survives close/reopen.
+    const closed = applyFileTreeChrome(source, { type: 'requestClose' })
+    expect(closed.section).toBe('source')
+    const reopened = applyFileTreeChrome(closed, { type: 'reveal', side: 'left' })
+    expect(reopened.section).toBe('source')
+    // Switching from a closed state opens the panel too.
+    const fromClosed = applyFileTreeChrome(initialFileTreeChrome(), {
+      type: 'switchSection',
+      section: 'plugins'
+    })
+    expect(fromClosed.section).toBe('plugins')
+    expect(fromClosed.open).toBe(true)
   })
 })

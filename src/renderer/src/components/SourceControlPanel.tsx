@@ -1,6 +1,10 @@
 // Source control panel (Phase 8, Task 8.2). Shows the active folder project's
 // git status, lets the user stage/unstage/discard files, commit, manage
 // branches, and push/pull/publish. Talks to core only via window.termsprawl.git.
+//
+// Renders either as the standalone overlay panel (from the cog menu) or,
+// `embedded`, as the sidebar's SOURCE CONTROL section (VS Code-style) — no
+// head, no close button, full width of the sidebar.
 
 import { useCallback, useEffect, useState } from 'react'
 import type { GitFileChange, GitPanelSnapshot, GitResult, GitWorktree } from '@shared/types'
@@ -8,10 +12,16 @@ import { HelpBadge } from './HelpBadge'
 
 interface SourceControlPanelProps {
   cwd: string
-  onClose: () => void
+  onClose?: () => void
+  /** Render inside the sidebar: no floating head/close, full-width content. */
+  embedded?: boolean
 }
 
-export function SourceControlPanel({ cwd, onClose }: SourceControlPanelProps): React.JSX.Element {
+export function SourceControlPanel({
+  cwd,
+  onClose,
+  embedded = false
+}: SourceControlPanelProps): React.JSX.Element {
   const [snap, setSnap] = useState<GitPanelSnapshot | null>(null)
   const [msg, setMsg] = useState('')
   const [newBranch, setNewBranch] = useState('')
@@ -104,20 +114,31 @@ export function SourceControlPanel({ cwd, onClose }: SourceControlPanelProps): R
 
   const ghNeedsAuth = !!snap?.remote?.includes('github.com') && snap.ghAuthed === false
 
+  // The exact git commands behind the push/pull/publish buttons — shown so the
+  // user learns them (VS Code-style "commands" affordance).
+  const branchName = snap?.branch ?? ''
+  const publishCommand = snap?.sync.upstream
+    ? null
+    : branchName
+      ? `git push -u origin ${branchName}`
+      : null
+
   return (
-    <div className="source-control">
-      <div className="source-control-head">
-        <span className="source-control-title">
-          source control
-          <HelpBadge
-            label="about source control"
-            text="Shows the active folder project's git state. Stage/unstage files, discard working-tree edits, commit, switch branches, and push or pull. git runs via system git in the project folder — works with any remote, GitHub or Gitea."
-          />
-        </span>
-        <button className="source-control-close" onClick={onClose} title="Close">
-          ×
-        </button>
-      </div>
+    <div className={embedded ? 'source-control source-control-embedded' : 'source-control'}>
+      {!embedded && (
+        <div className="source-control-head">
+          <span className="source-control-title">
+            source control
+            <HelpBadge
+              label="about source control"
+              text="Shows the active folder project's git state. Stage/unstage files, discard working-tree edits, commit, switch branches, and push or pull. git runs via system git in the project folder — works with any remote, GitHub or Gitea."
+            />
+          </span>
+          <button className="source-control-close" onClick={onClose} title="Close">
+            ×
+          </button>
+        </div>
+      )}
 
       {error && <p className="source-control-error">{error}</p>}
       {status && <p className="source-control-status">{status}</p>}
@@ -151,7 +172,53 @@ export function SourceControlPanel({ cwd, onClose }: SourceControlPanelProps): R
             )}
           </div>
 
+          {/* Remote + the exact git commands, in one easy panel (GitHub-style
+          workflow). Shows the command string next to each action so users can
+          also run them in a terminal. */}
+          <div className="source-control-remote">
+            <div className="source-control-subtitle">remote</div>
+            <div className="source-control-remotebox">
+              {snap.remote ? (
+                <span className="source-control-remoteurl" title={snap.remote}>
+                  {snap.remote}
+                </span>
+              ) : (
+                <span className="source-control-empty">no remote configured</span>
+              )}
+              <div className="source-control-cmdrow">
+                <code className="source-control-cmd">git push</code>
+                <button
+                  className="source-control-cmdbtn"
+                  onClick={() => void run(() => window.termsprawl.git.push(cwd), 'pushed')}
+                >
+                  run
+                </button>
+              </div>
+              <div className="source-control-cmdrow">
+                <code className="source-control-cmd">git pull</code>
+                <button
+                  className="source-control-cmdbtn"
+                  onClick={() => void run(() => window.termsprawl.git.pull(cwd), 'pulled')}
+                >
+                  run
+                </button>
+              </div>
+              {publishCommand && (
+                <div className="source-control-cmdrow">
+                  <code className="source-control-cmd">{publishCommand}</code>
+                  <button
+                    className="source-control-cmdbtn"
+                    onClick={() => void run(() => window.termsprawl.git.publish(cwd), 'published')}
+                  >
+                    run
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="source-control-files">
+            <div className="source-control-subtitle">changes</div>
             {snap.changes.length === 0 && <p className="source-control-empty">no changes</p>}
             {snap.changes.map((change) => (
               <div key={change.path} className={`git-file git-file-${change.status}`}>
@@ -209,6 +276,25 @@ export function SourceControlPanel({ cwd, onClose }: SourceControlPanelProps): R
             </button>
           </div>
 
+          {/* History — the changelog as a list (what changed recently). */}
+          {snap.commits.length > 0 && (
+            <div className="source-control-history">
+              <div className="source-control-subtitle">history</div>
+              <ul className="source-control-hlist">
+                {snap.commits.map((c) => (
+                  <li key={c.hash} className="source-control-hrow" title={`${c.hash} · ${c.author}`}>
+                    <span className="source-control-hash">{c.hash}</span>
+                    <span className="source-control-hsubject">{c.subject}</span>
+                    <span className="source-control-hmeta">
+                      {c.date}
+                      {c.author ? ` · ${c.author}` : ''}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <div className="source-control-branches">
             <div className="source-control-subtitle">branches</div>
             {snap.branches.map((b) => (
@@ -245,63 +331,63 @@ export function SourceControlPanel({ cwd, onClose }: SourceControlPanelProps): R
               >
                 create
               </button>
-                            </div>
-                          </div>
+            </div>
+          </div>
 
-                          <div className="source-control-worktrees">
-                            <div className="source-control-subtitle">worktrees</div>
-                            {worktrees.map((w) => (
-                              <div key={w.path} className="source-control-wtrow">
-                                <span className="source-control-wtpath" title={w.path}>
-                                  {w.path === cwd ? '● ' : ''}
-                                  {basenameOf(w.path)}
-                                </span>
-                                <span className="source-control-wtbranch">{w.branch ?? 'detached'}</span>
-                                {w.path !== cwd &&
-                                  (confirmRemoveWt === w.path ? (
-                                    <span className="git-file-confirm">
-                                      <span className="account-confirm-text">
-                                        removes this worktree (discards its changes)
-                                      </span>
-                                      <button className="danger" onClick={() => removeWorktreeAt(w.path)}>
-                                        confirm
-                                      </button>
-                                      <button onClick={() => setConfirmRemoveWt(null)}>keep</button>
-                                    </span>
-                                  ) : (
-                                    <button
-                                      className="git-file-action git-file-discard"
-                                      title="remove worktree"
-                                      onClick={() => setConfirmRemoveWt(w.path)}
-                                    >
-                                      ✕
-                                    </button>
-                                  ))}
-                              </div>
-                            ))}
-                            <div className="source-control-commit">
-                              <input
-                                className="source-control-msg"
-                                value={newWtName}
-                                placeholder="worktree name"
-                                onChange={(event) => setNewWtName(event.target.value)}
-                                onKeyDown={(event) => {
-                                  if (event.key === 'Enter') createWorktree()
-                                }}
-                              />
-                              <input
-                                className="source-control-msg"
-                                value={newWtBranch}
-                                placeholder="branch (optional)"
-                                onChange={(event) => setNewWtBranch(event.target.value)}
-                              />
-                              <button disabled={!newWtName.trim()} onClick={createWorktree}>
-                                create
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                    )}
+          <div className="source-control-worktrees">
+            <div className="source-control-subtitle">worktrees</div>
+            {worktrees.map((w) => (
+              <div key={w.path} className="source-control-wtrow">
+                <span className="source-control-wtpath" title={w.path}>
+                  {w.path === cwd ? '● ' : ''}
+                  {basenameOf(w.path)}
+                </span>
+                <span className="source-control-wtbranch">{w.branch ?? 'detached'}</span>
+                {w.path !== cwd &&
+                  (confirmRemoveWt === w.path ? (
+                    <span className="git-file-confirm">
+                      <span className="account-confirm-text">
+                        removes this worktree (discards its changes)
+                      </span>
+                      <button className="danger" onClick={() => removeWorktreeAt(w.path)}>
+                        confirm
+                      </button>
+                      <button onClick={() => setConfirmRemoveWt(null)}>keep</button>
+                    </span>
+                  ) : (
+                    <button
+                      className="git-file-action git-file-discard"
+                      title="remove worktree"
+                      onClick={() => setConfirmRemoveWt(w.path)}
+                    >
+                      ✕
+                    </button>
+                  ))}
+              </div>
+            ))}
+            <div className="source-control-commit">
+              <input
+                className="source-control-msg"
+                value={newWtName}
+                placeholder="worktree name"
+                onChange={(event) => setNewWtName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') createWorktree()
+                }}
+              />
+              <input
+                className="source-control-msg"
+                value={newWtBranch}
+                placeholder="branch (optional)"
+                onChange={(event) => setNewWtBranch(event.target.value)}
+              />
+              <button disabled={!newWtName.trim()} onClick={createWorktree}>
+                create
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

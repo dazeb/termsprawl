@@ -1,9 +1,15 @@
 export type TreeSide = 'left' | 'right'
 
+/** The VS Code-style sidebar sections. Plugins is a placeholder for the
+ * future extension area. */
+export type SidebarSection = 'files' | 'source' | 'plugins'
+
 export interface FileTreeChrome {
   side: TreeSide
   open: boolean
   pinned: boolean
+  /** Active sidebar section; survives close/reopen. */
+  section: SidebarSection
 }
 
 export type FileTreeChromeAction =
@@ -11,9 +17,10 @@ export type FileTreeChromeAction =
   | { type: 'flipSide' }
   | { type: 'togglePin' }
   | { type: 'requestClose' }
+  | { type: 'switchSection'; section: SidebarSection }
 
 export function initialFileTreeChrome(): FileTreeChrome {
-  return { side: 'left', open: false, pinned: false }
+  return { side: 'left', open: false, pinned: false, section: 'files' }
 }
 
 export function applyFileTreeChrome(
@@ -29,6 +36,8 @@ export function applyFileTreeChrome(
       return { ...state, pinned: !state.pinned, open: true }
     case 'requestClose':
       return state.pinned ? state : { ...state, open: false }
+    case 'switchSection':
+      return { ...state, section: action.section, open: true }
   }
 }
 
