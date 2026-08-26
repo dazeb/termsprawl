@@ -237,10 +237,13 @@ export function createEditorNode(path: string | null = null): Node<EditorNodeDat
 export const DEFAULT_BROWSER_URL = 'https://duckduckgo.com'
 
 /** A browser node: a sandboxed <webview> guest rendered inline on the canvas.
- * Opens as a small "mini window" (it's primarily the agent's browser; the user
- * can resize it up). Starts with a single tab at DuckDuckGo until the user or
- * an agent navigates it. */
+ * Opens as a small "mini window" — roughly 10cm × 15cm MAX (≈378×567px at
+ * 96dpi) — because it's primarily the agent's browser; the user views as a
+ * bonus. Starts with a single tab at DuckDuckGo until the user or an agent
+ * navigates it. */
 export const BROWSER_NODE_SIZE = { width: 320, height: 240 } as const
+/** Hard cap so the window can't grow past ~10cm × 15cm (96dpi). */
+export const BROWSER_NODE_MAX = { width: 378, height: 567 } as const
 
 export function createBrowserNode(url: string = DEFAULT_BROWSER_URL): Node<BrowserNodeData> {
   const tab = { id: nextBrowserTabId(), url }

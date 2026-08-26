@@ -6,6 +6,7 @@ import {
   activateBrowserTab,
   addBrowserTab,
   browserTitle,
+  BROWSER_NODE_MAX,
   closeBrowserTab,
   DEFAULT_BROWSER_URL,
   nextBrowserTabId,
@@ -23,6 +24,7 @@ interface WebviewElement extends HTMLElement {
   getURL(): string
   getWebContentsId(): number
   loadURL(url: string): Promise<void>
+  insertCSS(css: string): Promise<string>
   canGoBack(): boolean
   canGoForward(): boolean
   goBack(): void
@@ -30,6 +32,13 @@ interface WebviewElement extends HTMLElement {
   reload(): void
   stop(): void
 }
+
+// Hide the guest page's own scrollbars so the small mini-window shows clean
+// content instead of a scrollbar eating half of it. The page still scrolls.
+const HIDE_SCROLLBARS_CSS = `
+::-webkit-scrollbar { width: 0 !important; height: 0 !important; background: transparent !important; }
+* { scrollbar-width: none !important; }
+`
 
 // A browser node: one sandboxed <webview> guest PER TAB, rendered inline on
 // the canvas (13.4). The guests are hardened in main (no preload / no
@@ -151,6 +160,11 @@ export function BrowserNode({ id, data, selected }: NodeProps<BrowserNodeData>):
         const gid = webview.getWebContentsId()
         void window.termsprawl.browser.register(id, tab.id, gid)
         if (tab.id === activeTabIdRef.current) setGuestId(gid)
+        // Mini-window: hide the guest page's scrollbars (they eat the small
+        // viewport); the page still scrolls, just without the visible bar.
+        void webview.insertCSS(HIDE_SCROLLBARS_CSS).catch(() => {
+          /* best effort */
+        })
       } catch {
         // Guest not ready yet; will re-fire on the next load.
       }
@@ -290,6 +304,8 @@ export function BrowserNode({ id, data, selected }: NodeProps<BrowserNodeData>):
         isVisible={selected}
         minWidth={220}
         minHeight={140}
+        maxWidth={BROWSER_NODE_MAX.width}
+        maxHeight={BROWSER_NODE_MAX.height}
         color="#c6f135"
         handleClassName="browser-resize-handle"
       />
