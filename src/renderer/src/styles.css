@@ -400,6 +400,20 @@ body {
   letter-spacing: -0.01em;
 }
 
+/* "alpha" pill — mirrors the marketing site's header badge. */
+.brand-pill {
+  border-radius: 999px;
+  background: rgba(198, 241, 53, 0.12);
+  color: var(--accent);
+  font-family: 'Geist Mono', 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  padding: 3px 7px;
+}
+
 .version {
   color: var(--accent);
   font-family: 'Geist Mono', 'JetBrains Mono', monospace;
