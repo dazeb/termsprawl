@@ -38,7 +38,7 @@ terminal nodes, canvas, tmux continuity, projects/persistence, sticky/group/
 editor/diff nodes, agents with context links and managed accounts); Phase 8
 (source control panel with git status, staging, commits, branches, sync, and
 worktrees) is shipped through 8.3. Phase 13 (embedded browser nodes with
-opt-in agent control) is shipped. Current version: **0.7.0**.
+opt-in agent control) is shipped. Current version: **0.8.0**.
 
 Linux only — AppImage and `.deb` artifacts. No macOS support, by design.
 
