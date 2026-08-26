@@ -123,9 +123,9 @@ declare global {
       }
       browser: {
         cdpInfo(): Promise<BrowserCdpInfo>
-        register(nodeId: string, guestId: number): Promise<void>
-        unregister(nodeId: string): Promise<void>
-        navigate(nodeId: string, url: string): Promise<BrowserNavigateResult>
+        register(nodeId: string, tabId: string, guestId: number): Promise<void>
+        unregister(nodeId: string, tabId: string): Promise<void>
+        navigate(nodeId: string, tabId: string, url: string): Promise<BrowserNavigateResult>
         onAgentOpen(cb: (info: { url: string }) => void): () => void
       }
     }

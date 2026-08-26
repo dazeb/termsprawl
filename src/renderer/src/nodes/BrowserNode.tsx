@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import type { NodeProps } from 'reactflow'
-import type { BrowserNodeData } from '../state/workspace'
-import { browserTitle } from '../state/workspace'
+import type { BrowserNodeData, BrowserTab } from '../state/workspace'
+import {
+  activateBrowserTab,
+  addBrowserTab,
+  browserTitle,
+  closeBrowserTab,
+  nextBrowserTabId,
+  pushBrowserHistory,
+  setBrowserTabUrl
+} from '../state/workspace'
 import { useCanvas } from '../canvas/Canvas'
 import { HelpBadge } from '../components/HelpBadge'
 
@@ -21,69 +29,122 @@ interface WebviewElement extends HTMLElement {
   stop(): void
 }
 
-// A browser node: a sandboxed <webview> guest rendered inline on the canvas.
-// The guest is hardened in main (no preload / no nodeIntegration / sandbox on /
-// nav policy), so it is a real browser the user can use OR an agent can drive
-// via the exposed CDP endpoint. The body is nodrag only while unfocused;
-// dragging happens via the header, exactly like the terminal node.
+// A browser node: one sandboxed <webview> guest PER TAB, rendered inline on
+// the canvas (13.4). The guests are hardened in main (no preload / no
+// nodeIntegration / sandbox on / nav policy), so each tab is a real browser
+// page the user can use OR an agent can drive via the exposed CDP endpoint
+// (every tab shows up as its own `page` target). The body is nodrag only
+// while unfocused; dragging happens via the header, exactly like the terminal
+// node.
 export function BrowserNode({ id, data }: NodeProps<BrowserNodeData>): React.JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null)
-  const webviewRef = useRef<WebviewElement | null>(null)
+  const webviewsRef = useRef<Map<string, WebviewElement>>(new Map())
   const { closeNode, updateNodeData } = useCanvas()
+  const historyRef = useRef<string[]>(data.history ?? [])
+
+  // Legacy persisted nodes (pre-13.4) carry no tabs — treat them as one tab.
+  const initialTabsRef = useRef<BrowserTab[]>(
+    data.tabs && data.tabs.length > 0 ? data.tabs : [{ id: nextBrowserTabId(), url: data.url }]
+  )
+  const [tabs, setTabs] = useState<BrowserTab[]>(initialTabsRef.current)
+  const [activeTabId, setActiveTabId] = useState<string>(
+    data.activeTabId && initialTabsRef.current.some((t) => t.id === data.activeTabId)
+      ? data.activeTabId
+      : initialTabsRef.current[0].id
+  )
   const [address, setAddress] = useState(data.url)
   const [canBack, setCanBack] = useState(false)
   const [canForward, setCanForward] = useState(false)
   const [crashed, setCrashed] = useState(false)
   const [guestId, setGuestId] = useState<number | null>(null)
 
-  // Create the <webview> once per node mount; unregister + remove on unmount.
-  useEffect(() => {
+  // Refs mirroring the live state so event closures always read current values.
+  const activeTabIdRef = useRef(activeTabId)
+  activeTabIdRef.current = activeTabId
+  const tabsRef = useRef(tabs)
+  tabsRef.current = tabs
+
+  const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0]
+
+  /** Persist the tab set + active tab + history through the workspace store
+   * (the project file keeps them, so a reload restores the node's tabs). */
+  const persist = (nextTabs: BrowserTab[], nextActive: string, url?: string): void => {
+    updateNodeData(
+      id,
+      {
+        url: url ?? nextTabs.find((t) => t.id === nextActive)?.url ?? '',
+        tabs: nextTabs,
+        activeTabId: nextActive,
+        history: historyRef.current
+      },
+      false
+    )
+  }
+
+  /** Read the toolbar state for a tab's webview (address/back/forward/guest). */
+  const syncToolbar = (tabId: string): void => {
+    const wv = webviewsRef.current.get(tabId)
+    if (!wv) return
+    try {
+      setAddress(wv.getURL())
+      setCanBack(wv.canGoBack())
+      setCanForward(wv.canGoForward())
+      setGuestId(wv.getWebContentsId())
+    } catch {
+      /* transient read during teardown */
+    }
+  }
+
+  /** Create a hardened <webview> guest for a tab and wire its events. */
+  const spawnWebview = (tab: BrowserTab, hidden: boolean): void => {
     const host = hostRef.current
     if (!host) return
-
     const webview = document.createElement('webview') as unknown as WebviewElement
     // Isolated persistent profile so cookies/logins survive app restarts; the
-    // guest never sees a preload or Node because installBrowserSecurity() forces
-    // those off at attach time.
+    // guest never sees a preload or Node because installBrowserSecurity()
+    // forces those off at attach time.
     webview.setAttribute('partition', 'persist:termsprawl-browser')
     webview.setAttribute('webpreferences', 'contextIsolation=yes, sandbox=yes, nodeIntegration=no')
-    webview.setAttribute('src', data.url)
-    webview.style.display = 'block'
+    webview.setAttribute('src', tab.url)
     webview.style.width = '100%'
     webview.style.height = '100%'
-    webviewRef.current = webview
+    webview.style.display = hidden ? 'none' : 'block'
     webview.dataset.nodeId = id
+    webview.dataset.tabId = tab.id
+    webviewsRef.current.set(tab.id, webview)
     host.appendChild(webview)
 
-    let active = true
-
     const onDomReady = (): void => {
-      if (!active) return
       try {
         const gid = webview.getWebContentsId()
-        setGuestId(gid)
-        void window.termsprawl.browser.register(id, gid)
+        void window.termsprawl.browser.register(id, tab.id, gid)
+        if (tab.id === activeTabIdRef.current) setGuestId(gid)
       } catch {
         // Guest not ready yet; will re-fire on the next load.
       }
     }
 
     const onDidNavigate = (): void => {
-      if (!active) return
       try {
         const url = webview.getURL()
-        setAddress(url)
-        updateNodeData(id, { url }, false)
-        setCanBack(webview.canGoBack())
-        setCanForward(webview.canGoForward())
+        // Update the tab's url + the node-level history (most recent first).
+        const next = setBrowserTabUrl(tabsRef.current, tab.id, url)
+        historyRef.current = pushBrowserHistory(historyRef.current, url)
+        setTabs(next)
+        const active = activeTabIdRef.current
+        persist(next, active, next.find((t) => t.id === active)?.url ?? url)
+        if (tab.id === active) {
+          setAddress(url)
+          setCanBack(webview.canGoBack())
+          setCanForward(webview.canGoForward())
+        }
       } catch {
         /* ignore transient reads during teardown */
       }
     }
 
     const onCrashed = (): void => {
-      if (!active) return
-      setCrashed(true)
+      if (tab.id === activeTabIdRef.current) setCrashed(true)
     }
 
     webview.addEventListener('dom-ready', onDomReady)
@@ -91,45 +152,123 @@ export function BrowserNode({ id, data }: NodeProps<BrowserNodeData>): React.JSX
     webview.addEventListener('did-navigate-in-page', onDidNavigate)
     webview.addEventListener('page-title-updated', onDidNavigate)
     webview.addEventListener('render-process-gone', onCrashed)
+  }
 
+  // Create the webviews for the initial tabs once per node mount; unregister +
+  // remove on unmount (removing the <webview> element destroys the guest).
+  useEffect(() => {
+    for (const tab of initialTabsRef.current) {
+      spawnWebview(tab, tab.id !== activeTabIdRef.current)
+    }
     return () => {
-      active = false
-      webview.removeEventListener('dom-ready', onDomReady)
-      webview.removeEventListener('did-navigate', onDidNavigate)
-      webview.removeEventListener('did-navigate-in-page', onDidNavigate)
-      webview.removeEventListener('page-title-updated', onDidNavigate)
-      webview.removeEventListener('render-process-gone', onCrashed)
-      void window.termsprawl.browser.unregister(id)
-      host.removeChild(webview)
-      webviewRef.current = null
+      for (const [tabId, webview] of webviewsRef.current) {
+        void window.termsprawl.browser.unregister(id, tabId)
+        webview.stop()
+        webview.remove()
+      }
+      webviewsRef.current.clear()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
-  // Navigate: go through main so the URL policy is enforced in one place.
+  // Navigate the ACTIVE tab: go through main so the URL policy is enforced in
+  // one place.
   const navigateTo = (): void => {
     const target = address.trim()
     if (!target) return
-    void window.termsprawl.browser.navigate(id, target).then((res) => {
+    const tabId = activeTabIdRef.current
+    void window.termsprawl.browser.navigate(id, tabId, target).then((res) => {
       if (!res.ok && res.reason === 'DENIED') {
-        setAddress(data.url)
+        setAddress(webviewsRef.current.get(tabId)?.getURL() ?? data.url)
       }
     })
   }
 
-  const goBack = (): void => webviewRef.current?.goBack()
-  const goForward = (): void => webviewRef.current?.goForward()
+  const goBack = (): void => webviewsRef.current.get(activeTabIdRef.current)?.goBack()
+  const goForward = (): void => webviewsRef.current.get(activeTabIdRef.current)?.goForward()
   const reload = (): void => {
     setCrashed(false)
-    webviewRef.current?.reload()
+    webviewsRef.current.get(activeTabIdRef.current)?.reload()
+  }
+
+  const openTab = (): void => {
+    const res = addBrowserTab(tabsRef.current, 'about:blank')
+    setTabs(res.tabs)
+    setActiveTabId(res.activeTabId)
+    setCrashed(false)
+    setGuestId(null)
+    spawnWebview({ id: res.activeTabId, url: 'about:blank' }, false)
+    persist(res.tabs, res.activeTabId)
+  }
+
+  const closeTab = (tabId: string): void => {
+    const res = closeBrowserTab(tabsRef.current, activeTabIdRef.current, tabId)
+    if (!res) {
+      // Closing the last tab closes the node (browser convention).
+      closeNode(id)
+      return
+    }
+    const wv = webviewsRef.current.get(tabId)
+    if (wv) {
+      void window.termsprawl.browser.unregister(id, tabId)
+      wv.stop()
+      wv.remove()
+      webviewsRef.current.delete(tabId)
+    }
+    setTabs(res.tabs)
+    setActiveTabId(res.activeTabId)
+    setCrashed(false)
+    setGuestId(null)
+    syncToolbar(res.activeTabId)
+    persist(res.tabs, res.activeTabId)
+  }
+
+  const activateTab = (tabId: string): void => {
+    const res = activateBrowserTab(tabsRef.current, tabId)
+    if (!res || res.activeTabId === activeTabIdRef.current) return
+    // Hide the old guest, show the new one.
+    webviewsRef.current.get(activeTabIdRef.current)?.style.setProperty('display', 'none')
+    const next = webviewsRef.current.get(tabId)
+    if (next) next.style.setProperty('display', 'block')
+    setTabs(res.tabs)
+    setActiveTabId(res.activeTabId)
+    setCrashed(false)
+    syncToolbar(res.activeTabId)
+    persist(res.tabs, res.activeTabId)
   }
 
   return (
     <div className="browser-node">
+      <div className="browser-tabs nodrag">
+        {tabs.map((t) => (
+          <div
+            key={t.id}
+            className={`browser-tab${t.id === activeTabId ? ' is-active' : ''}`}
+            title={t.url}
+            onClick={() => activateTab(t.id)}
+          >
+            <span className="browser-tab-title">{browserTitle(t.url)}</span>
+            <button
+              className="browser-tab-close"
+              title="Close tab"
+              aria-label="Close tab"
+              onClick={(e) => {
+                e.stopPropagation()
+                closeTab(t.id)
+              }}
+            >
+              ×
+            </button>
+          </div>
+        ))}
+        <button className="browser-tab-add" title="New tab" aria-label="New tab" onClick={openTab}>
+          +
+        </button>
+      </div>
       <div className="browser-node-header nodrag">
         <span className="terminal-node-dot" />
-        <span className="browser-node-title" title={data.url}>
-          {browserTitle(data.url)}
+        <span className="browser-node-title" title={activeTab?.url ?? data.url}>
+          {browserTitle(activeTab?.url ?? data.url)}
         </span>
         <div className="browser-nav nodrag">
           <button className="browser-nav-btn" disabled={!canBack} onClick={goBack} title="Back">
@@ -154,7 +293,8 @@ export function BrowserNode({ id, data }: NodeProps<BrowserNodeData>): React.JSX
           onChange={(e) => setAddress(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') navigateTo()
-            if (e.key === 'Escape') setAddress(data.url)
+            if (e.key === 'Escape')
+              setAddress(webviewsRef.current.get(activeTabIdRef.current)?.getURL() ?? data.url)
           }}
           onPointerDown={(e) => e.stopPropagation()}
           placeholder="enter a URL (example.com → https)"
@@ -193,4 +333,4 @@ export function BrowserNode({ id, data }: NodeProps<BrowserNodeData>): React.JSX
 }
 
 const browserHelp =
-  'A real, sandboxed Chromium page embedded on the canvas. It is isolated from the rest of termsprawl (no Node, no preload). Drag the header to move it; the address bar navigates through a policy that blocks file:, devtools: and other privileged schemes. If an agent is attached, it drives this same page via a localhost-only CDP endpoint, so you watch exactly what it does. The × button closes the node.'
+  'A real, sandboxed Chromium page embedded on the canvas — one guest per tab. It is isolated from the rest of termsprawl (no Node, no preload). Drag the header to move it; the address bar navigates through a policy that blocks file:, devtools: and other privileged schemes. Tabs share cookies (persistent profile) and each tab is its own CDP target if an agent is attached, so you watch exactly what it does. The × button closes the node.'

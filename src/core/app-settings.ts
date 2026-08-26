@@ -19,7 +19,10 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   language: 'en',
   agentPreset: 'standard',
   defaultPermission: 'workspaceWrite',
-  enterBehavior: 'queue'
+  enterBehavior: 'queue',
+  // Browser nodes are usable by the user out of the box; the agent-control
+  // surface (CDP facade + /open server) is opt-in, off by default.
+  agentBrowserControl: false
 }
 
 const SETTINGS_FILE = 'settings.json'
@@ -117,7 +120,8 @@ export function normalizeAppSettings(raw: unknown): AppSettings {
         ? obj.defaultPermission
         : 'workspaceWrite',
     enterBehavior:
-      typeof obj.enterBehavior === 'string' && obj.enterBehavior.length > 0 ? obj.enterBehavior : 'queue'
+      typeof obj.enterBehavior === 'string' && obj.enterBehavior.length > 0 ? obj.enterBehavior : 'queue',
+    agentBrowserControl: obj.agentBrowserControl === true
   }
 }
 

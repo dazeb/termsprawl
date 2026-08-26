@@ -45,7 +45,8 @@ describe('app-settings', () => {
       language: 'en',
       agentPreset: 'standard',
       defaultPermission: 'workspaceWrite',
-      enterBehavior: 'queue'
+      enterBehavior: 'queue',
+      agentBrowserControl: false
     }
     expect(saveAppSettings(dir, { autoDownloadUpdates: true })).toEqual(base)
     expect(loadAppSettings(dir)).toEqual(base)
@@ -53,6 +54,26 @@ describe('app-settings', () => {
       autoDownloadUpdates: boolean
     }
     expect(raw.autoDownloadUpdates).toBe(true)
+  })
+
+  it('defaults agent browser control to OFF (manual browser works, no agent endpoint)', () => {
+    expect(DEFAULT_APP_SETTINGS.agentBrowserControl).toBe(false)
+    expect(normalizeAppSettings({ agentBrowserControl: 'yes' }).agentBrowserControl).toBe(false)
+    expect(normalizeAppSettings({}).agentBrowserControl).toBe(false)
+  })
+
+  it('round-trips agent browser control through disk', () => {
+    const dir = scratch()
+    const saved = saveAppSettings(dir, { agentBrowserControl: true })
+    expect(saved.agentBrowserControl).toBe(true)
+    expect(loadAppSettings(dir).agentBrowserControl).toBe(true)
+    const raw = JSON.parse(readFileSync(join(dir, 'settings.json'), 'utf8')) as {
+      agentBrowserControl: boolean
+    }
+    expect(raw.agentBrowserControl).toBe(true)
+    // Toggling back off sticks.
+    expect(saveAppSettings(dir, { agentBrowserControl: false }).agentBrowserControl).toBe(false)
+    expect(loadAppSettings(dir).agentBrowserControl).toBe(false)
   })
 
   it('ignores a corrupt settings file', () => {

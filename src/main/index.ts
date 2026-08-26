@@ -176,13 +176,54 @@ const hookServer = new HookServer((event) => {
   }
 })
 
-// Loopback agent-control server (13.3): lets an external agent open a browser
-// node so the user watches the agent's page. Started in whenReady; see
-// browser/agent-server.ts. The CDP facade (see browser/cdp-facade.ts) is the
-// endpoint agents actually connect to — it re-exposes guests as `page` targets
-// so Playwright (not just Puppeteer) sees them.
+// Agent-control surface (13.3/13.4): the CDP facade re-exposes browser-node
+// guests as `page` targets so Playwright can drive them, and the token-gated
+// loopback server lets an agent open a node. Both are localhost-only and
+// OPT-IN via settings → General → "allow agents to control browser nodes"
+// (off by default — browser nodes work fine manually without any agent
+// endpoint). See browser/cdp-facade.ts + browser/agent-server.ts.
 let agentServer: AgentServerHandle | null = null
 let cdpFacade: CdpFacadeHandle | null = null
+
+/** Start the agent-control surface. Idempotent; no-ops when already running. */
+async function startBrowserControlEndpoints(): Promise<void> {
+  if (cdpFacade) return
+  try {
+    cdpFacade = await startCdpFacade({
+      cdpInfo: { wsUrl: browserRuntime.wsUrl, host: '127.0.0.1', port: browserRuntime.port }
+    })
+    agentServer = await startAgentServer({
+      userDataPath: platform.userDataPath,
+      broadcast: (channel, payload) => platform.broadcast(channel, payload),
+      cdp: { wsUrl: cdpFacade.url, host: '127.0.0.1', port: cdpFacade.port }
+    })
+  } catch (err) {
+    console.error('[browser] agent-control facade failed to start:', err)
+    void cdpFacade?.close()
+    cdpFacade = null
+    agentServer = null
+  }
+}
+
+function stopBrowserControlEndpoints(): void {
+  if (agentServer) {
+    void agentServer.close()
+    agentServer = null
+  }
+  if (cdpFacade) {
+    void cdpFacade.close()
+    cdpFacade = null
+  }
+}
+
+/** Keep the agent-control surface in sync with the settings toggle. */
+function syncAgentBrowserControl(): void {
+  if (appSettings.current.agentBrowserControl === true) {
+    void startBrowserControlEndpoints()
+  } else {
+    stopBrowserControlEndpoints()
+  }
+}
 
 function registerWorkspaceIpc(): void {
   ipcMain.handle(IPC.workspaceSnapshot, () => workspaceStore.snapshot())
@@ -379,6 +420,7 @@ function registerUpdateIpc(): void {
   ipcMain.handle(IPC.appSettingsSet, (_event, patch: Partial<AppSettings>) => {
     appSettings.current = saveAppSettings(platform.userDataPath, patch)
     updateBridge.setAutoDownload(appSettings.current.autoDownloadUpdates)
+    syncAgentBrowserControl()
     return appSettings.current
   })
   ipcMain.handle(IPC.accountCreate, (_event, label: unknown): AppSettings => {
@@ -449,18 +491,20 @@ function registerBrowserIpc(): void {
     wsUrl: cdpFacade?.url ?? browserRuntime.wsUrl,
     host: '127.0.0.1'
   }))
-  ipcMain.handle(IPC.browserRegister, (_event, nodeId: string, guestId: number): void => {
-    if (typeof nodeId === 'string' && typeof guestId === 'number') {
-      registerBrowserGuest(nodeId, guestId)
+  ipcMain.handle(IPC.browserRegister, (_event, nodeId: string, tabId: string, guestId: number): void => {
+    if (typeof nodeId === 'string' && typeof tabId === 'string' && typeof guestId === 'number') {
+      registerBrowserGuest(nodeId, tabId, guestId)
     }
   })
-  ipcMain.handle(IPC.browserUnregister, (_event, nodeId: string): void => {
-    if (typeof nodeId === 'string') unregisterBrowserGuest(nodeId)
+  ipcMain.handle(IPC.browserUnregister, (_event, nodeId: string, tabId: string): void => {
+    if (typeof nodeId === 'string' && typeof tabId === 'string') {
+      unregisterBrowserGuest(nodeId, tabId)
+    }
   })
   ipcMain.handle(
     IPC.browserNavigate,
-    (_event, nodeId: string, url: string): Promise<BrowserNavigateResult> =>
-      navigateBrowserNode(nodeId, url)
+    (_event, nodeId: string, tabId: string, url: string): Promise<BrowserNavigateResult> =>
+      navigateBrowserNode(nodeId, tabId, url)
   )
 }
 
@@ -618,20 +662,13 @@ void app.whenReady().then(async () => {
     console.error('[hooks] install failed:', err)
   }
 
-  // 13.3 — start the playable CDP facade + the reachable agent-control endpoint
-  // (both localhost-only + token). The facade is the endpoint agents connect to:
-  // it re-exposes the embedded guests as `page` targets so Playwright sees them.
-  try {
-    cdpFacade = await startCdpFacade({
-      cdpInfo: { wsUrl: browserRuntime.wsUrl, host: '127.0.0.1', port: browserRuntime.port }
-    })
-    agentServer = await startAgentServer({
-      userDataPath: platform.userDataPath,
-      broadcast: (channel, payload) => platform.broadcast(channel, payload),
-      cdp: { wsUrl: cdpFacade.url, host: '127.0.0.1', port: cdpFacade.port }
-    })
-  } catch (err) {
-    console.error('[browser] agent-control facade failed to start:', err)
+  // 13.3/13.4 — the agent-control surface is OPT-IN (settings → General →
+  // "allow agents to control browser nodes"), off by default. When on, start
+  // the playable CDP facade + the token-gated /open endpoint (both
+  // localhost-only). The facade is what agents connect to: it re-exposes the
+  // embedded guests as `page` targets so Playwright sees them.
+  if (appSettings.current.agentBrowserControl === true) {
+    await startBrowserControlEndpoints()
   }
 
   createWindow()

@@ -213,6 +213,11 @@ export interface AppSettings {
   defaultPermission?: string
   /** Enter behavior while an agent is busy: 'queue' | 'send' | 'prompt'. */
   enterBehavior?: string
+  /** Allow external agents to control embedded browser nodes (13.4): when on,
+   * the CDP facade + agent-control server are started (localhost-only); when
+   * off (default) browser nodes still work manually but no agent endpoint
+   * exists. */
+  agentBrowserControl?: boolean
 }
 
 /** An A2A (agent-to-agent) peer the user may route tasks to. */

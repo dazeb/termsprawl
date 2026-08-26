@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { mkdtempSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -93,5 +93,16 @@ describe('agent-server', () => {
     expect(j.token).toBe(handle.token)
     expect(j.cdp.port).toBe(9231)
     expect(j.open.path).toBe('/open')
+  })
+
+  it('removes the discovery file on close (a stopped endpoint is never advertised)', async () => {
+    const h = await startAgentServer({
+      userDataPath,
+      broadcast: () => {},
+      cdp: { wsUrl: 'http://127.0.0.1:9231', host: '127.0.0.1', port: 9231 }
+    })
+    expect(existsSync(h.endpointFile)).toBe(true)
+    await h.close()
+    expect(existsSync(h.endpointFile)).toBe(false)
   })
 })

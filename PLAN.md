@@ -640,13 +640,39 @@ guest loaded the page (`webview` target, title "Example Domain") on the CDP
 endpoint, ready for a client to attach. `file:///etc/passwd` → 400, missing auth
 → 401 over the real server. Gates: typecheck clean; 345 tests (7 agent-server).
 
-### Task 13.4: Follow-ups
-- Settings gate to enable/disable the CDP endpoint (off by default = default
-  surface is a manual browser; on = agent controllable).
-- Tabs within a browser node (or multiple browser nodes sharing one guest
-  process). Currently one guest = one page per node.
-- Persist a small per-node history (back/forward stack already works via guest).
-- Cleanup of guests on project close (mirror terminal-close).
+### Task 13.4: Follow-ups (DONE, verified 2026-08-26)
+
+- **Settings gate (agentBrowserControl, OFF by default).** New app setting
+  `agentBrowserControl` (Settings → General → "Allow agents to control browser
+  nodes"). Off (default): browser nodes work manually, but NO facade, NO
+  agent-control server, and no `browser-agent.json` — an agent has no endpoint
+  to find (verified headless: default boot writes no discovery file). On: the
+  CDP facade + token-gated `/open` server start in `whenReady`; toggling the
+  setting mid-session starts/stops them live (`syncAgentBrowserControl`), and
+  `agent-server.close()` now removes the discovery file so a stopped endpoint
+  is never advertised. Full Playwright + Puppeteer regression re-verified
+  against a gate-on boot.
+- **Tabs within a browser node.** Each tab is its own sandboxed `<webview>`
+  guest (tab strip + `+`, close-last-tab closes the node, active tab drives the
+  toolbar). Tabs share the persistent cookie partition; each tab is its own CDP
+  `page` target, so an agent sees every tab. Main-side node→guest map is now
+  keyed `nodeId::tabId` (`browser:register`/`unregister`/`navigate` carry a
+  tabId). Legacy persisted nodes (no `tabs` field) deserialize to a single tab.
+  Pure helpers in `state/workspace.ts` (`addBrowserTab`, `closeBrowserTab`,
+  `activateBrowserTab`, `setBrowserTabUrl`) + tests.
+- **Per-node history.** `BrowserNodeData.history` (most-recent-first, capped at
+  10, `about:` pages skipped) is recorded on every navigation and persisted with
+  the project file via the node data, so a reload restores where the node has
+  been. (`pushBrowserHistory` + tests.)
+- **Guest cleanup.** Guest lifetime is renderer-owned — removing the
+  `<webview>` element destroys the guest (Electron has no main-side guest
+  destroy); unregister reaps the `nodeId::tabId` map entry, and
+  `browserGuestIds()` now filters dead guests so the CDP facade never
+  advertises a corpse after a renderer crash.
+
+Gates: typecheck clean; 368 tests (11 new: tabs/history, settings gate,
+discovery-file removal); originality OK; headless boot verified gate-off (no
+endpoint) and gate-on (facade + /open + Playwright/Puppeteer regression).
 
 ---
 

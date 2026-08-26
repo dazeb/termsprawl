@@ -12,7 +12,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { randomBytes } from 'node:crypto'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { normalizeAddress, ABOUT_BLANK } from '../../core/browser-policy'
 
@@ -137,6 +137,16 @@ export async function startAgentServer(
     token,
     url: `http://127.0.0.1:${boundPort}`,
     endpointFile,
-    close: () => new Promise<void>((resolve) => server.close(() => resolve()))
+    close: () =>
+      new Promise<void>((resolve) => {
+        server.close(() => resolve())
+        // Remove the discovery file so a stopped endpoint is never advertised
+        // (agent would find a stale port/token and fail to connect).
+        try {
+          rmSync(endpointFile, { force: true })
+        } catch {
+          /* best effort */
+        }
+      })
   }
 }

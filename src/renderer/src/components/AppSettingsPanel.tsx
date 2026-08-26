@@ -156,7 +156,8 @@ export function AppSettingsPanel({ onClose }: AppSettingsPanelProps): React.JSX.
     language: 'en',
     agentPreset: 'standard',
     defaultPermission: 'workspaceWrite',
-    enterBehavior: 'queue'
+    enterBehavior: 'queue',
+    agentBrowserControl: false
   })
   const [permissionSupported, setPermissionSupported] = useState(false)
   const [newLabel, setNewLabel] = useState('')
@@ -394,6 +395,23 @@ export function AppSettingsPanel({ onClose }: AppSettingsPanelProps): React.JSX.
                   <option key={b.value} value={b.value}>{b.label}</option>
                 ))}
               </select>
+            </div>
+
+            <div className="settings-pref-row">
+              <div className="settings-pref-copy">
+                <span className="settings-pref-label">Allow agents to control browser nodes</span>
+                <span className="settings-pref-sub">
+                  Off (default): embedded browsers work normally but no agent endpoint exists. On: an external
+                  agent can open and drive browser nodes over a localhost-only CDP endpoint
+                </span>
+              </div>
+              <label className="app-settings-toggle">
+                <input
+                  type="checkbox"
+                  checked={c.settings.agentBrowserControl === true}
+                  onChange={(e) => void c.update({ agentBrowserControl: e.target.checked })}
+                />
+              </label>
             </div>
           </>
         )

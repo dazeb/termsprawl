@@ -52,11 +52,26 @@ export interface EditorNodeData {
   preview: boolean
 }
 
+/** One tab inside a browser node. Each tab is its own sandboxed <webview>
+ * guest (so tabs can run pages side by side and an agent sees each as a
+ * separate CDP target). */
+export interface BrowserTab {
+  id: string
+  url: string
+}
+
 export interface BrowserNodeData {
   kind: 'browser'
-  /** Last known URL. The live <webview> guest owns the actual page; this mirrors
-   * it so the project file persists where the node was browsing. */
+  /** Last known URL (mirrors the ACTIVE tab; persisted so the project file
+   * remembers where the node was browsing). */
   url: string
+  /** Recent URLs visited in this node, most recent first (capped). Persisted
+   * with the project file. */
+  history?: string[]
+  /** Open tabs. Absent on legacy persisted nodes → treated as one tab at `url`. */
+  tabs?: BrowserTab[]
+  /** The active tab id; absent → first tab. */
+  activeTabId?: string
 }
 
 export type SprawlNodeData =
@@ -219,15 +234,82 @@ export function createEditorNode(path: string | null = null): Node<EditorNodeDat
 }
 
 /** A browser node: a sandboxed <webview> guest rendered inline on the canvas.
- * Starts at about:blank (no surprise network) until the user or an agent
- * navigates it. */
+ * Starts with a single tab at the given URL (about:blank by default — no
+ * surprise network) until the user or an agent navigates it. */
 export function createBrowserNode(url: string = 'about:blank'): Node<BrowserNodeData> {
+  const tab = { id: nextBrowserTabId(), url }
   return {
     id: nextId(),
     type: 'browser',
     position: { x: 60 + Math.random() * 240, y: 60 + Math.random() * 160 },
-    data: { kind: 'browser', url }
+    data: { kind: 'browser', url, tabs: [tab], activeTabId: tab.id }
   }
+}
+
+let tabCounter = 0
+
+export function nextBrowserTabId(): string {
+  tabCounter += 1
+  return `tab${Date.now().toString(36)}-${tabCounter}`
+}
+
+/** Append a tab and make it active. */
+export function addBrowserTab(
+  tabs: BrowserTab[] | undefined,
+  url = 'about:blank'
+): { tabs: BrowserTab[]; activeTabId: string } {
+  const tab = { id: nextBrowserTabId(), url }
+  return { tabs: [...(tabs ?? []), tab], activeTabId: tab.id }
+}
+
+/** Remove a tab, activating a neighbour. Returns null when the LAST tab was
+ * removed — the caller should close the node (browser convention). */
+export function closeBrowserTab(
+  tabs: BrowserTab[] | undefined,
+  activeTabId: string | undefined,
+  tabId: string
+): { tabs: BrowserTab[]; activeTabId: string } | null {
+  const list = tabs ?? []
+  const idx = list.findIndex((t) => t.id === tabId)
+  if (idx === -1) return { tabs: list, activeTabId: activeTabId ?? list[0]?.id ?? '' }
+  const next = list.filter((t) => t.id !== tabId)
+  if (next.length === 0) return null
+  const keepActive =
+    activeTabId !== undefined && activeTabId !== tabId && next.some((t) => t.id === activeTabId)
+  const activeId = keepActive ? activeTabId : next[Math.min(idx, next.length - 1)].id
+  return { tabs: next, activeTabId: activeId }
+}
+
+/** Set the active tab; no-op (null) when the tab id is unknown. */
+export function activateBrowserTab(
+  tabs: BrowserTab[] | undefined,
+  tabId: string
+): { tabs: BrowserTab[]; activeTabId: string } | null {
+  const list = tabs ?? []
+  if (!list.some((t) => t.id === tabId)) return null
+  return { tabs: list, activeTabId: tabId }
+}
+
+/** Update a single tab's URL. */
+export function setBrowserTabUrl(
+  tabs: BrowserTab[] | undefined,
+  tabId: string,
+  url: string
+): BrowserTab[] {
+  return (tabs ?? []).map((t) => (t.id === tabId ? { ...t, url } : t))
+}
+
+/** Most-recent-first navigation history for a browser node, capped. Skips
+ * empty and about: pages (they are not meaningful "places visited"). */
+export function pushBrowserHistory(
+  history: string[] | undefined,
+  url: string,
+  cap = 10
+): string[] {
+  if (!url || url === 'about:blank' || url === 'about:srcdoc') return history ?? []
+  const prev = history ?? []
+  if (prev[0] === url) return prev
+  return [url, ...prev].slice(0, cap)
 }
 
 /** Project name from a chosen folder path (basename), or the fallback when no

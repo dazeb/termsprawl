@@ -1398,6 +1398,86 @@ html[data-theme='light'] .settings-nav-item:hover {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 }
 
+/* Tab strip (13.4): one chip per open tab, + to open. */
+.browser-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px 0;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  user-select: none;
+}
+
+.browser-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 160px;
+  padding: 4px 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+  cursor: default;
+}
+
+.browser-tab:hover {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.browser-tab.is-active {
+  background: var(--bg);
+  border-color: var(--border);
+  color: var(--fg);
+}
+
+.browser-tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browser-tab-close {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  line-height: 1;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.browser-tab-close:hover {
+  background: var(--border);
+  color: var(--fg);
+}
+
+.browser-tab-add {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  line-height: 1;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.browser-tab-add:hover {
+  background: var(--border);
+  color: var(--fg);
+}
+
 .browser-node-header {
   display: flex;
   align-items: center;

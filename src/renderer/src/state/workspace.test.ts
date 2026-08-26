@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { Node } from 'reactflow'
 import {
+  activateBrowserTab,
+  addBrowserTab,
   createAgentLoginNode,
   createAgentNode,
+  createBrowserNode,
   createDiffNode,
   createDrukNode,
   createEditorNode,
@@ -10,13 +13,16 @@ import {
   createResumeAgentNode,
   createStickyNode,
   createTerminalNode,
+  closeBrowserTab,
   deserializeNodes,
   isAgentCommand,
   nodeTitle,
   projectNameFromPath,
+  pushBrowserHistory,
   removeNode,
   resumedSessionId,
   serializeNodes,
+  setBrowserTabUrl,
   topZ,
   ungroup
 } from './workspace'
@@ -396,5 +402,80 @@ describe('createAgentLoginNode', () => {
     expect(node.data.title).toBe('claude login')
     expect(node.data.command).toBe('claude auth login')
     expect(node.data.cwd).toBe('/tmp')
+  })
+})
+
+describe('browser tabs + history (13.4)', () => {
+  it('createBrowserNode starts with a single active tab', () => {
+    const node = createBrowserNode('https://example.com')
+    expect(node.type).toBe('browser')
+    expect(node.data.kind).toBe('browser')
+    expect(node.data.tabs).toHaveLength(1)
+    expect(node.data.tabs![0].url).toBe('https://example.com')
+    expect(node.data.activeTabId).toBe(node.data.tabs![0].id)
+    expect(node.data.url).toBe('https://example.com')
+  })
+
+  it('addBrowserTab appends and activates the new tab', () => {
+    const base = createBrowserNode('https://a.example')
+    const { tabs, activeTabId } = addBrowserTab(base.data.tabs, 'https://b.example')
+    expect(tabs).toHaveLength(2)
+    expect(tabs[1].url).toBe('https://b.example')
+    expect(activeTabId).toBe(tabs[1].id)
+    expect(base.data.tabs).toHaveLength(1) // immutable
+  })
+
+  it('closeBrowserTab keeps the active tab when closing another', () => {
+    const base = createBrowserNode('https://a.example')
+    const { tabs } = addBrowserTab(base.data.tabs, 'https://b.example')
+    const res = closeBrowserTab(tabs, tabs[1].id, tabs[0].id)
+    expect(res).not.toBeNull()
+    expect(res!.tabs).toHaveLength(1)
+    expect(res!.activeTabId).toBe(tabs[1].id)
+  })
+
+  it('closeBrowserTab activates a neighbour when closing the active tab', () => {
+    const base = createBrowserNode('https://a.example')
+    const { tabs } = addBrowserTab(base.data.tabs, 'https://b.example')
+    const res = closeBrowserTab(tabs, tabs[1].id, tabs[1].id)
+    expect(res!.activeTabId).toBe(tabs[0].id)
+  })
+
+  it('closeBrowserTab returns null when the last tab closes (node should close)', () => {
+    const base = createBrowserNode('https://a.example')
+    const { tabs } = addBrowserTab(base.data.tabs, 'https://b.example')
+    const once = closeBrowserTab(tabs, tabs[0].id, tabs[0].id)
+    const twice = closeBrowserTab(once!.tabs, once!.activeTabId, once!.tabs[0].id)
+    expect(twice).toBeNull()
+  })
+
+  it('activateBrowserTab sets the active tab and rejects unknown ids', () => {
+    const base = createBrowserNode('https://a.example')
+    const { tabs } = addBrowserTab(base.data.tabs, 'https://b.example')
+    expect(activateBrowserTab(tabs, tabs[0].id)?.activeTabId).toBe(tabs[0].id)
+    expect(activateBrowserTab(tabs, 'nope')).toBeNull()
+  })
+
+  it('setBrowserTabUrl updates only the target tab', () => {
+    const base = createBrowserNode('https://a.example')
+    const { tabs } = addBrowserTab(base.data.tabs, 'https://b.example')
+    const next = setBrowserTabUrl(tabs, tabs[0].id, 'https://c.example')
+    expect(next[0].url).toBe('https://c.example')
+    expect(next[1].url).toBe('https://b.example')
+  })
+
+  it('pushBrowserHistory keeps most-recent-first, dedupes consecutive, caps', () => {
+    expect(pushBrowserHistory(undefined, 'https://a.example')).toEqual(['https://a.example'])
+    expect(pushBrowserHistory(['https://a.example'], 'https://a.example')).toEqual([
+      'https://a.example'
+    ])
+    const h = pushBrowserHistory(['https://a.example'], 'https://b.example')
+    expect(h).toEqual(['https://b.example', 'https://a.example'])
+    expect(pushBrowserHistory(undefined, 'about:blank')).toEqual([])
+    expect(pushBrowserHistory(undefined, '')).toEqual([])
+    let capped: string[] | undefined
+    for (let i = 0; i < 15; i++) capped = pushBrowserHistory(capped, `https://s${i}.example`)
+    expect(capped).toHaveLength(10)
+    expect(capped![0]).toBe('https://s14.example')
   })
 })

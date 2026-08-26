@@ -210,14 +210,15 @@ const api = {
   browser: {
     /** Localhost-only CDP endpoint an external agent can attach to. */
     cdpInfo: (): Promise<BrowserCdpInfo> => ipcRenderer.invoke(IPC.browserCdpInfo),
-    /** Tell main which live guest this browser node owns (node id is stable). */
-    register: (nodeId: string, guestId: number): Promise<void> =>
-      ipcRenderer.invoke(IPC.browserRegister, nodeId, guestId),
-    unregister: (nodeId: string): Promise<void> =>
-      ipcRenderer.invoke(IPC.browserUnregister, nodeId),
-    /** Navigate a browser node; main enforces the URL policy. */
-    navigate: (nodeId: string, url: string): Promise<BrowserNavigateResult> =>
-      ipcRenderer.invoke(IPC.browserNavigate, nodeId, url),
+    /** Tell main which live guest this browser-node tab owns (node + tab ids
+     * are both stable canvas ids). */
+    register: (nodeId: string, tabId: string, guestId: number): Promise<void> =>
+      ipcRenderer.invoke(IPC.browserRegister, nodeId, tabId, guestId),
+    unregister: (nodeId: string, tabId: string): Promise<void> =>
+      ipcRenderer.invoke(IPC.browserUnregister, nodeId, tabId),
+    /** Navigate a browser-node tab; main enforces the URL policy. */
+    navigate: (nodeId: string, tabId: string, url: string): Promise<BrowserNavigateResult> =>
+      ipcRenderer.invoke(IPC.browserNavigate, nodeId, tabId, url),
     /** Subscribe to an external agent's "open a browser node" request. */
     onAgentOpen: (cb: (info: { url: string }) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, info: { url: string }): void =>

@@ -17,24 +17,42 @@ import { isAllowedNavUrl } from '../../core/browser-policy'
 type NodeId = string
 type GuestId = number
 
-// nodeId -> the guest WebContents id of the live webview for that browser node.
-const guests = new Map<NodeId, GuestId>()
+// nodeId::tabId -> the guest WebContents id of the live webview for that tab
+// (a browser node can hold several tabs, each its own guest).
+const guests = new Map<string, GuestId>()
 
-export function guestIdForNode(nodeId: string): GuestId | undefined {
-  return guests.get(nodeId)
+function guestKey(nodeId: string, tabId: string): string {
+  return `${nodeId}::${tabId}`
 }
 
-export function registerBrowserGuest(nodeId: string, guestId: number): void {
-  guests.set(nodeId, guestId)
+export function guestIdForNode(nodeId: string, tabId: string): GuestId | undefined {
+  return guests.get(guestKey(nodeId, tabId))
 }
 
-export function unregisterBrowserGuest(nodeId: string): void {
-  guests.delete(nodeId)
+export function registerBrowserGuest(nodeId: string, tabId: string, guestId: number): void {
+  guests.set(guestKey(nodeId, tabId), guestId)
 }
 
-/** Live guest webContents ids for every browser node (used by the CDP facade). */
+export function unregisterBrowserGuest(nodeId: string, tabId: string): void {
+  // The guest webContents itself is destroyed by the renderer when the tab's
+  // <webview> element is removed (Electron ties guest lifetime to the embedder
+  // DOM; there is no main-side destroy for guests). This just reaps the map
+  // entry so nothing references a closed tab.
+  guests.delete(guestKey(nodeId, tabId))
+}
+
+/** Live guest webContents ids for every browser node (used by the CDP facade).
+ * Filters out guests that died out-of-band (renderer crash before unregister)
+ * so the facade never advertises a corpse as a driveable target. */
 export function browserGuestIds(): GuestId[] {
-  return Array.from(guests.values())
+  return Array.from(guests.values()).filter((guestId) => {
+    try {
+      const c = webContents.fromId(guestId)
+      return c !== undefined && !c.isDestroyed()
+    } catch {
+      return false
+    }
+  })
 }
 
 /** Force the safe prefs on a guest at the moment the parent attaches it. By
@@ -87,15 +105,16 @@ export function installBrowserSecurity(): void {
  */
 export async function navigateBrowserNode(
   nodeId: string,
+  tabId: string,
   url: string
 ): Promise<{ ok: true } | { ok: false; reason: 'UNKNOWN_NODE' | 'DENIED' }> {
-  const guestId = guests.get(nodeId)
+  const guestId = guests.get(guestKey(nodeId, tabId))
   if (guestId === undefined) return { ok: false, reason: 'UNKNOWN_NODE' }
   // Resolve by id so a stale guest id after a crash-corner case still targets
   // the actual live webContents.
   const contents = webContents.fromId(guestId)
   if (!contents || contents.isDestroyed()) {
-    guests.delete(nodeId)
+    guests.delete(guestKey(nodeId, tabId))
     return { ok: false, reason: 'UNKNOWN_NODE' }
   }
   if (!isAllowedNavUrl(url)) return { ok: false, reason: 'DENIED' }
