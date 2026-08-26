@@ -1217,6 +1217,71 @@ html[data-theme='light'] .settings-nav-item:hover {
   cursor: pointer;
 }
 
+/* Clickable: the whole bar opens the changelog modal. */
+.announcement-banner {
+  cursor: pointer;
+}
+.announcement-banner:hover {
+  border-color: #c6f135;
+}
+
+/* Changelog modal (12.2): centered sheet showing the full release notes. */
+.changelog-modal {
+  width: min(600px, calc(100vw - 48px));
+  height: min(70vh, 620px);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 24px 80px #000c;
+  overflow: hidden;
+}
+
+.changelog-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.changelog-modal-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #c6f135;
+}
+
+.changelog-modal-body {
+  flex: 1;
+  min-height: 0;
+}
+
+.changelog-modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.changelog-gotit {
+  padding: 6px 16px;
+  background: #c6f135;
+  color: #0a0a0a;
+  border: 0;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.changelog-gotit:hover {
+  filter: brightness(1.1);
+}
+
 .error-banner {
   position: fixed;
   top: 44px;

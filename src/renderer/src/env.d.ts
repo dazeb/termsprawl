@@ -36,6 +36,7 @@ declare global {
   interface Window {
     termsprawl: {
       appVersion(): Promise<string>
+      openExternal(url: string): Promise<void>
       settings: {
         get(): Promise<AppSettings>
         set(patch: Partial<AppSettings>): Promise<AppSettings>

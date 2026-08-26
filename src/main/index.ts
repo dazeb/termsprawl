@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Notification, protocol, net } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Notification, protocol, net, shell } from 'electron'
 import { execFileSync, spawn } from 'node:child_process'
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, join } from 'node:path'
@@ -496,6 +496,11 @@ function registerAnnouncementIpc(): void {
     if (!a) return null
     if (appSettings.current.dismissedAnnouncementVersion === a.version) return null
     return a
+  })
+  // Open a link in the user's system browser (changelog links etc.) — http(s)
+  // only, never navigate the app window itself.
+  ipcMain.handle(IPC.openExternal, (_event, url: string) => {
+    if (typeof url === 'string' && /^https?:\/\//.test(url)) void shell.openExternal(url)
   })
 }
 

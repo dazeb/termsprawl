@@ -37,6 +37,7 @@ import type { UpdateStatus } from '../shared/update-status'
 // Grows per phase; the renderer must never touch ipcRenderer directly.
 const api = {
   appVersion: (): Promise<string> => ipcRenderer.invoke(IPC.appVersion),
+  openExternal: (url: string): Promise<void> => ipcRenderer.invoke(IPC.openExternal, url),
 
   settings: {
     get: (): Promise<AppSettings> => ipcRenderer.invoke(IPC.appSettingsGet),

@@ -4,6 +4,7 @@
 export const IPC = {
   // App metadata
   appVersion: 'app:version',
+  openExternal: 'shell:open-external',
   appSettingsGet: 'app:settings-get',
   appSettingsSet: 'app:settings-set',
   updateStatus: 'update:status',
