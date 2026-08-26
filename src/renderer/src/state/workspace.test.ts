@@ -6,6 +6,7 @@ import {
   createAgentLoginNode,
   createAgentNode,
   createBrowserNode,
+  DEFAULT_BROWSER_URL,
   createDiffNode,
   createDrukNode,
   createEditorNode,
@@ -406,6 +407,12 @@ describe('createAgentLoginNode', () => {
 })
 
 describe('browser tabs + history (13.4)', () => {
+  it('createBrowserNode defaults to DuckDuckGo (a real, useful start page)', () => {
+    const node = createBrowserNode()
+    expect(node.data.tabs![0].url).toBe(DEFAULT_BROWSER_URL)
+    expect(node.data.url).toBe(DEFAULT_BROWSER_URL)
+  })
+
   it('createBrowserNode starts with a single active tab', () => {
     const node = createBrowserNode('https://example.com')
     expect(node.type).toBe('browser')

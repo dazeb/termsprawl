@@ -233,10 +233,14 @@ export function createEditorNode(path: string | null = null): Node<EditorNodeDat
   }
 }
 
+/** The default start page for a fresh browser node (or new tab). */
+export const DEFAULT_BROWSER_URL = 'https://duckduckgo.com'
+
 /** A browser node: a sandboxed <webview> guest rendered inline on the canvas.
- * Starts with a single tab at the given URL (about:blank by default — no
- * surprise network) until the user or an agent navigates it. */
-export function createBrowserNode(url: string = 'about:blank'): Node<BrowserNodeData> {
+ * Starts with a single tab at DuckDuckGo (a real, useful page — no surprise
+ * data sent to a search engine until the user searches) until the user or an
+ * agent navigates it. */
+export function createBrowserNode(url: string = DEFAULT_BROWSER_URL): Node<BrowserNodeData> {
   const tab = { id: nextBrowserTabId(), url }
   return {
     id: nextId(),

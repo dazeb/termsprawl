@@ -6,6 +6,7 @@ import {
   addBrowserTab,
   browserTitle,
   closeBrowserTab,
+  DEFAULT_BROWSER_URL,
   nextBrowserTabId,
   pushBrowserHistory,
   setBrowserTabUrl
@@ -202,7 +203,7 @@ export function BrowserNode({ id, data }: NodeProps<BrowserNodeData>): React.JSX
   }
 
   const openTab = (): void => {
-    const res = addBrowserTab(tabsRef.current, 'about:blank')
+    const res = addBrowserTab(tabsRef.current, DEFAULT_BROWSER_URL)
     // Hide the previous active guest so the new tab is the only visible one
     // (activateTab does the same dance when switching back).
     webviewsRef.current.get(activeTabIdRef.current)?.style.setProperty('display', 'none')
@@ -210,7 +211,7 @@ export function BrowserNode({ id, data }: NodeProps<BrowserNodeData>): React.JSX
     setActiveTabId(res.activeTabId)
     setCrashed(false)
     setGuestId(null)
-    spawnWebview({ id: res.activeTabId, url: 'about:blank' }, false)
+    spawnWebview({ id: res.activeTabId, url: DEFAULT_BROWSER_URL }, false)
     persist(res.tabs, res.activeTabId)
   }
 
@@ -280,7 +281,7 @@ export function BrowserNode({ id, data }: NodeProps<BrowserNodeData>): React.JSX
           +
         </button>
       </div>
-      <div className="browser-node-header nodrag">
+      <div className="browser-node-header">
         <span className="terminal-node-dot" />
         <span className="browser-node-title" title={activeTab?.url ?? data.url}>
           {browserTitle(activeTab?.url ?? data.url)}
@@ -316,7 +317,7 @@ export function BrowserNode({ id, data }: NodeProps<BrowserNodeData>): React.JSX
         />
         <HelpBadge label="about this browser" text={browserHelp} />
         <button
-          className="node-close"
+          className="node-close nodrag"
           title="Close browser"
           aria-label="Close browser"
           onPointerDown={(e) => e.stopPropagation()}
