@@ -70,9 +70,16 @@ export function useCanvas(): CanvasApi {
 
 interface CanvasProps {
   cwd?: string
+  /** Invert the mousewheel zoom direction (scroll up = zoom out). */
+  invertWheelZoom?: boolean
 }
 
-export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
+// Match React Flow's default zoom bounds so the inverted (custom) wheel path
+// clamps to the same range as the native zoom-on-scroll.
+const MIN_ZOOM = 0.5
+const MAX_ZOOM = 2
+
+export function Canvas({ cwd, invertWheelZoom = false }: CanvasProps): React.JSX.Element {
   const activeProjectId = useProjects((s) => s.activeProjectId)
   const nodeCache = useProjects((s) => s.nodeCache)
   const saveNodes = useProjects((s) => s.saveNodes)
@@ -87,10 +94,49 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [cleanupError, setCleanupError] = useState<string | null>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
-  const { screenToFlowPosition } = useReactFlow()
+  const { screenToFlowPosition, getViewport, setViewport } = useReactFlow()
   const loadingRef = useRef(false)
   const latestNodesRef = useRef(nodes)
   latestNodesRef.current = nodes
+
+  // Mirror the invert setting so the capture-phase wheel listener below always
+  // reads the latest value without re-binding on every toggle.
+  const invertWheelZoomRef = useRef(invertWheelZoom)
+  invertWheelZoomRef.current = invertWheelZoom
+
+  // Inverted mousewheel zoom: when the setting is on, take over wheel-zoom so
+  // the direction flips. Mirrors React Flow's native zoom-on-scroll (same delta
+  // math, cursor anchoring, min/max clamp, and the `nowheel` guard) but negates
+  // the direction. When off, we do nothing and let native zoom handle it.
+  useEffect(() => {
+    const wrapper = wrapperRef.current
+    if (!wrapper) return
+    const onWheel = (event: WheelEvent): void => {
+      if (!invertWheelZoomRef.current) return
+      const target = event.target as HTMLElement | null
+      // Only the pan/zoom surface (the renderer subtree): skip the context
+      // menu, history bar, file tree, controls, minimap, and any `nowheel`
+      // content (terminals/editors scroll themselves).
+      if (!target || !target.closest('.react-flow__renderer')) return
+      if (target.closest('.nowheel')) return
+
+      event.preventDefault()
+      event.stopPropagation()
+
+      const viewport = getViewport()
+      const delta = -event.deltaY * (event.deltaMode === 1 ? 0.05 : event.deltaMode ? 1 : 0.002)
+      const scale = 2 ** -delta // negate: invert the default direction
+      const rect = wrapper.getBoundingClientRect()
+      const px = event.clientX - rect.left
+      const py = event.clientY - rect.top
+      const flowX = (px - viewport.x) / viewport.zoom
+      const flowY = (py - viewport.y) / viewport.zoom
+      const nextZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, viewport.zoom * scale))
+      setViewport({ x: px - flowX * nextZoom, y: py - flowY * nextZoom, zoom: nextZoom })
+    }
+    wrapper.addEventListener('wheel', onWheel, { capture: true, passive: false })
+    return () => wrapper.removeEventListener('wheel', onWheel, { capture: true } as EventListenerOptions)
+  }, [getViewport, setViewport])
 
   // Load the active project's serialized nodes into React Flow.
   // keyed on activeProjectId — switching projects swaps the canvas.
@@ -598,8 +644,9 @@ export function Canvas({ cwd }: CanvasProps): React.JSX.Element {
         onNodeContextMenu={onNodeContextMenu}
         onPaneClick={onPaneClick}
         onSelectionChange={onSelectionChange}
-        panOnScroll
-        zoomOnScroll={false}
+        zoomOnScroll
+        minZoom={MIN_ZOOM}
+        maxZoom={MAX_ZOOM}
         selectionOnDrag
         deleteKeyCode={['Delete', 'Backspace']}
         elevateNodesOnSelect={false}

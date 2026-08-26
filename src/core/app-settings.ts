@@ -22,7 +22,9 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   enterBehavior: 'queue',
   // Browser nodes are usable by the user out of the box; the agent-control
   // surface (CDP facade + /open server) is opt-in, off by default.
-  agentBrowserControl: false
+  agentBrowserControl: false,
+  // Mousewheel zooms the canvas; scroll-up = zoom in by default.
+  invertWheelZoom: false
 }
 
 const SETTINGS_FILE = 'settings.json'
@@ -121,7 +123,8 @@ export function normalizeAppSettings(raw: unknown): AppSettings {
         : 'workspaceWrite',
     enterBehavior:
       typeof obj.enterBehavior === 'string' && obj.enterBehavior.length > 0 ? obj.enterBehavior : 'queue',
-    agentBrowserControl: obj.agentBrowserControl === true
+    agentBrowserControl: obj.agentBrowserControl === true,
+    invertWheelZoom: obj.invertWheelZoom === true
   }
 }
 

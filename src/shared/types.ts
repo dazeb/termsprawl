@@ -218,6 +218,9 @@ export interface AppSettings {
    * off (default) browser nodes still work manually but no agent endpoint
    * exists. */
   agentBrowserControl?: boolean
+  /** Invert the mousewheel canvas zoom direction. Default (false): scroll up
+   * zooms in. True: scroll up zooms out. */
+  invertWheelZoom?: boolean
 }
 
 /** An A2A (agent-to-agent) peer the user may route tasks to. */

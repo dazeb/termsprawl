@@ -46,7 +46,8 @@ describe('app-settings', () => {
       agentPreset: 'standard',
       defaultPermission: 'workspaceWrite',
       enterBehavior: 'queue',
-      agentBrowserControl: false
+      agentBrowserControl: false,
+      invertWheelZoom: false
     }
     expect(saveAppSettings(dir, { autoDownloadUpdates: true })).toEqual(base)
     expect(loadAppSettings(dir)).toEqual(base)
@@ -74,6 +75,15 @@ describe('app-settings', () => {
     // Toggling back off sticks.
     expect(saveAppSettings(dir, { agentBrowserControl: false }).agentBrowserControl).toBe(false)
     expect(loadAppSettings(dir).agentBrowserControl).toBe(false)
+  })
+
+  it('defaults invert-wheel-zoom to OFF and round-trips it through disk', () => {
+    expect(DEFAULT_APP_SETTINGS.invertWheelZoom).toBe(false)
+    expect(normalizeAppSettings({ invertWheelZoom: 'yes' }).invertWheelZoom).toBe(false)
+    expect(normalizeAppSettings({}).invertWheelZoom).toBe(false)
+    const dir = scratch()
+    expect(saveAppSettings(dir, { invertWheelZoom: true }).invertWheelZoom).toBe(true)
+    expect(loadAppSettings(dir).invertWheelZoom).toBe(true)
   })
 
   it('ignores a corrupt settings file', () => {
