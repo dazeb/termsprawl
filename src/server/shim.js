@@ -182,6 +182,23 @@
       remove: function () { return Promise.resolve({ ok: false, error: 'NO_FOLDER' }) }
     },
 
+    // Browser nodes are Electron-only (<webview> guests) — the Server Edition
+    // has no embedded browser, so every method is a safe no-op/rejection. The
+    // desktop preload always exposes `browser`, so the renderer (Canvas.tsx
+    // subscribes to browser.onAgentOpen on mount) would otherwise throw
+    // "Cannot read properties of undefined (reading 'onAgentOpen')" and blank
+    // the whole canvas. Provide the same top-level shape so the renderer boots.
+    browser: {
+      cdpInfo: function () { return Promise.reject(new Error('browser nodes not available in server edition')) },
+      register: function () { return Promise.resolve() },
+      unregister: function () { return Promise.resolve() },
+      navigate: function () { return Promise.resolve({ ok: false, reason: 'DENIED' }) },
+      // No agent-control server runs here, so this never fires; return a working
+      // unsubscribe so Canvas's effect cleanup is valid.
+      onAgentOpen: function () { return function () {} },
+      offAgentOpen: function () { return function () {} }
+    },
+
     git: {
       snapshot: notAvailable('source control'),
       stage: notAvailable('source control'),

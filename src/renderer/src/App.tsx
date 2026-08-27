@@ -9,7 +9,6 @@ import { CogMenu } from './components/CogMenu'
 import { HelpBadge } from './components/HelpBadge'
 import { useProjects } from './state/projects'
 import { applyTheme } from './state/theme'
-import { useSidebarRequests } from './state/sidebar-requests'
 import { useBrowserHome } from './state/browser-home'
 import type { AppSettings } from '@shared/types'
 
@@ -39,11 +38,7 @@ export function App(): React.JSX.Element {
     useBrowserHome.getState().setHomeUrl(settings?.browserHomeUrl)
   }, [settings])
 
-  // Source control now lives in the sidebar (VS Code-style); the cog menu just
-  // opens that section. The sidebar consumes the request itself.
-  const openSourceControl = (): void => {
-    useSidebarRequests.getState().openSection('source')
-  }
+  // Source control lives in the sidebar; the cog button opens settings only.
 
   // Visible error surface: any uncaught renderer error shows as a banner so
   // failures are never silent (used for diagnosing machine-specific issues).
@@ -74,11 +69,7 @@ export function App(): React.JSX.Element {
           />
         </span>
         <TabBar />
-        <CogMenu
-          hasActiveProject={!!activeCwd}
-          onOpenSourceControl={openSourceControl}
-          onOpenSettings={() => setSettingsOpen(true)}
-        />
+        <CogMenu onOpenSettings={() => setSettingsOpen(true)} />
         <span className="version">v{version}</span>
       </div>
       {settingsOpen && (

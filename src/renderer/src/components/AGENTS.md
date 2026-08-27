@@ -20,9 +20,9 @@ Shared UI components (non-node chrome).
   Connections holds A2A peers + API providers; Updates holds auto-download.
   Theme choices are persisted and applied via `state/theme.ts`. Closes on
   Escape / backdrop click.
-- `CogMenu.tsx` — toolbar cog button + dropdown (source control / settings).
-  Closes on Escape or outside click; source control is disabled without a
-  folder project.
+- `CogMenu.tsx` — toolbar cog button that opens the app settings sheet
+  directly. (The old source-control/settings dropdown was removed — source
+  control lives in the sidebar open via the canvas-edge hover; see `FileTree`.)
 - `HelpBadge.tsx` — `?` next to titles; hover/focus/click opens a portaled
   explanation so node overflow cannot clip it.
 
