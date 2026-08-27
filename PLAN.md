@@ -784,6 +784,18 @@ missing, health timeout, and engine failures all degrade to fallback.
   BrowserNode hardcoded `color="#c6f135"` so the theme's accent drives it.
   Verified headless via CDP: selected node has 4 resizer lines at the exact
   node edges, 0 outlines, single visible border.
+- **Node resize didn't actually resize content (fixed root sizes).** The
+  NodeResizer changes the WRAPPER (`.react-flow__node`) inline width/height,
+  but the node roots had fixed px sizes (terminal 720×420, diff 560×360,
+  editor 640×420, sticky min 200×130) so only the selection box grew while
+  the content stayed put. Fix (the unified system for ALL node types): every
+  node factory sets `style: { width, height }` (the wrapper — what the resizer
+  writes), and every node root CSS is `width:100%; height:100%; box-sizing:
+  border-box` so it fills the wrapper. Group + browser already did this.
+  Also lowered the per-node resizer minimums (terminal 240×140, sticky
+  120×80, diff 260×180, editor 240×160) so nodes can be shrunk smaller.
+  Verified live (HMR) via CDP: sticky drags down to 120×80, wrapper style
+  updates, content follows.
 
 ---
 

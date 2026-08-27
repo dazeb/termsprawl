@@ -206,7 +206,7 @@ export function TerminalNode({ id, data, selected }: NodeProps<TerminalNodeData>
 
   return (
     <div className="terminal-node">
-      <NodeResizer isVisible={selected} minWidth={360} minHeight={200} />
+      <NodeResizer isVisible={selected} minWidth={240} minHeight={140} />
       <div className="terminal-node-header">
         <span className="terminal-node-dot" />
         {editingTitle ? (

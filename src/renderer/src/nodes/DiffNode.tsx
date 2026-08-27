@@ -64,7 +64,7 @@ export function DiffNode({ id, data, selected }: NodeProps<DiffNodeData>): React
 
   return (
     <div className="diff-node">
-      <NodeResizer isVisible={selected} minWidth={400} minHeight={240} />
+      <NodeResizer isVisible={selected} minWidth={260} minHeight={180} />
       <div className="diff-node-header">
         <span className="diff-node-title" title={data.path ?? undefined}>
           {nodeTitle(data)}

@@ -32,7 +32,7 @@ export function StickyNode({ id, data, selected }: NodeProps<StickyNodeData>): R
 
   return (
     <div className={`sticky-node sticky-${data.color}${data.collapsed ? ' collapsed' : ''}`}>
-      <NodeResizer isVisible={selected} minWidth={140} minHeight={90} />
+      <NodeResizer isVisible={selected} minWidth={120} minHeight={80} />
       <div className="sticky-node-header">
         <button
           className="sticky-node-dot"

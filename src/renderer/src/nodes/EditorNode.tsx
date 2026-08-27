@@ -100,7 +100,7 @@ export function EditorNode({ id, data, selected }: NodeProps<EditorNodeData>): R
 
   return (
     <div className="editor-node">
-      <NodeResizer isVisible={selected} minWidth={320} minHeight={200} />
+      <NodeResizer isVisible={selected} minWidth={240} minHeight={160} />
       <div className="editor-node-header">
         <span className="editor-node-title" title={data.path ?? undefined}>
           {nodeTitle(data)}

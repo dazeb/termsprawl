@@ -95,6 +95,10 @@ export function createTerminalNode(cwd?: string): Node<TerminalNodeData> {
     id: nextId(),
     type: 'terminal',
     ...TERMINAL_DIMENSIONS,
+    // Explicit wrapper size (style) — the NodeResizer updates THIS, and the
+    // node root fills it (width/height 100%). Without it the root's old fixed
+    // px size kept the content from actually resizing (learned 2026-08-27).
+    style: { width: TERMINAL_DIMENSIONS.width, height: TERMINAL_DIMENSIONS.height },
     position: { x: 60 + Math.random() * 240, y: 60 + Math.random() * 160 },
     data: { kind: 'terminal', title: 'shell', cwd }
   }
@@ -211,6 +215,7 @@ export function createStickyNode(): Node<StickyNodeData> {
     id: nextId(),
     type: 'sticky',
     position: { x: 60 + Math.random() * 240, y: 60 + Math.random() * 160 },
+    style: { width: 200, height: 130 },
     data: { kind: 'sticky', text: '', color: 'slate', collapsed: false }
   }
 }
@@ -220,6 +225,7 @@ export function createDiffNode(): Node<DiffNodeData> {
     id: nextId(),
     type: 'diff',
     position: { x: 60 + Math.random() * 240, y: 60 + Math.random() * 160 },
+    style: { width: 560, height: 360 },
     data: { kind: 'diff', path: null, base: 'HEAD' }
   }
 }
@@ -229,6 +235,7 @@ export function createEditorNode(path: string | null = null): Node<EditorNodeDat
     id: nextId(),
     type: 'editor',
     position: { x: 60 + Math.random() * 240, y: 60 + Math.random() * 160 },
+    style: { width: 640, height: 420 },
     data: { kind: 'editor', path, preview: false }
   }
 }

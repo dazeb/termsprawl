@@ -1468,9 +1468,24 @@ html[data-theme='light'] .settings-nav-item:hover {
     var(--bg);
 }
 
+/* ---- canvas nodes: the root fills its React Flow wrapper ----
+ * The NodeResizer changes the WRAPPER's inline width/height (node.style);
+ * every node root must fill that wrapper (100%) or the content stays its old
+ * fixed px size while only the selection box grows — "resizing doesn't
+ * resize" (learned 2026-08-27). Default sizes live in the node factories'
+ * style (workspace.ts), not here. */
+.terminal-node,
+.sticky-node,
+.diff-node,
+.editor-node,
+.group-node,
+.browser-node {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+
 .terminal-node {
-  width: 720px;
-  height: 420px;
   display: flex;
   flex-direction: column;
   background: #101010;
@@ -1877,8 +1892,6 @@ html[data-theme='light'] .settings-nav-item:hover {
 /* ---- sticky notes ---- */
 
 .sticky-node {
-  min-width: 200px;
-  min-height: 130px;
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border);
@@ -2150,8 +2163,6 @@ html[data-theme='light'] .settings-nav-item:hover {
 /* ---- diff nodes ---- */
 
 .diff-node {
-  width: 560px;
-  height: 360px;
   display: flex;
   flex-direction: column;
   background: var(--panel);
@@ -2264,8 +2275,6 @@ html[data-theme='light'] .settings-nav-item:hover {
 /* ---- editor nodes ---- */
 
 .editor-node {
-  width: 640px;
-  height: 420px;
   display: flex;
   flex-direction: column;
   background: var(--panel);
