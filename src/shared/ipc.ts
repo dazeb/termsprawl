@@ -91,14 +91,7 @@ export const IPC = {
   browserNavigate: 'browser:navigate',
   // Push channel main → renderer when an external agent asks to open a browser
   // node (from the reachable loopback agent-control server).
-  browserAgentOpen: 'browser:agent-open',
-
-  // Local search sidecar (Phase 14): loopback SearXNG for browser-node home +
-  // agent search. statusEvent is the push channel main → renderer.
-  searxngStatusGet: 'searxng:status-get',
-  searxngStatusEvent: 'searxng:status',
-  searxngEnsure: 'searxng:ensure',
-  searxngQuery: 'searxng:query'
+  browserAgentOpen: 'browser:agent-open'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

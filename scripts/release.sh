@@ -109,9 +109,6 @@ git push github main
 if [[ "$SKIP_DIST" -eq 1 ]]; then
   echo "==> --skip-dist: skipping pnpm run dist"
 else
-  # Vendored SearXNG runtime must be present for the AppImage (14.x).
-  echo "==> vendor searxng runtime"
-  bash scripts/vendor-searxng.sh
   echo "==> pnpm run dist"
   pnpm run dist
 fi

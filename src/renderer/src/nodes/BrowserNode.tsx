@@ -16,7 +16,6 @@ import {
 } from '../state/workspace'
 import { useCanvas } from '../canvas/Canvas'
 import { useBrowserHome } from '../state/browser-home'
-import { useSearxng } from '../state/searxng'
 import { HelpBadge } from '../components/HelpBadge'
 
 // Minimal shape of the <webview> element we create (Electron's WebviewTag). We
@@ -71,8 +70,6 @@ export function BrowserNode({ id, data, selected }: NodeProps<BrowserNodeData>):
   const [canForward, setCanForward] = useState(false)
   const [crashed, setCrashed] = useState(false)
   const [guestId, setGuestId] = useState<number | null>(null)
-  // Sidecar status for the header chip (live subscription → re-renders).
-  const searxngStatus = useSearxng((s) => s.info.status)
   // Body drag layer: the webview swallows mouse events, so to move the node by
   // its page area we overlay a transparent layer that is ARMED (grabs pointer)
   // by default — press = drag the node. Hovering WITHOUT pressing for a short
@@ -223,19 +220,28 @@ export function BrowserNode({ id, data, selected }: NodeProps<BrowserNodeData>):
     }
     return () => {
       for (const [tabId, webview] of webviewsRef.current) {
-        void window.termsprawl.browser.unregister(id, tabId)
-        webview.stop()
-        webview.remove()
+        void window.termsprawl.browser.unregister(id, tabId).catch(() => {})
+        // stop() internally reads getWebContentsId() and THROWS ("The WebView
+        // must be attached to the DOM and the dom-ready event emitted...") when
+        // the webview is no longer attached. On node close React Flow detaches
+        // the node's DOM subtree before these passive-unmount cleanup effects
+        // run — so the webview is already disconnected → an uncaught throw here
+        // tears down the whole React tree (blank/crashed window). Every teardown
+        // step must therefore be best-effort and never propagate.
+        try {
+          webview.stop()
+        } catch {
+          /* guest already detached / not dom-ready */
+        }
+        try {
+          webview.remove()
+        } catch {
+          /* already removed */
+        }
       }
       webviewsRef.current.clear()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id])
-
-  // Lazy-start the local search sidecar while a browser node exists; when it
-  // comes up, new tabs (and the node's home) resolve to it.
-  useEffect(() => {
-    void useSearxng.getState().ensure()
   }, [id])
 
   // Navigate the ACTIVE tab: go through main so the URL policy is enforced in
@@ -259,7 +265,7 @@ export function BrowserNode({ id, data, selected }: NodeProps<BrowserNodeData>):
   }
 
   const openTab = (): void => {
-    const homeUrl = resolveHomeUrl(useBrowserHome.getState().homeUrl, useSearxng.getState().info)
+    const homeUrl = resolveHomeUrl(useBrowserHome.getState().homeUrl)
     const res = addBrowserTab(tabsRef.current, homeUrl)
     // Hide the previous active guest so the new tab is the only visible one
     // (activateTab does the same dance when switching back).
@@ -281,9 +287,17 @@ export function BrowserNode({ id, data, selected }: NodeProps<BrowserNodeData>):
     }
     const wv = webviewsRef.current.get(tabId)
     if (wv) {
-      void window.termsprawl.browser.unregister(id, tabId)
-      wv.stop()
-      wv.remove()
+      void window.termsprawl.browser.unregister(id, tabId).catch(() => {})
+      try {
+        wv.stop()
+      } catch {
+        /* not dom-ready yet */
+      }
+      try {
+        wv.remove()
+      } catch {
+        /* already removed */
+      }
       webviewsRef.current.delete(tabId)
     }
     setTabs(res.tabs)
@@ -347,13 +361,6 @@ export function BrowserNode({ id, data, selected }: NodeProps<BrowserNodeData>):
       </div>
       <div className="browser-node-header">
         <span className="terminal-node-dot" />
-        {searxngStatus !== 'ready' && searxngStatus !== 'idle' && (
-          <span className="browser-search-chip" title="Local search status">
-            {searxngStatus === 'failed' || searxngStatus === 'stopped'
-              ? 'search unavailable — using fallback'
-              : 'starting local search…'}
-          </span>
-        )}
         <span className="browser-node-title" title={activeTab?.url ?? data.url}>
           {browserTitle(activeTab?.url ?? data.url)}
         </span>

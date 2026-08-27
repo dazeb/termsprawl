@@ -414,19 +414,11 @@ describe('browser tabs + history (13.4)', () => {
     expect(node.data.url).toBe(DEFAULT_BROWSER_URL)
   })
 
-  it('resolveHomeUrl: explicit setting wins; else local SearXNG when ready; else default', () => {
-    expect(resolveHomeUrl(undefined, { status: 'idle' })).toBe(DEFAULT_BROWSER_URL)
-    expect(resolveHomeUrl('', { status: 'ready', baseUrl: 'http://127.0.0.1:54321' })).toBe(
-      'http://127.0.0.1:54321'
-    )
-    expect(resolveHomeUrl('https://a.example', { status: 'ready', baseUrl: 'http://127.0.0.1:54321' })).toBe(
-      'https://a.example'
-    )
-    expect(resolveHomeUrl('  https://a.example  ', { status: 'ready' })).toBe('https://a.example')
-    // Not ready → no sidecar URL even if baseUrl lingered.
-    expect(resolveHomeUrl(undefined, { status: 'failed', baseUrl: 'http://127.0.0.1:54321' })).toBe(
-      DEFAULT_BROWSER_URL
-    )
+  it('resolveHomeUrl: explicit setting wins; else the default browser', () => {
+    expect(resolveHomeUrl(undefined)).toBe(DEFAULT_BROWSER_URL)
+    expect(resolveHomeUrl('')).toBe(DEFAULT_BROWSER_URL)
+    expect(resolveHomeUrl('https://search.example')).toBe('https://search.example')
+    expect(resolveHomeUrl('  http://127.0.0.1:8888  ')).toBe('http://127.0.0.1:8888')
   })
 
   it('createBrowserNode starts with a single active tab', () => {

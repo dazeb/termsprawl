@@ -26,9 +26,7 @@ import type {
   CloudDeviceStart,
   CloudUser,
   BrowserCdpInfo,
-  BrowserNavigateResult,
-  SearxngInfo,
-  SearchResult
+  BrowserNavigateResult
 } from '@shared/types'
 import type { AgentStatusEvent } from '@shared/agent-status'
 import type { UpdateStatus } from '@shared/update-status'
@@ -130,12 +128,6 @@ declare global {
         unregister(nodeId: string, tabId: string): Promise<void>
         navigate(nodeId: string, tabId: string, url: string): Promise<BrowserNavigateResult>
         onAgentOpen(cb: (info: { url: string }) => void): () => void
-      }
-      searxng: {
-        status(): Promise<SearxngInfo>
-        ensure(): Promise<SearxngInfo>
-        query(q: string): Promise<SearchResult[]>
-        onStatus(cb: (info: SearxngInfo) => void): () => void
       }
     }
   }

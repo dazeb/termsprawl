@@ -420,10 +420,11 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
 
             <div className="settings-pref-row">
               <div className="settings-pref-copy">
-                <span className="settings-pref-label">Browser home page</span>
+                <span className="settings-pref-label">Search provider / browser home</span>
                 <span className="settings-pref-sub">
-                  URL opened when a browser node or new tab starts. Empty = default
-                  (DuckDuckGo; the local SearXNG search when enabled)
+                  URL opened when a browser node or new tab starts — point this at
+                  your own SearXNG (e.g. http://127.0.0.1:8080 or a LAN host) for
+                  private search. Empty = DuckDuckGo
                 </span>
               </div>
               <input

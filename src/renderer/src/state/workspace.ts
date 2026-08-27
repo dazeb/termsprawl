@@ -243,14 +243,10 @@ export function createEditorNode(path: string | null = null): Node<EditorNodeDat
 /** The default start page for a fresh browser node (or new tab). */
 export const DEFAULT_BROWSER_URL = 'https://duckduckgo.com'
 
-/** Resolve the browser home URL (14.x): an explicit user setting wins; else
- * the local SearXNG sidecar when it's ready; else the stock default. */
-export function resolveHomeUrl(
-  settingUrl: string | undefined,
-  searxng: { status: string; baseUrl?: string }
-): string {
+/** Resolve the browser home URL: an explicit user setting wins; else the
+ * stock default (DuckDuckGo). The user may point this at their own SearXNG. */
+export function resolveHomeUrl(settingUrl: string | undefined): string {
   if (settingUrl && settingUrl.trim().length > 0) return settingUrl.trim()
-  if (searxng.status === 'ready' && searxng.baseUrl) return searxng.baseUrl
   return DEFAULT_BROWSER_URL
 }
 

@@ -77,7 +77,7 @@ describe('app-settings', () => {
     expect(loadAppSettings(dir).agentBrowserControl).toBe(false)
   })
 
-  it('defaults browser home URL to unset (renderer falls back to DuckDuckGo / local SearXNG)', () => {
+  it('defaults browser home URL to unset (renderer falls back to DuckDuckGo)', () => {
     expect(DEFAULT_APP_SETTINGS.browserHomeUrl).toBeUndefined()
     expect(normalizeAppSettings({}).browserHomeUrl).toBeUndefined()
     expect(normalizeAppSettings({ browserHomeUrl: '' }).browserHomeUrl).toBeUndefined()

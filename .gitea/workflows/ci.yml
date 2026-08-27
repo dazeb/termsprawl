@@ -45,8 +45,7 @@ jobs:
         # --publish never: electron-builder would otherwise auto-publish to
         # the configured github provider on tag builds (fails without
         # GH_TOKEN). The publish steps below upload to Gitea + GitHub.
-        # The vendored SearXNG runtime is regenerated first (14.x).
-        run: bash scripts/vendor-searxng.sh && pnpm run build && pnpm exec electron-builder --linux --publish never
+        run: pnpm run build && pnpm exec electron-builder --linux --publish never
 
       - name: publish gitea release
         env:
