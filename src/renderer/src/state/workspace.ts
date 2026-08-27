@@ -458,6 +458,9 @@ export function serializeNodes(nodes: Node<SprawlNodeData>[]): SerializedNode[] 
     type: n.type ?? 'terminal',
     position: { x: n.position.x, y: n.position.y },
     parentId: n.parentId,
+    width: n.width ?? undefined,
+    height: n.height ?? undefined,
+    style: n.style ? ({ ...n.style } as Record<string, unknown>) : undefined,
     data: { ...n.data }
   }))
 }
@@ -470,7 +473,12 @@ export function deserializeNodes(serialized: SerializedNode[]): Node<SprawlNodeD
       type: (n.type as Node['type']) ?? 'terminal',
       position: { x: n.position.x, y: n.position.y },
       parentId: n.parentId,
-      extent: n.parentId ? ('parent' as const) : undefined
+      extent: n.parentId ? ('parent' as const) : undefined,
+      // Restore the saved size so a resized node keeps its dimensions instead of
+      // reverting to the content-measured default after a project switch.
+      ...(n.width != null ? { width: n.width } : {}),
+      ...(n.height != null ? { height: n.height } : {}),
+      ...(n.style ? { style: { ...n.style } } : {})
     }
     const data = n.data as Partial<SprawlNodeData>
     if (data.kind === 'sticky') {
@@ -506,6 +514,8 @@ export function deserializeNodes(serialized: SerializedNode[]): Node<SprawlNodeD
     return {
       ...base,
       ...TERMINAL_DIMENSIONS,
+      ...(n.width != null ? { width: n.width } : {}),
+      ...(n.height != null ? { height: n.height } : {}),
       data: { kind: 'terminal', title: 'shell', linkedIds: [], ...data } as TerminalNodeData
     }
   })

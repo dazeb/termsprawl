@@ -64,6 +64,20 @@ describe('sticky nodes', () => {
     expect(restored.data.cwd).toBe('/tmp')
   })
 
+  it('round-trips a resized terminal size (project-switch persistence)', () => {
+    const node = createTerminalNode('/tmp')
+    // A NodeResizer resize updates style.width/height (and React Flow's top-level
+    // width/height). Both must survive serialize/deserialize so the node keeps
+    // its size after a project switch / reopen instead of reverting to default.
+    node.width = 900
+    node.height = 500
+    node.style = { width: 900, height: 500 }
+    const restored = deserializeNodes(serializeNodes([node]))[0]
+    expect(restored.width).toBe(900)
+    expect(restored.height).toBe(500)
+    expect(restored.style).toEqual({ width: 900, height: 500 })
+  })
+
   it('creates a druk preset terminal that persists its command', () => {
     const node = createDrukNode('/repo')
     expect(node.type).toBe('terminal')

@@ -56,6 +56,13 @@ export interface SerializedNode {
   /** Parent frame id (group nodes) — kept out of live state only because
    * React Flow owns it; persisted so groups survive a reopen. */
   parentId?: string
+  /** Live node size (top-level React Flow width/height), persisted so a
+   * resized node remembers its size after a project switch / reopen. */
+  width?: number
+  height?: number
+  /** Node `style` (the NodeResizer writes width/height here); restored so the
+   * node renders at its saved size instead of reverting to content-measured. */
+  style?: Record<string, unknown>
   data: Record<string, unknown>
 }
 

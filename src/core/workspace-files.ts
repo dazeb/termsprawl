@@ -16,6 +16,9 @@ export interface SerializedNode {
   id: string
   type: string
   position: { x: number; y: number }
+  width?: number
+  height?: number
+  style?: Record<string, unknown>
   data: Record<string, unknown>
 }
 
