@@ -210,6 +210,45 @@ without a GH_TOKEN env and would fight the workflow's own uploads).
 - Test stubs of `CorePlatform` must provide `userDataPath` (a temp dir) or the
   tmux config write fails.
 
+## Agent skills to load (Hermes developer profile)
+
+The repo is an Electron + React + TypeScript + tmux app with heavy
+browser/PTY testing. When working here, load the matching Hermes skills up
+front rather than improvising:
+
+- `termsprawl` — always. Ship/release conventions specific to this repo.
+- **Testing** — `playwright-best-practices` (E2E, flaky-fix, POM, CI),
+  `webapp-testing` (unit/integration/e2e for web + local apps),
+  `electron-cdp-ui-testing` (headless Electron UI via raw CDP), and
+  `test-driven-development` (RED–GREEN–REFACTOR). Run `pnpm test` + `pnpm run
+  typecheck` before claiming a change is verified.
+- **Electron internals** — `electron-app-development`, `electron-builder`
+  (packaging/AppImage/.deb/auto-update), `electron-renderer-ui`,
+  `electron-core-web-bridge` / `electron-web-shell` (Server Edition seam),
+  `monaco-in-electron` (editor node), `desktop-app-server-edition` (browser
+  boot), `desktop-release-and-site-sync`.
+- **React/TS** — `vercel-react-best-practices`, `vercel-composition-patterns`
+  (component API design for the canvas node system),
+  `react-flow-node-interactions` (node gestures), `typescript-advanced-types`
+  (complex type modeling in `src/shared`/`state`).
+- **tmux** — `tmux-embedding` before touching session-continuity / scrollback
+  (`core/pty-manager.ts`, the `tmux.conf` generation).
+- **Parallel/remotes** — `parallel-agent-git-coordination` (worktrees,
+  remotes, SSH auth) + `git-cli-parsing` when scripting push/pull across
+  origin/github/gitea.
+- **Process** — `plan` (write plans), `systematic-debugging`,
+  `subagent-driven-development`, `requesting-code-review`,
+  `skill-creator` (when maintaining agent skills), `clean-room-rewrite`
+  (any legal touchpoint — hard gate).
+- **Negotiation/design** — `frontend-design`, `web-design-guidelines`,
+  `ui-ux-pro-max` for the dark/lime UI taste; `one-three-one-rule` if a
+  technical decision needs a structured proposal.
+
+These are loadable from the developer profile (`skills_list` → software-development
+category confirms them). If a skill is missing, install via `npx skills add
+<owner>/<repo> --skill <name> -y` and relocate into the profile tree per the
+`installing-third-party-skills` skill before relying on it.
+
 ## Legal rules (clean-room — non-negotiable)
 
 This project exists because the prior fork (nodeterm-linux, BUSL-1.1) could
