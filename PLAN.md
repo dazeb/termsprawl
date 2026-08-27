@@ -796,6 +796,17 @@ missing, health timeout, and engine failures all degrade to fallback.
   120×80, diff 260×180, editor 240×160) so nodes can be shrunk smaller.
   Verified live (HMR) via CDP: sticky drags down to 120×80, wrapper style
   updates, content follows.
+- **ResizeObserver loop warning (still firing after the rAF fix).** The first
+  fix deferred layout to rAF, but the deferred work (xterm fit() writes the
+  host's dimensions; Monaco layout writes its container) MUTATES the very
+  element being observed — so the observer caught its own mutation and
+  Chromium still warned "ResizeObserver loop completed with undelivered
+  notifications". Final fix in `useSafeResize`: **disconnect the observer
+  before running the deferred work, run it, then re-observe** — the mutation
+  happens with no active observer, so no loop is possible, and the next
+  observe() picks up the new size. Verified live via instrumented RO:
+  0 SYNC-MUTATE, 0 console warnings across multi-node resizes; xterm viewport
+  still tracks the host.
 
 ---
 

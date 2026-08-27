@@ -28,11 +28,23 @@ export function useSafeResize<T extends HTMLElement>(
     const el = ref.current
     if (!el) return
 
+    // The observed element may MUTATE during the deferred work (xterm fit()
+    // writes host dimensions; Monaco layout writes its container). If the
+    // observer is live during that mutation, Chromium sees a callback that
+    // changed the observed size → "ResizeObserver loop completed with
+    // undelivered notifications". So we disconnect before the work, run it,
+    // then re-observe — the mutation happens with NO active observer, and the
+    // next observe() picks up the new size cleanly. (learned 2026-08-27)
     const schedule = (): void => {
       if (frame.current !== null) return
       frame.current = requestAnimationFrame(() => {
         frame.current = null
-        onResizeRef.current()
+        observer.disconnect()
+        try {
+          onResizeRef.current()
+        } finally {
+          if (el.isConnected) observer.observe(el)
+        }
       })
     }
 
