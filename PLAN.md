@@ -342,9 +342,10 @@ extension, one feature at a time.**
 - Model: `AppSettings.displayName`, `a2aPeers`, `apiProviders` (optional, added
   to normalize + defaults). Focus: codex + grok are the primary agents
   (PRIMARY_AGENTS); claude stays registered but secondary.
-- **Status: DONE (commit pending) on `phase-10-server`.** app-settings normalize
-  round-trips the new fields (13 tests); typecheck, build, build:server,
-  originality all green (325 tests).
+- **Status: DONE (on main).** The `phase-10-server` branch was merged into main
+  (via 3b2fc14) and deleted 2026-08-27 — Task 7.8 is complete, do not reopen.
+  app-settings normalize round-trips the new fields (13 tests); typecheck, build,
+  build:server, originality all green (325 tests).
 
 ## Phase 8 — Source control
 
@@ -427,8 +428,10 @@ extension, one feature at a time.**
   WS-RPC protocol; browser shim fills the same API as the desktop preload.
 - Boot same core services via a platform implementation.
 - Verify: browser session opens project, runs terminals, sees agent status.
-- **Status: PARTIAL (web shell + terminals + agent status live-verified; commits
-  89243f3/…/5fabfdf on branch `phase-10-server`).** `server/rpc.ts` (RPC
+- **Status: PARTIAL — IN PROGRESS, NOT SHIPPED (web shell + terminals + agent
+  status live-verified; commits 89243f3/…/5fabfdf landed on main via the
+  `phase-10-server` branch, merged at 3b2fc14, branch deleted 2026-08-27).**
+  `server/rpc.ts` (RPC
   dispatcher), `server/platform.ts` (ServerPlatform over ws), `server/handlers.ts`
   (IPC channel -> core services: workspace, terminals, settings, updates idle,
   announcements, file list/read/write), `server/index.ts` (node:http static +
@@ -441,12 +444,15 @@ extension, one feature at a time.**
   (`echo SERVER_EDITION_OK`/`pwd` streamed back); "New folder project" modal
   works in a real browser; POST /hook/claude -> agent:status:<sid> broadcast
   received over WS. git/accounts/cloud not wired (shim rejects gracefully).
-  **Remaining:** install agent CLI hooks on the host for a live agent (only codex
-  present), persistence refinements, platform-impl parity, a real browser boot
-  polish pass.
+  **Remaining (Phase 10 is NOT complete):** git/accounts/cloud still not wired
+  (shim rejects gracefully), install agent CLI hooks on the host for a live agent
+  (only codex present), persistence refinements, platform-impl parity, real
+  browser boot polish. Task 10.2 stays open until these land.
 
 ### Task 10.2: Commit
 - `git commit -m "feat: server edition"`
+- **Status: NOT DONE.** No `feat: server edition` commit exists yet — Phase 10
+  stays open until the remaining work above is done and verified.
 
 ## Phase 11 — Our own extras (rebuilt from scratch, better than the originals)
 
