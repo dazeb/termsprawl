@@ -50,11 +50,35 @@ export function connectionArgs(remote: RemoteHost): string[] {
   return args
 }
 
-/** Run `ssh <remote> <command...>` and capture the result. argv-array, no shell
- * on the local side. */
+/** Single-quote a value for a POSIX remote shell (safe against spaces and
+ * embedded quotes). The remote command string is parsed by the remote shell,
+ * so every dynamic value must be quoted — unquoted, a commit message or path
+ * containing spaces would be split into separate words. */
+export function shq(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`
+}
+
+/** Serialize a command argv into ONE remote-shell command string. ssh joins
+ * argv elements with spaces and hands the joined string to the remote shell,
+ * so each element must be single-quoted — otherwise any argument containing
+ * spaces (commit messages, paths) is misparsed as multiple words. Callers
+ * that build their own pre-quoted compound command must use `runSshRaw`. */
+export function remoteCommand(command: string[]): string {
+  return command.map(shq).join(' ')
+}
+
+/** Run `ssh <remote> <command...>` and capture the result. argv-array on the
+ * local side (no local shell); each element is quoted for the remote shell.
+ */
 export function runSsh(remote: RemoteHost, command: string[]): Promise<SshResult> {
+  return runSshRaw(remote, remoteCommand(command))
+}
+
+/** Run a pre-quoted remote shell command string (single argv element, passed
+ * through untouched — the caller owns quoting, e.g. `remoteSh`). */
+export function runSshRaw(remote: RemoteHost, commandStr: string): Promise<SshResult> {
   return new Promise((resolve) => {
-    const child = spawn('ssh', [...connectionArgs(remote), ...command], {
+    const child = spawn('ssh', [...connectionArgs(remote), commandStr], {
       stdio: ['ignore', 'pipe', 'pipe']
     })
     let stdout = ''

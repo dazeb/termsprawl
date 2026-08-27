@@ -413,6 +413,20 @@ extension, one feature at a time.**
   + preload + renderer store, `TerminalNode` passes the owning project's remote
   on pty.create (so a remote terminal spawns over ssh), and a TabBar "New
   remote (SSH) project" dialog (validate via normalizeRemote).
+- **Live transport re-verification 2026-08-27 (real Proxmox LXC):** exercised
+  the actual modules against `root@192.168.8.221` (actrunner CT 109 on PVE
+  192.168.8.195; tmux 3.5a + git 2.47.3; user's ed25519 key deployed to its
+  authorized_keys). Verified: runSsh command exec, remote tmux session lifecycle
+  (create / has-session / kill, both async and sync variants), remote file read
+  (/etc/hostname), and a remote git status→add→commit round-trip in a scratch
+  repo. **Found + fixed a real bug:** `runSsh` joined argv elements unquoted and
+  ssh hands the joined string to the REMOTE shell, so any argument containing
+  spaces (commit messages, paths) was split — a multi-word `git commit -m` died
+  with a pathspec error. Fix: `ssh.ts` now single-quotes every element via
+  `remoteCommand()` (new `shq` moved here; `runSshRaw` added for pre-quoted
+  compound commands — `remoteSh` uses it, sync tmux helpers quote too). 3 new
+  unit tests (multi-word round-trip through /bin/sh); 379 tests green;
+  typecheck + originality OK. Test host left configured for the app-level pass.
   **Remaining:** route the source-control + file panel to the remote transports
   (remote repoRoot/branch/sync/list/recent-commits + stage/unstage/discard/
   commit), client controlMaster multiplexing, and the end-to-end "open project

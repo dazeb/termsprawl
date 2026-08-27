@@ -3,7 +3,7 @@
 // the remote host and multiplexes it through tmux, so terminals survive app
 // restarts the same way local sessions do. Electron-free.
 import { spawnSync } from 'node:child_process'
-import { runSsh, connectionArgs, type RemoteHost } from './ssh'
+import { runSsh, connectionArgs, remoteCommand, type RemoteHost } from './ssh'
 import { shq } from './remote-file'
 
 /** Build the argv for `ssh -tt <remote> tmux ...` that creates/attaches a tmux
@@ -40,7 +40,7 @@ export function remoteTmuxHasSessionSync(
 ): boolean {
   try {
     return (
-      spawnSync('ssh', [...connectionArgs(remote), 'tmux', 'has-session', '-t', sessionName], {
+      spawnSync('ssh', [...connectionArgs(remote), remoteCommand(['tmux', 'has-session', '-t', sessionName])], {
         stdio: 'ignore'
       }).status === 0
     )
@@ -60,7 +60,7 @@ export async function remoteTmuxKillSession(
 /** Sync remote kill (for the sync destroy path). */
 export function remoteTmuxKillSessionSync(remote: RemoteHost, sessionName: string): void {
   try {
-    spawnSync('ssh', [...connectionArgs(remote), 'tmux', 'kill-session', '-t', sessionName], {
+    spawnSync('ssh', [...connectionArgs(remote), remoteCommand(['tmux', 'kill-session', '-t', sessionName])], {
       stdio: 'ignore'
     })
   } catch {

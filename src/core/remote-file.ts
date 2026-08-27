@@ -1,12 +1,9 @@
 // Phase 9 — remote file ops over ssh. The local side never runs a shell
 // (argv-array to ssh); the remote `sh -c` runs a command we build ourselves
 // with every dynamic value fully single-quoted. Electron-free.
-import { runSsh, type RemoteHost, type SshResult } from './ssh'
+import { runSshRaw, shq, type RemoteHost, type SshResult } from './ssh'
 
-/** Single-quote a value for a POSIX remote shell. */
-export function shq(s: string): string {
-  return `'${s.replace(/'/g, `'\\''`)}'`
-}
+export { shq }
 
 /** Build the remote `cat <path>` command (path fully quoted). */
 export function remoteFileReadCmd(path: string): string {
@@ -24,7 +21,7 @@ export interface RemoteFileResult {
  * `sh -c` wrapper here would stringify to `sh -c <script> <arg>`, making the
  * remote run `<script>` with `<arg>` as `$0` instead of the intended command. */
 export function remoteSh(remote: RemoteHost, cmd: string): Promise<SshResult> {
-  return runSsh(remote, [cmd])
+  return runSshRaw(remote, cmd)
 }
 
 /** Read a file's content over ssh. */
