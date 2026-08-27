@@ -1,17 +1,25 @@
-// useSafeResize — ResizeObserver without the "loop completed with undelivered
-// notifications" warning (learned 2026-08-27, node-resize noise).
+// useSafeResize — ResizeObserver-driven layout without the two failure modes
+// that have bitten us (learned 2026-08-27, node resize):
 //
-// Why the warning happens: Chromium warns when a ResizeObserver callback
-// synchronously mutates an observed element's size inside the callback frame
-// (xterm fit() writes element dimensions back into its observed host; Monaco's
-// automaticLayout rounds fractional sizes and re-triggers its own observer).
-// The notification then stays undelivered → "ResizeObserver loop completed
-// with undelivered notifications" on every node resize.
+// 1. "ResizeObserver loop completed with undelivered notifications" — Chromium
+//    warns when a callback synchronously mutates the observed element's size
+//    in the same frame (xterm fit() writes host dimensions; Monaco layout
+//    writes its container). Fix: defer the work to requestAnimationFrame so
+//    the mutation lands in a LATER frame with no pending delivery, and skip
+//    when the size hasn't actually changed (>=1px guard kills subpixel
+//    feedback).
 //
-// Fix: defer the layout work OUT of the observer callback via
-// requestAnimationFrame (so the notification cycle completes before any
-// mutation), and skip when the observed size hasn't actually changed. This
-// keeps layout correct (runs on the next frame) while silencing the warning.
+// 2. RENDERER CRASH / black screen — if a ResizeObserver callback ever
+//    throws (e.g. Chromium's "ResizeObserver loop limit exceeded", which it
+//    throws when an observer keeps rescheduling itself), the uncaught
+//    exception can blank the whole page. Two hard rules here:
+//      - NEVER disconnect/re-observe from inside the callback (that pattern
+//        can re-trigger delivery and hit the loop limit).
+//      - EVERY callback body is wrapped in try/catch; a failure degrades to a
+//        no-op instead of killing the renderer.
+//
+// Do NOT "improve" this back into a synchronous fit or a disconnect/re-observe
+// dance — both reintroduce the crash.
 
 import { useEffect, useRef, type RefObject } from 'react'
 
@@ -28,34 +36,26 @@ export function useSafeResize<T extends HTMLElement>(
     const el = ref.current
     if (!el) return
 
-    // The observed element may MUTATE during the deferred work (xterm fit()
-    // writes host dimensions; Monaco layout writes its container). If the
-    // observer is live during that mutation, Chromium sees a callback that
-    // changed the observed size → "ResizeObserver loop completed with
-    // undelivered notifications". So we disconnect before the work, run it,
-    // then re-observe — the mutation happens with NO active observer, and the
-    // next observe() picks up the new size cleanly. (learned 2026-08-27)
-    const schedule = (): void => {
-      if (frame.current !== null) return
-      frame.current = requestAnimationFrame(() => {
-        frame.current = null
-        observer.disconnect()
-        try {
-          onResizeRef.current()
-        } finally {
-          if (el.isConnected) observer.observe(el)
-        }
-      })
-    }
-
     const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const { width, height } = entry.contentRect
-        if (Math.abs(width - lastSize.current.w) < 1 && Math.abs(height - lastSize.current.h) < 1) {
-          return
+      try {
+        for (const entry of entries) {
+          const { width, height } = entry.contentRect
+          if (Math.abs(width - lastSize.current.w) < 1 && Math.abs(height - lastSize.current.h) < 1) {
+            return
+          }
+          lastSize.current = { w: width, h: height }
+          if (frame.current !== null) cancelAnimationFrame(frame.current)
+          frame.current = requestAnimationFrame(() => {
+            frame.current = null
+            try {
+              onResizeRef.current()
+            } catch {
+              // Never let layout work crash the renderer.
+            }
+          })
         }
-        lastSize.current = { w: width, h: height }
-        schedule()
+      } catch {
+        // An RO callback must never throw — that can blank the page.
       }
     })
     observer.observe(el)

@@ -801,12 +801,21 @@ missing, health timeout, and engine failures all degrade to fallback.
   host's dimensions; Monaco layout writes its container) MUTATES the very
   element being observed — so the observer caught its own mutation and
   Chromium still warned "ResizeObserver loop completed with undelivered
-  notifications". Final fix in `useSafeResize`: **disconnect the observer
-  before running the deferred work, run it, then re-observe** — the mutation
-  happens with no active observer, so no loop is possible, and the next
-  observe() picks up the new size. Verified live via instrumented RO:
-  0 SYNC-MUTATE, 0 console warnings across multi-node resizes; xterm viewport
-  still tracks the host.
+  notifications". Verified live via instrumented RO: 0 SYNC-MUTATE, 0 console
+  warnings across multi-node resizes; xterm viewport still tracks the host.
+- **BLACK SCREEN / renderer crash (the disconnect/re-observe "fix" was wrong).**
+  Disconnecting + re-observing inside the deferred work can re-trigger RO
+  delivery and hit Chromium's "ResizeObserver loop limit exceeded", which is
+  THROWN inside the observer callback — an uncaught exception there blanks
+  the whole page (user: "black screen, requires reload/force reload"). Final
+  correct fix in `useSafeResize`: plain rAF deferral + size guard (the
+  mutation lands in a later frame, so no loop warning) and HARD try/catch
+  around the callback body and the work so an RO callback can NEVER throw or
+  crash the renderer. Do NOT reintroduce disconnect/re-observe or synchronous
+  fit. Verified live: full reload → app boots, nodes create, multi-node
+  grow/shrink resize ×3 → renderer alive, 0 RO warnings, 0 RO crashes.
+  (Separate pre-existing <BrowserNode> webview "getWebContentsId before
+  dom-ready" errors surface under HMR churn — unrelated to this crash.)
 
 ---
 
