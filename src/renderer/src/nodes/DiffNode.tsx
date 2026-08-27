@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { NodeResizer } from '@reactflow/node-resizer'
 import type { NodeProps } from 'reactflow'
 import { DiffEditor } from '@monaco-editor/react'
 import { nodeTitle } from '../state/workspace'
@@ -12,7 +13,7 @@ import { HelpBadge } from '../components/HelpBadge'
 // or HEAD), modified side from the working tree. The path/base are persisted
 // with the node; the diff payload is fetched on demand over IPC and kept in
 // component state (never serialized).
-export function DiffNode({ id, data }: NodeProps<DiffNodeData>): React.JSX.Element {
+export function DiffNode({ id, data, selected }: NodeProps<DiffNodeData>): React.JSX.Element {
   const { updateNodeData, closeNode } = useCanvas()
   const [info, setInfo] = useState<DiffInfoResult | null>(null)
   const [loading, setLoading] = useState(false)
@@ -52,6 +53,7 @@ export function DiffNode({ id, data }: NodeProps<DiffNodeData>): React.JSX.Eleme
 
   return (
     <div className="diff-node">
+      <NodeResizer isVisible={selected} minWidth={400} minHeight={240} />
       <div className="diff-node-header">
         <span className="diff-node-title" title={data.path ?? undefined}>
           {nodeTitle(data)}

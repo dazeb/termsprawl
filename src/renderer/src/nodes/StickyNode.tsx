@@ -1,4 +1,5 @@
 import { useRef } from 'react'
+import { NodeResizer } from '@reactflow/node-resizer'
 import type { NodeProps } from 'reactflow'
 import { STICKY_COLORS, nodeTitle } from '../state/workspace'
 import { useCanvas } from '../canvas/Canvas'
@@ -9,7 +10,7 @@ import { HelpBadge } from '../components/HelpBadge'
 // + collapse toggle, and an always-editable textarea body. The body is
 // nodrag/nowheel so text selection and scrolling work; dragging happens via
 // the header, same as terminal nodes.
-export function StickyNode({ id, data }: NodeProps<StickyNodeData>): React.JSX.Element {
+export function StickyNode({ id, data, selected }: NodeProps<StickyNodeData>): React.JSX.Element {
   const { updateNodeData, commit, closeNode } = useCanvas()
   const blurTimer = useRef<number | null>(null)
 
@@ -31,6 +32,7 @@ export function StickyNode({ id, data }: NodeProps<StickyNodeData>): React.JSX.E
 
   return (
     <div className={`sticky-node sticky-${data.color}${data.collapsed ? ' collapsed' : ''}`}>
+      <NodeResizer isVisible={selected} minWidth={140} minHeight={90} />
       <div className="sticky-node-header">
         <button
           className="sticky-node-dot"

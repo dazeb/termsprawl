@@ -307,7 +307,6 @@ export function BrowserNode({ id, data, selected }: NodeProps<BrowserNodeData>):
         maxWidth={BROWSER_NODE_MAX.width}
         maxHeight={BROWSER_NODE_MAX.height}
         color="#c6f135"
-        handleClassName="browser-resize-handle"
       />
       <div className="browser-tabs">
         {tabs.map((t) => (

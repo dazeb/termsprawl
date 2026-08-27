@@ -81,6 +81,12 @@ touch build config, re-verify with a packaged boot test.
 
 ## Key design decisions (do not casually reverse)
 
+- **Every node is resizable** with a subtle, selection-only transform chrome.
+  Each node component owns its `<NodeResizer>` (from `@reactflow/node-resizer`)
+  gated on the `selected` prop; the handles/lines/outline are styled once in
+  `styles.css` (lime, opacity-faded) and appear only when a node is selected —
+  never for unselected nodes. Do not revert to per-node resize styles or make
+  the handles prominent.
 - **React Flow is the single live source of truth** for node state
   (`Canvas.tsx`). No separate store mirroring nodes. `state/workspace.ts`
   holds only pure helpers: node factories + `serializeNodes`/`deserializeNodes`.
@@ -116,12 +122,21 @@ touch build config, re-verify with a packaged boot test.
 
 ## Node kinds
 
-Implemented: `terminal`, `sticky`, `group`, `diff`, `editor` (Phase 6).
-Agent sessions reuse the terminal node with a CLI preset (Phase 7). The plan
+Implemented: `terminal`, `sticky`, `group`, `diff`, `editor` (Phase 6), and
+`browser` (Phase 13 — a sandboxed `<webview>` guest, one per tab). Agent
+sessions reuse the terminal node with a CLI preset (Phase 7). The plan
 (`PLAN.md`) still adds chat, source control, SSH remote, Server Edition, then
 rebuilds our own extras from scratch (Telegram, relay, chat driver — concepts
 only, never ported). Extend `NODE_TYPES` and the `data.kind` union in
 `state/workspace.ts` when adding kinds.
+
+**Every node is resizable** via `NodeResizer` (`@reactflow/node-resizer`,
+added 0.8.3). Each node component renders `<NodeResizer isVisible={selected}
+minWidth minHeight …>` as its first child and takes `selected` from `NodeProps`.
+The shared theme lives in `styles.css` on `.react-flow__resize-control` (8px
+lime handles, thin lime lines, opacity-faded) plus a subtle selected outline on
+`.react-flow__node.selected > div` — both appear only when the node is
+selected. Keep the handles subtle; do not add per-node handle classes.
 
 ## Remote & parallel-agent workflow (worktrees)
 

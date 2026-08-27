@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { NodeResizer } from '@reactflow/node-resizer'
 import type { NodeProps } from 'reactflow'
 import { nodeTitle } from '../state/workspace'
 import { useCanvas } from '../canvas/Canvas'
@@ -8,7 +9,7 @@ import { HelpBadge } from '../components/HelpBadge'
 // A parent frame around other nodes. The frame itself is the drag handle —
 // React Flow moves children (parentId) along with it. The label pill is
 // editable on double-click; edits commit one history snapshot on blur/Enter.
-export function GroupNode({ id, data }: NodeProps<GroupNodeData>): React.JSX.Element {
+export function GroupNode({ id, data, selected }: NodeProps<GroupNodeData>): React.JSX.Element {
   const { updateNodeData, commit, closeNode } = useCanvas()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(data.title)
@@ -30,6 +31,7 @@ export function GroupNode({ id, data }: NodeProps<GroupNodeData>): React.JSX.Ele
 
   return (
     <div className="group-node">
+      <NodeResizer isVisible={selected} minWidth={200} minHeight={130} />
       <div
         className="group-label nodrag"
         onDoubleClick={(e) => {

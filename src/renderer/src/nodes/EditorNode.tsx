@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { NodeResizer } from '@reactflow/node-resizer'
 import type { NodeProps } from 'reactflow'
 import Editor from '@monaco-editor/react'
 import '../monaco'
@@ -11,7 +12,7 @@ import { toFilePreviewUrl } from '@shared/file-url'
 import type { FileReadResult } from '@shared/types'
 import { HelpBadge } from '../components/HelpBadge'
 
-export function EditorNode({ id, data }: NodeProps<EditorNodeData>): React.JSX.Element {
+export function EditorNode({ id, data, selected }: NodeProps<EditorNodeData>): React.JSX.Element {
   const { updateNodeData, closeNode } = useCanvas()
   const [content, setContent] = useState('')
   const [saved, setSaved] = useState('')
@@ -86,6 +87,7 @@ export function EditorNode({ id, data }: NodeProps<EditorNodeData>): React.JSX.E
 
   return (
     <div className="editor-node">
+      <NodeResizer isVisible={selected} minWidth={320} minHeight={200} />
       <div className="editor-node-header">
         <span className="editor-node-title" title={data.path ?? undefined}>
           {nodeTitle(data)}

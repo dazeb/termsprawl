@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { NodeResizer } from '@reactflow/node-resizer'
 import type { Node, NodeProps } from 'reactflow'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -32,7 +33,7 @@ function getOwningRemote(projectId: string | null): ProjectRemote | undefined {
 // session respawns. The body is nodrag so xterm owns mouse input; dragging
 // happens via the header (the drag handle). The × button asks Canvas to
 // destroy the tmux session; ordinary React unmount only detaches the view.
-export function TerminalNode({ id, data }: NodeProps<TerminalNodeData>): React.JSX.Element {
+export function TerminalNode({ id, data, selected }: NodeProps<TerminalNodeData>): React.JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null)
   const { closeNode, updateNodeData } = useCanvas()
   const projectId = useProjects((s) => s.activeProjectId)
@@ -190,6 +191,7 @@ export function TerminalNode({ id, data }: NodeProps<TerminalNodeData>): React.J
 
   return (
     <div className="terminal-node">
+      <NodeResizer isVisible={selected} minWidth={360} minHeight={200} />
       <div className="terminal-node-header">
         <span className="terminal-node-dot" />
         {editingTitle ? (

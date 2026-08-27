@@ -1612,13 +1612,34 @@ html[data-theme='light'] .settings-nav-item:hover {
   user-select: none;
 }
 
-/* NodeResizer handles on the selected browser node. */
-.browser-resize-handle {
-  width: 10px !important;
-  height: 10px !important;
-  background: var(--panel) !important;
-  border: 1px solid var(--accent) !important;
-  border-radius: 3px !important;
+/* NodeResizer — subtle handles/lines for ALL nodes, shown only when selected.
+ * The browser node's earlier chunky per-node handle style is replaced by this
+ * shared theme (react-flow__resize-control is the resizer's default class). */
+.react-flow__resize-control.handle {
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  background: var(--bg);
+  opacity: 0.7;
+}
+
+.react-flow__resize-control.handle:hover {
+  opacity: 1;
+}
+
+.react-flow__resize-control.line {
+  border-color: var(--accent);
+  opacity: 0.35;
+}
+
+/* Subtle selected outline around every node (React Flow default is a
+ * blue/brighter ring — the app's accent is lime, and we keep it faint).
+ * The custom node component's root div is the DIRECT child of
+ * .react-flow__node (no wrapper in React Flow 11). */
+.react-flow__node.selected > div {
+  outline: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: 2px;
 }
 
 .browser-tab {

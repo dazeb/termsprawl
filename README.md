@@ -8,9 +8,10 @@ sprawls, nothing hides in tabs.
 
 ## What it does
 
-- **One infinite canvas** — pan, zoom, drag nodes anywhere. Layout is spatial,
-  not stacked tabs: terminals, notes, groups, and diffs sit where *you* put
-  them.
+- **One infinite canvas** — pan, zoom, drag, and resize nodes anywhere. Layout
+  is spatial, not stacked tabs: terminals, notes, groups, diffs, editors, and
+  browsers sit where *you* put them. Every node is resizable (subtle handles
+  appear when selected).
 - **Real terminals** — every terminal node runs a genuine PTY (`node-pty`)
   rendered with xterm.js.
 - **Sessions that survive restarts** — each terminal lives inside a persistent
@@ -26,7 +27,9 @@ sprawls, nothing hides in tabs.
 - **Embedded browser nodes** — a real sandboxed Chromium browser on the canvas,
   one guest per tab, hardened (no Node/preload, navigation policy), with an
   opt-in, localhost-only CDP surface so an external agent (Playwright/Puppeteer)
-  can drive the exact page you're watching.
+  can drive the exact page you're watching. Opens as a small mini-window
+  (it's the agent's browser; viewing is a bonus) and stays capped at a compact
+  size.
 - **Source control** — stage, commit, branch, push/pull, and manage worktrees
   from a panel bound to the active project.
 - **Undo/redo, command palette, dark lime-on-black UI.**
