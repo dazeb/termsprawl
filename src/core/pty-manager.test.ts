@@ -225,4 +225,36 @@ describe('PtyManager', () => {
     const snap = manager.readScrollback('scroll')
     expect(snap).toContain('SCROLLBACK_MARK')
   })
+
+  it('liveSessionIds() lists live sessions and clears on destroy', async () => {
+    const { manager } = makeManager()
+    manager.create({ id: 'live-a', cols: 80, rows: 24, cwd: process.cwd() })
+    manager.create({ id: 'live-b', cols: 80, rows: 24, cwd: process.cwd() })
+    expect(manager.liveSessionIds().sort()).toEqual(['live-a', 'live-b'])
+    manager.destroy('live-a')
+    expect(manager.liveSessionIds()).toEqual(['live-b'])
+  })
+
+  it('capturePane() returns recent tmux output for a live session', { timeout: 20000 }, async () => {
+    const { manager, platform } = makeManager()
+
+    manager.create({ id: 'peek', cols: 80, rows: 24, cwd: process.cwd() })
+    // Wait for the shell prompt, then print a marker and give tmux a beat.
+    await waitFor(() => platform.captured.some((c) => c.data.length > 0))
+    manager.write('peek', 'echo CAPTURE_MARK\\r')
+    await waitFor(() => platform.captured.some((c) => c.data.includes('CAPTURE_MARK')))
+    await new Promise((resolve) => setTimeout(resolve, 400))
+
+    const pane = manager.capturePane('peek')
+    expect(pane).not.toBeNull()
+    expect(pane).toContain('CAPTURE_MARK')
+  })
+
+  it('capturePane() returns null for unknown or destroyed sessions', () => {
+    const { manager } = makeManager()
+    expect(manager.capturePane('ghost')).toBeNull()
+    manager.create({ id: 'doomed2', cols: 80, rows: 24, cwd: process.cwd() })
+    manager.destroy('doomed2')
+    expect(manager.capturePane('doomed2')).toBeNull()
+  })
 })

@@ -21,7 +21,7 @@ import type { PtyCreateRequest, PtyCreateResult, PtyExitInfo } from '../shared/t
 import { resolveCommandLine } from './command-resolver'
 import { stripAuthEnv } from './agent-accounts'
 import { ensureTmuxConfig, hasSession, sessionNameFor, type TmuxConfig } from './tmux'
-import { remoteTmuxSpawnArgv, remoteTmuxHasSessionSync, remoteTmuxKillSessionSync } from './remote-pty'
+import { remoteTmuxSpawnArgv, remoteTmuxHasSessionSync, remoteTmuxKillSessionSync, remoteTmuxCaptureSync } from './remote-pty'
 import type { RemoteHost } from './ssh'
 import { ScrollbackStore } from './scrollback-store'
 
@@ -217,6 +217,34 @@ export class PtyManager {
 
   has(id: string): boolean {
     return this.sessions.has(id)
+  }
+
+  /** All live session ids (the terminal node ids). For the Telegram bot. */
+  liveSessionIds(): string[] {
+    return [...this.sessions.keys()]
+  }
+
+  /** Recent pane output for a session (`tmux capture-pane -S -200`), or null
+   * when the session is gone or tmux is unavailable. Local sessions capture on
+   * the termsprawl socket; remote sessions capture over ssh. Used by the
+   * Telegram bot's /peek and /attach. */
+  capturePane(id: string): string | null {
+    assertTerminalId(id)
+    const remote = this.remoteBySession.get(id)
+    if (remote) {
+      // Remote: capture on the remote host's tmux (a short capture is fast).
+      return remoteTmuxCaptureSync(remote, sessionNameFor(id))
+    }
+    if (!this.tmux) return null
+    try {
+      return execFileSync(
+        this.tmux.tmuxPath,
+        [...this.tmux.baseArgs, 'capture-pane', '-p', '-S', '-200', '-t', sessionNameFor(id)],
+        { encoding: 'utf8', timeout: 3000 }
+      )
+    } catch {
+      return null
+    }
   }
 
   sessionIdsForProject(projectId: string): string[] {

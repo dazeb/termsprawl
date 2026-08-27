@@ -57,6 +57,30 @@ export async function remoteTmuxKillSession(
   await runSsh(remote, ['tmux', 'kill-session', '-t', sessionName])
 }
 
+/** Capture the remote pane's recent output (`tmux capture-pane -p -S -200`).
+ * Returns null when the session is gone. Used by the Telegram bot's peek/attach. */
+export async function remoteTmuxCapture(
+  remote: RemoteHost,
+  sessionName: string
+): Promise<string | null> {
+  const r = await runSsh(remote, ['tmux', 'capture-pane', '-p', '-S', '-200', '-t', sessionName])
+  return r.code === 0 ? r.stdout : null
+}
+
+/** Sync remote capture (the bot's peek/attach runs in a sync loop). */
+export function remoteTmuxCaptureSync(remote: RemoteHost, sessionName: string): string | null {
+  try {
+    const r = spawnSync(
+      'ssh',
+      [...connectionArgs(remote), remoteCommand(['tmux', 'capture-pane', '-p', '-S', '-200', '-t', sessionName])],
+      { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'pipe'] }
+    )
+    return r.status === 0 ? (r.stdout ?? null) : null
+  } catch {
+    return null
+  }
+}
+
 /** Sync remote kill (for the sync destroy path). */
 export function remoteTmuxKillSessionSync(remote: RemoteHost, sessionName: string): void {
   try {
