@@ -776,6 +776,14 @@ missing, health timeout, and engine failures all degrade to fallback.
   `automaticLayout: false` and drive `editor.layout()` through it. Verified
   headless via raw CDP: 12 resize drags (terminal + Monaco editor node, both
   fractional rects) → 0 warnings.
+- **Double border on selected nodes.** The selected node showed two lines
+  around it: the NodeResizer's 4 edge lines AND a separate
+  `.react-flow__node.selected > div` outline (offset 2px). Fix: the resizer's
+  lines ARE the single selection border (faint lime, coincident with the
+  node's 1px border) — removed the separate outline entirely and dropped the
+  BrowserNode hardcoded `color="#c6f135"` so the theme's accent drives it.
+  Verified headless via CDP: selected node has 4 resizer lines at the exact
+  node edges, 0 outlines, single visible border.
 
 ---
 

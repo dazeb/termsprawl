@@ -1635,8 +1635,9 @@ html[data-theme='light'] .settings-nav-item:hover {
 }
 
 /* NodeResizer — subtle handles/lines for ALL nodes, shown only when selected.
- * The browser node's earlier chunky per-node handle style is replaced by this
- * shared theme (react-flow__resize-control is the resizer's default class). */
+ * The resizer's 4 edge lines ARE the single selection border (drawn coincident
+ * with the node's 1px border, faint) — do NOT add a separate node outline or
+ * the selection shows a double border (learned 2026-08-27). */
 .react-flow__resize-control.handle {
   width: 8px;
   height: 8px;
@@ -1652,17 +1653,12 @@ html[data-theme='light'] .settings-nav-item:hover {
 
 .react-flow__resize-control.line {
   border-color: var(--accent);
-  opacity: 0.35;
+  opacity: 0.45;
 }
 
-/* Subtle selected outline around every node (React Flow default is a
- * blue/brighter ring — the app's accent is lime, and we keep it faint).
- * The custom node component's root div is the DIRECT child of
- * .react-flow__node (no wrapper in React Flow 11). */
-.react-flow__node.selected > div {
-  outline: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
-  outline-offset: 2px;
-}
+/* Selected nodes get their accent border from the resizer lines above; the
+ * node itself must not draw a second outline. (Legacy: an outline used to be
+ * applied here — removed because it doubled the border.) */
 
 .browser-tab {
   display: flex;
