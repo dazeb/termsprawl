@@ -1,6 +1,6 @@
 {
   "name": "termsprawl",
-  "version": "0.8.4",
+  "version": "0.9.0",
   "description": "A spatial terminal manager for Linux — terminals, editors, and agents sprawled across one infinite canvas",
   "main": "out/main/index.js",
   "type": "module",
@@ -61,6 +61,12 @@
     "files": [
       "out/**",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/searxng-runtime",
+        "to": "searxng-runtime"
+      }
     ],
     "directories": {
       "output": "dist",

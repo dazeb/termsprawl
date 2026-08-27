@@ -31,6 +31,7 @@ import {
   createBrowserNode,
   isAgentCommand,
   removeNode,
+  resolveHomeUrl,
   serializeNodes,
   deserializeNodes,
   topZ,
@@ -41,6 +42,8 @@ import type { AgentId } from '@shared/agents/config'
 import { useHistory } from '../state/history'
 import { useProjects } from '../state/projects'
 import { useCanvasRequests } from '../state/canvas-requests'
+import { useBrowserHome } from '../state/browser-home'
+import { useSearxng } from '../state/searxng'
 import type { SprawlNodeData, TerminalNodeData } from '../state/workspace'
 
 const nodeTypes = {
@@ -382,7 +385,9 @@ export function Canvas({ cwd, invertWheelZoom = false }: CanvasProps): React.JSX
   }, [menu, push, screenToFlowPosition, appendOnTop])
 
   const addBrowser = useCallback(() => {
-    const node = createBrowserNode()
+    const node = createBrowserNode(
+      resolveHomeUrl(useBrowserHome.getState().homeUrl, useSearxng.getState().info)
+    )
     if (menu && wrapperRef.current) {
       node.position = screenToFlowPosition({ x: menu.x, y: menu.y })
     }

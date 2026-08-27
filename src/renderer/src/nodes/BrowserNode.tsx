@@ -11,9 +11,12 @@ import {
   DEFAULT_BROWSER_URL,
   nextBrowserTabId,
   pushBrowserHistory,
+  resolveHomeUrl,
   setBrowserTabUrl
 } from '../state/workspace'
 import { useCanvas } from '../canvas/Canvas'
+import { useBrowserHome } from '../state/browser-home'
+import { useSearxng } from '../state/searxng'
 import { HelpBadge } from '../components/HelpBadge'
 
 // Minimal shape of the <webview> element we create (Electron's WebviewTag). We
@@ -68,6 +71,8 @@ export function BrowserNode({ id, data, selected }: NodeProps<BrowserNodeData>):
   const [canForward, setCanForward] = useState(false)
   const [crashed, setCrashed] = useState(false)
   const [guestId, setGuestId] = useState<number | null>(null)
+  // Sidecar status for the header chip (live subscription → re-renders).
+  const searxngStatus = useSearxng((s) => s.info.status)
   // Body drag layer: the webview swallows mouse events, so to move the node by
   // its page area we overlay a transparent layer that is ARMED (grabs pointer)
   // by default — press = drag the node. Hovering WITHOUT pressing for a short
@@ -227,6 +232,12 @@ export function BrowserNode({ id, data, selected }: NodeProps<BrowserNodeData>):
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
+  // Lazy-start the local search sidecar while a browser node exists; when it
+  // comes up, new tabs (and the node's home) resolve to it.
+  useEffect(() => {
+    void useSearxng.getState().ensure()
+  }, [id])
+
   // Navigate the ACTIVE tab: go through main so the URL policy is enforced in
   // one place.
   const navigateTo = (): void => {
@@ -248,7 +259,8 @@ export function BrowserNode({ id, data, selected }: NodeProps<BrowserNodeData>):
   }
 
   const openTab = (): void => {
-    const res = addBrowserTab(tabsRef.current, DEFAULT_BROWSER_URL)
+    const homeUrl = resolveHomeUrl(useBrowserHome.getState().homeUrl, useSearxng.getState().info)
+    const res = addBrowserTab(tabsRef.current, homeUrl)
     // Hide the previous active guest so the new tab is the only visible one
     // (activateTab does the same dance when switching back).
     webviewsRef.current.get(activeTabIdRef.current)?.style.setProperty('display', 'none')
@@ -256,7 +268,7 @@ export function BrowserNode({ id, data, selected }: NodeProps<BrowserNodeData>):
     setActiveTabId(res.activeTabId)
     setCrashed(false)
     setGuestId(null)
-    spawnWebview({ id: res.activeTabId, url: DEFAULT_BROWSER_URL }, false)
+    spawnWebview({ id: res.activeTabId, url: homeUrl }, false)
     persist(res.tabs, res.activeTabId)
   }
 
@@ -336,6 +348,13 @@ export function BrowserNode({ id, data, selected }: NodeProps<BrowserNodeData>):
       </div>
       <div className="browser-node-header">
         <span className="terminal-node-dot" />
+        {searxngStatus !== 'ready' && searxngStatus !== 'idle' && (
+          <span className="browser-search-chip" title="Local search status">
+            {searxngStatus === 'failed' || searxngStatus === 'stopped'
+              ? 'search unavailable — using fallback'
+              : 'starting local search…'}
+          </span>
+        )}
         <span className="browser-node-title" title={activeTab?.url ?? data.url}>
           {browserTitle(activeTab?.url ?? data.url)}
         </span>

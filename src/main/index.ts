@@ -30,6 +30,9 @@ import { claudeSettingsPath, installClaudeHooks } from './agents/hook-installer'
 import { SessionNameTracker } from '../core/session-name'
 import { agentSessionNameChannel } from '../shared/ipc'
 import { browserRuntime, ensureBrowserDebugPort } from './browser/runtime'
+import { existsSync } from 'node:fs'
+import { SearxngSidecar } from './searxng/sidecar'
+import type { SearxngInfo, SearchResult } from '../shared/types'
 import {
   installBrowserSecurity,
   registerBrowserGuest,
@@ -128,6 +131,18 @@ const platform: CorePlatform = {
 }
 
 const ptyManager = new PtyManager(platform)
+
+// Local search sidecar (Phase 14): a loopback SearXNG instance for the
+// browser-node home page + keyless agent search. Lazy — starts on first use;
+// killed on quit. Dev builds read the vendored runtime from the repo;
+// packaged builds from extraResources.
+const searxng = new SearxngSidecar({
+  userDataPath: platform.userDataPath,
+  runtimePath: existsSync(join(app.getAppPath(), 'resources', 'searxng-runtime'))
+    ? join(app.getAppPath(), 'resources', 'searxng-runtime')
+    : join(process.resourcesPath, 'searxng-runtime'),
+  broadcast: (info) => platform.broadcast(IPC.searxngStatusEvent, info)
+})
 const workspaceStore = new WorkspaceStore(platform)
 const updateBridge = createUpdateBridge({
   isPackaged: app.isPackaged,
@@ -513,6 +528,15 @@ function registerCloudIpc(): void {
   ipcMain.handle(IPC.cloudListBackups, (_event, limit?: number): Promise<CloudBackup[]> => cloud.listBackups(limit))
 }
 
+function registerSearxngIpc(): void {
+  ipcMain.handle(IPC.searxngStatusGet, (): SearxngInfo => searxng.info())
+  ipcMain.handle(IPC.searxngEnsure, (): Promise<SearxngInfo> => searxng.ensureSearxng())
+  ipcMain.handle(
+    IPC.searxngQuery,
+    (_event, q: string): Promise<SearchResult[]> => searxng.query(String(q ?? '').slice(0, 500))
+  )
+}
+
 function registerBrowserIpc(): void {
   ipcMain.handle(IPC.browserCdpInfo, (): BrowserCdpInfo => ({
     port: cdpFacade?.port ?? browserRuntime.port,
@@ -653,6 +677,7 @@ void app.whenReady().then(async () => {
   registerAnnouncementIpc()
   registerCloudIpc()
   registerBrowserIpc()
+  registerSearxngIpc()
   if (app.isPackaged) void fetchLatestAnnouncement()
 
   for (const entry of workspaceStore.pendingTerminalNodeCleanup()) {
@@ -719,4 +744,5 @@ app.on('before-quit', () => {
   ptyManager.killAll()
   void agentServer?.close()
   void cdpFacade?.close()
+  void searxng.stop()
 })

@@ -221,6 +221,26 @@ export interface AppSettings {
   /** Invert the mousewheel canvas zoom direction. Default (false): scroll up
    * zooms in. True: scroll up zooms out. */
   invertWheelZoom?: boolean
+  /** Browser home page for new browser nodes + new tabs (14.1). Unset =
+   * the app default (DuckDuckGo; the local SearXNG sidecar when enabled). */
+  browserHomeUrl?: string
+}
+
+/** SearXNG sidecar lifecycle status (Phase 14). */
+export type SearxngStatus = 'idle' | 'starting' | 'ready' | 'failed' | 'stopped'
+
+export interface SearxngInfo {
+  status: SearxngStatus
+  port?: number
+  baseUrl?: string
+  reason?: string
+}
+
+/** One hit from the local SearXNG JSON API (14.4). */
+export interface SearchResult {
+  title: string
+  url: string
+  content: string
 }
 
 /** An A2A (agent-to-agent) peer the user may route tasks to. */

@@ -686,6 +686,84 @@ raw port + facade + `/open` and passes the full Playwright/Puppeteer regression.
 
 ---
 
+## Phase 14 — Bundled SearXNG search sidecar (deviation from the plan)
+
+*User-directed deviation 2026-08-27. Goal: private, bundled search — a
+localhost-only SearXNG metasearch instance spawned as a child process (the
+tmux sidecar model) that (a) powers the browser node's home/new-tab page and
+(b) gives agent nodes a keyless JSON search API. SearXNG is NOT a browser;
+Phase 13 webview guests stay the renderer. Plan:
+`.hermes/plans/2026-08-27_015509-searxng-search-sidecar.md`.*
+
+### Task 14.1: Browser home URL setting (DONE, verified)
+
+- `AppSettings.browserHomeUrl` (types + normalize round-trips, unset = app
+  default), Settings > General text-input row, and threading into browser
+  node creation + new tabs via a module-level `useBrowserHome` store (custom
+  nodes can't take props). Explicit setting wins over everything else.
+  (`DEFAULT_BROWSER_URL` stays DuckDuckGo.)
+
+### Task 14.2: Vendored runtime + packaging (DONE, verified)
+
+- `scripts/vendor-searxng.sh` — reproducible runtime under
+  `resources/searxng-runtime/` (gitignored): python-build-standalone
+  CPython 3.12.14 pinned + sha256-verified, searxng pinned by commit SHA
+  (PyPI's `searxng` is an unrelated MCP wrapper — install from GitHub
+  source), `--no-build-isolation` with build deps pre-installed (searxng's
+  setup.py imports the package at build time), AGPL-3.0 LICENSE copied as
+  `LICENSE-SEARXNG.txt`, `requirements.lock` + `SEARXNG_VERSION` manifests.
+- Run by `scripts/release.sh` and the Gitea Actions release job before
+  `pnpm run dist`; `extraResources` carries it into the AppImage.
+- **Size gate (B0):** venv ≈ 128MB unpacked / ~37MB gzip; full runtime
+  516MB unpacked. Well under the 120MB decision gate → **bundled** (no
+  on-demand download / pipx).
+- Verified: vendored python boots searxng 2026.8.27 → `/healthz` OK in ~1s,
+  JSON search returns results (google/ddg/wikipedia; brave/startpage/wikidata
+  need per-user tuning — documented follow-up, not a blocker).
+
+### Task 14.3: Sidecar lifecycle (DONE, verified)
+
+- `src/core/searxng-config.ts` (pure, TDD): settings.yml generator
+  (bind 127.0.0.1, random high port 49152–65535, generated secret persisted
+  across restarts, limiter on sqlite, `search.formats: [html, json]`),
+  `pickFreePort` (probes explicit random high ports — the kernel ephemeral
+  range 32768–60999 isn't guaranteed to contain the app range), health URL.
+- `src/main/searxng/sidecar.ts` (electron-free, DI'd spawn/fetch): lazy
+  start → `/healthz` poll (500ms, 30s cap) → `ready`; pid-file
+  adopt-or-kill crash recovery; SIGTERM → 3s grace → SIGKILL on quit
+  (`before-quit`); crash-after-ready broadcasts `stopped`; status push via
+  `searxng:status`.
+- IPC: `searxng:status-get` / `searxng:ensure` / `searxng:query` +
+  `searxng:status` push; preload `window.termsprawl.searxng.*`.
+- 12 unit tests (fake spawn/fetch, no electron).
+
+### Task 14.4: Browser nodes + agent search (DONE, verified)
+
+- `resolveHomeUrl(setting, searxngInfo)` (pure, tested): setting > local
+  SearXNG when ready > DuckDuckGo. Browser node mount lazily
+  `ensure()`s the sidecar; new-tab + context-menu creation resolve against
+  live sidecar status (`useSearxng` store, subscribed once in App.tsx).
+- Keyless JSON search: `searxng.query(q)` → `SearchResult[]` capped at 10,
+  never throws — `[]` when the sidecar is unavailable. The `search:query`
+  surface phase 7 agent work consumes later.
+
+### Task 14.5: Failure & fallback (DONE)
+
+No UI blockers when the sidecar is dead: browser nodes open on the fallback
+URL, and a subtle lime-free `browser-search-chip` in the node header shows
+"starting local search…" / "search unavailable — using fallback". Runtime
+missing, health timeout, and engine failures all degrade to fallback.
+
+### Verify (whole phase)
+
+- Gates: `pnpm run typecheck`; `pnpm test` 393 passed (18 new: settings,
+  searxng-config, sidecar, resolveHomeUrl); `./scripts/check-originality.sh`
+  OK.
+- Live: vendored runtime boots `/healthz` in ~1s, JSON search 200 + results;
+  AppImage built with `resources/searxng-runtime` inside (see 14.2).
+
+---
+
 ## Testing strategy
 
 - Unit: vitest for core services (pty, workspace files, git ops, normalizers).

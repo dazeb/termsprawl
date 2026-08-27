@@ -29,7 +29,9 @@ import type {
   CloudDeviceStart,
   CloudUser,
   BrowserCdpInfo,
-  BrowserNavigateResult
+  BrowserNavigateResult,
+  SearxngInfo,
+  SearchResult
 } from '../shared/types'
 import type { UpdateStatus } from '../shared/update-status'
 
@@ -227,6 +229,23 @@ const api = {
       ipcRenderer.on(IPC.browserAgentOpen, listener)
       return () => {
         ipcRenderer.removeListener(IPC.browserAgentOpen, listener)
+      }
+    }
+  },
+
+  searxng: {
+    /** Current sidecar lifecycle info (idle/starting/ready/failed/stopped). */
+    status: (): Promise<SearxngInfo> => ipcRenderer.invoke(IPC.searxngStatusGet),
+    /** Lazily start the sidecar (idempotent) and resolve with its info. */
+    ensure: (): Promise<SearxngInfo> => ipcRenderer.invoke(IPC.searxngEnsure),
+    /** Keyless search via the local instance. Returns [] when unavailable. */
+    query: (q: string): Promise<SearchResult[]> => ipcRenderer.invoke(IPC.searxngQuery, q),
+    /** Subscribe to sidecar lifecycle changes (start/ready/crash/stop). */
+    onStatus: (cb: (info: SearxngInfo) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, info: SearxngInfo): void => cb(info)
+      ipcRenderer.on(IPC.searxngStatusEvent, listener)
+      return () => {
+        ipcRenderer.removeListener(IPC.searxngStatusEvent, listener)
       }
     }
   }
