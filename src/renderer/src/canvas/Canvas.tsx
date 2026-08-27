@@ -41,6 +41,7 @@ import type { AgentId } from '@shared/agents/config'
 import { useHistory } from '../state/history'
 import { useProjects } from '../state/projects'
 import { useCanvasRequests } from '../state/canvas-requests'
+import { useBrowserHome } from '../state/browser-home'
 import type { SprawlNodeData, TerminalNodeData } from '../state/workspace'
 
 const nodeTypes = {
@@ -382,7 +383,7 @@ export function Canvas({ cwd, invertWheelZoom = false }: CanvasProps): React.JSX
   }, [menu, push, screenToFlowPosition, appendOnTop])
 
   const addBrowser = useCallback(() => {
-    const node = createBrowserNode()
+    const node = createBrowserNode(useBrowserHome.getState().homeUrl)
     if (menu && wrapperRef.current) {
       node.position = screenToFlowPosition({ x: menu.x, y: menu.y })
     }

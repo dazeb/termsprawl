@@ -10,6 +10,7 @@ import { HelpBadge } from './components/HelpBadge'
 import { useProjects } from './state/projects'
 import { applyTheme } from './state/theme'
 import { useSidebarRequests } from './state/sidebar-requests'
+import { useBrowserHome } from './state/browser-home'
 import type { AppSettings } from '@shared/types'
 
 export function App(): React.JSX.Element {
@@ -32,6 +33,11 @@ export function App(): React.JSX.Element {
     })
     void load()
   }, [load])
+
+  // Keep the browser home URL available to canvas nodes (they can't take props).
+  useEffect(() => {
+    useBrowserHome.getState().setHomeUrl(settings?.browserHomeUrl)
+  }, [settings])
 
   // Source control now lives in the sidebar (VS Code-style); the cog menu just
   // opens that section. The sidebar consumes the request itself.
