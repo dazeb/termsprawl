@@ -236,6 +236,17 @@ export function createEditorNode(path: string | null = null): Node<EditorNodeDat
 /** The default start page for a fresh browser node (or new tab). */
 export const DEFAULT_BROWSER_URL = 'https://duckduckgo.com'
 
+/** Resolve the browser home URL (14.x): an explicit user setting wins; else
+ * the local SearXNG sidecar when it's ready; else the stock default. */
+export function resolveHomeUrl(
+  settingUrl: string | undefined,
+  searxng: { status: string; baseUrl?: string }
+): string {
+  if (settingUrl && settingUrl.trim().length > 0) return settingUrl.trim()
+  if (searxng.status === 'ready' && searxng.baseUrl) return searxng.baseUrl
+  return DEFAULT_BROWSER_URL
+}
+
 /** A browser node: a sandboxed <webview> guest rendered inline on the canvas.
  * Opens as a small "mini window" — roughly 10cm × 15cm MAX (≈378×567px at
  * 96dpi) — because it's primarily the agent's browser; the user views as a

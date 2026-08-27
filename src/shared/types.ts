@@ -226,6 +226,23 @@ export interface AppSettings {
   browserHomeUrl?: string
 }
 
+/** SearXNG sidecar lifecycle status (Phase 14). */
+export type SearxngStatus = 'idle' | 'starting' | 'ready' | 'failed' | 'stopped'
+
+export interface SearxngInfo {
+  status: SearxngStatus
+  port?: number
+  baseUrl?: string
+  reason?: string
+}
+
+/** One hit from the local SearXNG JSON API (14.4). */
+export interface SearchResult {
+  title: string
+  url: string
+  content: string
+}
+
 /** An A2A (agent-to-agent) peer the user may route tasks to. */
 export interface A2APeer {
   id: string

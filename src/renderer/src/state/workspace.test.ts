@@ -21,6 +21,7 @@ import {
   projectNameFromPath,
   pushBrowserHistory,
   removeNode,
+  resolveHomeUrl,
   resumedSessionId,
   serializeNodes,
   setBrowserTabUrl,
@@ -411,6 +412,21 @@ describe('browser tabs + history (13.4)', () => {
     const node = createBrowserNode()
     expect(node.data.tabs![0].url).toBe(DEFAULT_BROWSER_URL)
     expect(node.data.url).toBe(DEFAULT_BROWSER_URL)
+  })
+
+  it('resolveHomeUrl: explicit setting wins; else local SearXNG when ready; else default', () => {
+    expect(resolveHomeUrl(undefined, { status: 'idle' })).toBe(DEFAULT_BROWSER_URL)
+    expect(resolveHomeUrl('', { status: 'ready', baseUrl: 'http://127.0.0.1:54321' })).toBe(
+      'http://127.0.0.1:54321'
+    )
+    expect(resolveHomeUrl('https://a.example', { status: 'ready', baseUrl: 'http://127.0.0.1:54321' })).toBe(
+      'https://a.example'
+    )
+    expect(resolveHomeUrl('  https://a.example  ', { status: 'ready' })).toBe('https://a.example')
+    // Not ready → no sidecar URL even if baseUrl lingered.
+    expect(resolveHomeUrl(undefined, { status: 'failed', baseUrl: 'http://127.0.0.1:54321' })).toBe(
+      DEFAULT_BROWSER_URL
+    )
   })
 
   it('createBrowserNode starts with a single active tab', () => {

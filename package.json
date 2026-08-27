@@ -62,6 +62,12 @@
       "out/**",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "resources/searxng-runtime",
+        "to": "searxng-runtime"
+      }
+    ],
     "directories": {
       "output": "dist",
       "buildResources": "build"

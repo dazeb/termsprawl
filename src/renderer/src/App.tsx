@@ -11,6 +11,7 @@ import { useProjects } from './state/projects'
 import { applyTheme } from './state/theme'
 import { useSidebarRequests } from './state/sidebar-requests'
 import { useBrowserHome } from './state/browser-home'
+import { useSearxng } from './state/searxng'
 import type { AppSettings } from '@shared/types'
 
 export function App(): React.JSX.Element {
@@ -38,6 +39,13 @@ export function App(): React.JSX.Element {
   useEffect(() => {
     useBrowserHome.getState().setHomeUrl(settings?.browserHomeUrl)
   }, [settings])
+
+  // Mirror the local search sidecar's lifecycle so browser nodes can resolve
+  // their home URL against it and react to crashes.
+  useEffect(() => {
+    void useSearxng.getState().refresh()
+    return window.termsprawl?.searxng.onStatus((info) => useSearxng.getState().setInfo(info))
+  }, [])
 
   // Source control now lives in the sidebar (VS Code-style); the cog menu just
   // opens that section. The sidebar consumes the request itself.
