@@ -420,6 +420,24 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
 
             <div className="settings-pref-row">
               <div className="settings-pref-copy">
+                <span className="settings-pref-label">Browser home page</span>
+                <span className="settings-pref-sub">
+                  URL opened when a browser node or new tab starts. Empty = default
+                  (DuckDuckGo; the local SearXNG search when enabled)
+                </span>
+              </div>
+              <input
+                type="text"
+                className="settings-text-input"
+                placeholder="https://duckduckgo.com"
+                spellCheck={false}
+                value={c.settings.browserHomeUrl ?? ''}
+                onChange={(e) => void c.update({ browserHomeUrl: e.target.value })}
+              />
+            </div>
+
+            <div className="settings-pref-row">
+              <div className="settings-pref-copy">
                 <span className="settings-pref-label">Invert mousewheel zoom</span>
                 <span className="settings-pref-sub">
                   Off (default): scroll up zooms in. On: scroll up zooms out
