@@ -124,7 +124,10 @@ export function normalizeAppSettings(raw: unknown): AppSettings {
     enterBehavior:
       typeof obj.enterBehavior === 'string' && obj.enterBehavior.length > 0 ? obj.enterBehavior : 'queue',
     agentBrowserControl: obj.agentBrowserControl === true,
-    invertWheelZoom: obj.invertWheelZoom === true
+    invertWheelZoom: obj.invertWheelZoom === true,
+    ...(typeof obj.browserHomeUrl === 'string' && obj.browserHomeUrl.trim().length > 0
+      ? { browserHomeUrl: obj.browserHomeUrl.trim() }
+      : {})
   }
 }
 

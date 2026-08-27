@@ -77,6 +77,25 @@ describe('app-settings', () => {
     expect(loadAppSettings(dir).agentBrowserControl).toBe(false)
   })
 
+  it('defaults browser home URL to unset (renderer falls back to DuckDuckGo / local SearXNG)', () => {
+    expect(DEFAULT_APP_SETTINGS.browserHomeUrl).toBeUndefined()
+    expect(normalizeAppSettings({}).browserHomeUrl).toBeUndefined()
+    expect(normalizeAppSettings({ browserHomeUrl: '' }).browserHomeUrl).toBeUndefined()
+    expect(normalizeAppSettings({ browserHomeUrl: '   ' }).browserHomeUrl).toBeUndefined()
+    expect(normalizeAppSettings({ browserHomeUrl: 42 }).browserHomeUrl).toBeUndefined()
+  })
+
+  it('keeps a set browser home URL and round-trips it through disk', () => {
+    expect(normalizeAppSettings({ browserHomeUrl: 'https://search.example' }).browserHomeUrl).toBe(
+      'https://search.example'
+    )
+    const dir = scratch()
+    expect(saveAppSettings(dir, { browserHomeUrl: 'http://127.0.0.1:8888' }).browserHomeUrl).toBe(
+      'http://127.0.0.1:8888'
+    )
+    expect(loadAppSettings(dir).browserHomeUrl).toBe('http://127.0.0.1:8888')
+  })
+
   it('defaults invert-wheel-zoom to OFF and round-trips it through disk', () => {
     expect(DEFAULT_APP_SETTINGS.invertWheelZoom).toBe(false)
     expect(normalizeAppSettings({ invertWheelZoom: 'yes' }).invertWheelZoom).toBe(false)
