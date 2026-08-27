@@ -762,6 +762,21 @@ missing, health timeout, and engine failures all degrade to fallback.
 - Live: vendored runtime boots `/healthz` in ~1s, JSON search 200 + results;
   AppImage built with `resources/searxng-runtime` inside (see 14.2).
 
+### Post-phase fixes (2026-08-27)
+
+- **ResizeObserver loop warning on node resize.** TerminalNode's RO called
+  `fit.fit()` synchronously inside the callback (xterm writes element
+  dimensions back into its observed host) and Monaco's `automaticLayout`
+  re-triggered its own observer on fractional sizes — both produced
+  "ResizeObserver loop completed with undelivered notifications" on every
+  resize drag. Fix: `src/renderer/src/hooks/useSafeResize.ts` — a shared hook
+  that rAF-defers the layout work out of the RO callback and skips when the
+  content size hasn't actually changed (≥1px guard kills subpixel feedback).
+  TerminalNode fits through the hook; EditorNode/DiffNode switched
+  `automaticLayout: false` and drive `editor.layout()` through it. Verified
+  headless via raw CDP: 12 resize drags (terminal + Monaco editor node, both
+  fractional rects) → 0 warnings.
+
 ---
 
 ## Testing strategy

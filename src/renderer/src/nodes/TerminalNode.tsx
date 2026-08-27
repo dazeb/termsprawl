@@ -10,6 +10,7 @@ import { resumedSessionId } from '../state/workspace'
 import { useCanvas } from '../canvas/Canvas'
 import { useAgentStatuses } from '../state/agents'
 import { useProjects } from '../state/projects'
+import { useSafeResize } from '../hooks/useSafeResize'
 import { HelpBadge } from '../components/HelpBadge'
 
 // Status badge labels for agent nodes (Phase 7). Only nodes spawned with a
@@ -35,6 +36,11 @@ function getOwningRemote(projectId: string | null): ProjectRemote | undefined {
 // destroy the tmux session; ordinary React unmount only detaches the view.
 export function TerminalNode({ id, data, selected }: NodeProps<TerminalNodeData>): React.JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null)
+  // The xterm instance + fit addon live inside the mount effect; the resize
+  // hook below reads them through refs so layout stays rAF-deferred (no RO
+  // loop warning) while the effect owns their lifecycle.
+  const termRef = useRef<Terminal | null>(null)
+  const fitRef = useRef<FitAddon | null>(null)
   const { closeNode, updateNodeData } = useCanvas()
   const projectId = useProjects((s) => s.activeProjectId)
   // Capture ownership for this mount. During a project switch Zustand updates
@@ -166,20 +172,17 @@ export function TerminalNode({ id, data, selected }: NodeProps<TerminalNodeData>
       window.termsprawl.pty.resize(id, cols, rows)
     })
 
-    // Keep the terminal fitted to its container; push the new size to the pty.
-    const observer = new ResizeObserver(() => {
-      fit.fit()
-      window.termsprawl.pty.resize(id, term.cols, term.rows)
-    })
-    observer.observe(host)
+    termRef.current = term
+    fitRef.current = fit
 
     return () => {
       active = false
-      observer.disconnect()
       disposeInput.dispose()
       disposeResize.dispose()
       offData()
       offExit()
+      termRef.current = null
+      fitRef.current = null
       // xterm parses writes and refreshes its viewport asynchronously. Wait
       // until queued writes and two render frames have drained before disposal;
       // otherwise a pending viewport refresh can read already-disposed services.
@@ -188,6 +191,18 @@ export function TerminalNode({ id, data, selected }: NodeProps<TerminalNodeData>
       })
     }
   }, [id, data.cwd, data.command])
+
+  // Keep the terminal fitted to its container and push the new size to the
+  // pty — deferred out of the ResizeObserver callback (rAF) so xterm's own
+  // element writes never re-trigger the observer in the same frame (that's
+  // the "ResizeObserver loop completed with undelivered notifications" noise).
+  useSafeResize(hostRef, () => {
+    const term = termRef.current
+    const fit = fitRef.current
+    if (!term || !fit) return
+    fit.fit()
+    window.termsprawl.pty.resize(id, term.cols, term.rows)
+  })
 
   return (
     <div className="terminal-node">

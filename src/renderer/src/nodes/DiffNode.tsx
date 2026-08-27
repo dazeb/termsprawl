@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { NodeResizer } from '@reactflow/node-resizer'
 import type { NodeProps } from 'reactflow'
 import { DiffEditor } from '@monaco-editor/react'
+import type { editor as MonacoEditor } from 'monaco-editor'
 import { nodeTitle } from '../state/workspace'
 import { detectLanguage } from '../monaco'
 import { useCanvas } from '../canvas/Canvas'
 import type { DiffNodeData } from '../state/workspace'
 import type { DiffInfoResult } from '@shared/types'
+import { useSafeResize } from '../hooks/useSafeResize'
 import { HelpBadge } from '../components/HelpBadge'
 
 // A read-only git diff: original side comes from the chosen ref (staged index
@@ -15,6 +17,10 @@ import { HelpBadge } from '../components/HelpBadge'
 // component state (never serialized).
 export function DiffNode({ id, data, selected }: NodeProps<DiffNodeData>): React.JSX.Element {
   const { updateNodeData, closeNode } = useCanvas()
+  // automaticLayout off + rAF-deferred layout (see EditorNode for the RO-loop
+  // rationale): Monaco's internal observer re-triggers on fractional sizes.
+  const hostRef = useRef<HTMLDivElement>(null)
+  const diffEditorRef = useRef<MonacoEditor.IStandaloneDiffEditor | null>(null)
   const [info, setInfo] = useState<DiffInfoResult | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -46,6 +52,11 @@ export function DiffNode({ id, data, selected }: NodeProps<DiffNodeData>): React
   const toggleBase = useCallback(() => {
     updateNodeData(id, { base: data.base === 'staged' ? 'HEAD' : 'staged' }, true)
   }, [id, data.base, updateNodeData])
+
+  // Drive the diff editor's layout on container resize, rAF-deferred.
+  useSafeResize(hostRef, () => {
+    diffEditorRef.current?.layout()
+  })
 
   const status = info?.error?.message ?? null
   const original = info?.original ?? ''
@@ -92,7 +103,7 @@ export function DiffNode({ id, data, selected }: NodeProps<DiffNodeData>): React
         ) : loading && !info ? (
           <div className="diff-empty">loading…</div>
         ) : (
-          <div className="diff-host nodrag nowheel">
+          <div className="diff-host nodrag nowheel" ref={hostRef}>
             <DiffEditor
               original={original}
               modified={modified}
@@ -104,7 +115,10 @@ export function DiffNode({ id, data, selected }: NodeProps<DiffNodeData>): React
                 minimap: { enabled: false },
                 fontSize: 12,
                 scrollBeyondLastLine: false,
-                automaticLayout: true
+                automaticLayout: false
+              }}
+              onMount={(editor) => {
+                diffEditorRef.current = editor
               }}
             />
           </div>

@@ -2,18 +2,26 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { NodeResizer } from '@reactflow/node-resizer'
 import type { NodeProps } from 'reactflow'
 import Editor from '@monaco-editor/react'
+import type { editor as MonacoEditor } from 'monaco-editor'
 import '../monaco'
-import { detectLanguage } from '../monaco'
+import { monaco, detectLanguage } from '../monaco'
 import { nodeTitle } from '../state/workspace'
 import { useCanvas } from '../canvas/Canvas'
 import type { EditorNodeData } from '../state/workspace'
 import { renderMarkdown } from '../markdown'
 import { toFilePreviewUrl } from '@shared/file-url'
 import type { FileReadResult } from '@shared/types'
+import { useSafeResize } from '../hooks/useSafeResize'
 import { HelpBadge } from '../components/HelpBadge'
 
 export function EditorNode({ id, data, selected }: NodeProps<EditorNodeData>): React.JSX.Element {
   const { updateNodeData, closeNode } = useCanvas()
+  // Monaco's own `automaticLayout` uses a ResizeObserver that re-triggers
+  // itself on fractional sizes (the "ResizeObserver loop completed with
+  // undelivered notifications" warning on every node resize). We drive layout
+  // ourselves: automaticLayout off + rAF-deferred layout on container resize.
+  const hostRef = useRef<HTMLDivElement>(null)
+  const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
   const [content, setContent] = useState('')
   const [saved, setSaved] = useState('')
   const [kind, setKind] = useState<'text' | 'markdown' | 'image' | null>(null)
@@ -83,6 +91,11 @@ export function EditorNode({ id, data, selected }: NodeProps<EditorNodeData>): R
     updateNodeData(id, { preview: !data.preview }, true)
   }, [id, data.preview, updateNodeData])
 
+  // Drive Monaco layout on container resize, rAF-deferred (no RO loop noise).
+  useSafeResize(hostRef, () => {
+    editorRef.current?.layout()
+  })
+
   const showPreview = kind === 'markdown' && data.preview
 
   return (
@@ -147,7 +160,7 @@ export function EditorNode({ id, data, selected }: NodeProps<EditorNodeData>): R
             dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }}
           />
         ) : kind === 'text' || kind === 'markdown' ? (
-          <div className="editor-host nodrag nowheel">
+          <div className="editor-host nodrag nowheel" ref={hostRef}>
             <Editor
               value={content}
               language={detectLanguage(data.path)}
@@ -157,10 +170,11 @@ export function EditorNode({ id, data, selected }: NodeProps<EditorNodeData>): R
                 minimap: { enabled: false },
                 fontSize: 12,
                 scrollBeyondLastLine: false,
-                automaticLayout: true,
+                automaticLayout: false,
                 wordWrap: 'on'
               }}
-              onMount={(editor, monaco) => {
+              onMount={(editor) => {
+                editorRef.current = editor
                 editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
                   void saveRef.current()
                 })
