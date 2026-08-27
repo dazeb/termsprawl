@@ -21,6 +21,7 @@ import type {
   ContextLinkWriteResult,
   GitPanelSnapshot,
   GitResult,
+  GitTarget,
   GitWorktree,
   CommitMessageResult,
   Announcement,
@@ -118,17 +119,18 @@ const api = {
   },
 
   diff: {
-    info: (path: string, base: DiffBase): Promise<DiffInfoResult> =>
-      ipcRenderer.invoke(IPC.diffInfo, path, base)
+    info: (path: string, base: DiffBase, remote?: ProjectRemote): Promise<DiffInfoResult> =>
+      ipcRenderer.invoke(IPC.diffInfo, path, base, remote)
   },
 
   files: {
     openDialog: (): Promise<string | null> => ipcRenderer.invoke(IPC.dialogOpenFile),
-    read: (path: string): Promise<FileReadResult> => ipcRenderer.invoke(IPC.fileRead, path),
-    write: (path: string, content: string): Promise<FileWriteResult> =>
-      ipcRenderer.invoke(IPC.fileWrite, path, content),
-    list: (root: string, rel?: string): Promise<DirListResult> =>
-      ipcRenderer.invoke(IPC.fileList, root, rel)
+    read: (path: string, remote?: ProjectRemote): Promise<FileReadResult> =>
+      ipcRenderer.invoke(IPC.fileRead, path, remote),
+    write: (path: string, content: string, remote?: ProjectRemote): Promise<FileWriteResult> =>
+      ipcRenderer.invoke(IPC.fileWrite, path, content, remote),
+    list: (root: string, rel?: string, remote?: ProjectRemote): Promise<DirListResult> =>
+      ipcRenderer.invoke(IPC.fileList, root, rel, remote)
   },
 
   agent: {
@@ -168,31 +170,33 @@ const api = {
   },
 
   git: {
-    snapshot: (cwd: string): Promise<GitPanelSnapshot> =>
-      ipcRenderer.invoke(IPC.gitSnapshot, cwd),
-    stage: (cwd: string, paths: string[]): Promise<GitResult> =>
-      ipcRenderer.invoke(IPC.gitStage, cwd, paths),
-    unstage: (cwd: string, paths: string[]): Promise<GitResult> =>
-      ipcRenderer.invoke(IPC.gitUnstage, cwd, paths),
-    discard: (cwd: string, paths: string[]): Promise<GitResult> =>
-      ipcRenderer.invoke(IPC.gitDiscard, cwd, paths),
-    commit: (cwd: string, message: string): Promise<GitResult> =>
-      ipcRenderer.invoke(IPC.gitCommit, cwd, message),
-    commitMessage: (cwd: string): Promise<CommitMessageResult> =>
-      ipcRenderer.invoke(IPC.gitCommitMessage, cwd),
-    createBranch: (cwd: string, name: string): Promise<GitResult> =>
-      ipcRenderer.invoke(IPC.gitCreateBranch, cwd, name),
-    checkout: (cwd: string, name: string): Promise<GitResult> =>
-      ipcRenderer.invoke(IPC.gitCheckout, cwd, name),
-    push: (cwd: string): Promise<GitResult> => ipcRenderer.invoke(IPC.gitPush, cwd),
-    pull: (cwd: string): Promise<GitResult> => ipcRenderer.invoke(IPC.gitPull, cwd),
-    publish: (cwd: string): Promise<GitResult> => ipcRenderer.invoke(IPC.gitPublish, cwd),
-    worktrees: (cwd: string): Promise<GitWorktree[]> =>
-      ipcRenderer.invoke(IPC.gitWorktrees, cwd),
-    worktreeAdd: (cwd: string, path: string, branch?: string): Promise<GitResult> =>
-      ipcRenderer.invoke(IPC.gitWorktreeAdd, cwd, path, branch),
-    worktreeRemove: (cwd: string, path: string, force?: boolean): Promise<GitResult> =>
-      ipcRenderer.invoke(IPC.gitWorktreeRemove, cwd, path, force)
+    // Phase 9: every op takes a GitTarget — { cwd } for local folder projects,
+    // { remote } for ssh remote projects.
+    snapshot: (target: GitTarget): Promise<GitPanelSnapshot> =>
+      ipcRenderer.invoke(IPC.gitSnapshot, target),
+    stage: (target: GitTarget, paths: string[]): Promise<GitResult> =>
+      ipcRenderer.invoke(IPC.gitStage, target, paths),
+    unstage: (target: GitTarget, paths: string[]): Promise<GitResult> =>
+      ipcRenderer.invoke(IPC.gitUnstage, target, paths),
+    discard: (target: GitTarget, paths: string[]): Promise<GitResult> =>
+      ipcRenderer.invoke(IPC.gitDiscard, target, paths),
+    commit: (target: GitTarget, message: string): Promise<GitResult> =>
+      ipcRenderer.invoke(IPC.gitCommit, target, message),
+    commitMessage: (target: GitTarget): Promise<CommitMessageResult> =>
+      ipcRenderer.invoke(IPC.gitCommitMessage, target),
+    createBranch: (target: GitTarget, name: string): Promise<GitResult> =>
+      ipcRenderer.invoke(IPC.gitCreateBranch, target, name),
+    checkout: (target: GitTarget, name: string): Promise<GitResult> =>
+      ipcRenderer.invoke(IPC.gitCheckout, target, name),
+    push: (target: GitTarget): Promise<GitResult> => ipcRenderer.invoke(IPC.gitPush, target),
+    pull: (target: GitTarget): Promise<GitResult> => ipcRenderer.invoke(IPC.gitPull, target),
+    publish: (target: GitTarget): Promise<GitResult> => ipcRenderer.invoke(IPC.gitPublish, target),
+    worktrees: (target: GitTarget): Promise<GitWorktree[]> =>
+      ipcRenderer.invoke(IPC.gitWorktrees, target),
+    worktreeAdd: (target: GitTarget, path: string, branch?: string): Promise<GitResult> =>
+      ipcRenderer.invoke(IPC.gitWorktreeAdd, target, path, branch),
+    worktreeRemove: (target: GitTarget, path: string, force?: boolean): Promise<GitResult> =>
+      ipcRenderer.invoke(IPC.gitWorktreeRemove, target, path, force)
   },
 
   cloud: {

@@ -427,10 +427,58 @@ extension, one feature at a time.**
   compound commands — `remoteSh` uses it, sync tmux helpers quote too). 3 new
   unit tests (multi-word round-trip through /bin/sh); 379 tests green;
   typecheck + originality OK. Test host left configured for the app-level pass.
-  **Remaining:** route the source-control + file panel to the remote transports
-  (remote repoRoot/branch/sync/list/recent-commits + stage/unstage/discard/
-  commit), client controlMaster multiplexing, and the end-to-end "open project
-  on a test host" verify — all of which need a running-app pass.
+
+### Task 9.1b: Source control + file panel over ssh (DONE, verified 2026-08-27)
+
+**Status: DONE.** Phase 9 remaining work shipped + verified end-to-end against
+the live LXC (`root@192.168.8.221`). 391 tests green, typecheck + originality OK.
+
+- **ControlMaster multiplexing (`core/ssh.ts`):** `connectionArgs(remote, opts)`
+  now takes an optional `controlPath` → `ControlMaster=auto` +
+  `ControlPath=<socket>` + `ControlPersist=600`, so every git/file op for a
+  project rides ONE persistent ssh connection (a snapshot's ~7 parallel calls
+  stop paying the TCP+auth handshake each time). `sshControlPath(userDataPath,
+  remote)` derives a sanitized per-host socket under `userData/ssh`;
+  `runSshWithInput` added for stdin-backed writes. Interactive terminals
+  deliberately keep their own connections (no control path). Unit tests cover
+  the argv shape + a localhost ControlMaster round-trip (skips when no sshd).
+- **Full remote git surface (`core/remote-git.ts`):** mirrors git-service —
+  remoteRepoRoot (`git rev-parse --show-toplevel`, so a project path inside a
+  repo resolves like findRepoRoot), currentBranch, listBranches, syncState,
+  remoteUrl, status (parsed), stage/unstage/discard, commit, recentCommits,
+  createBranch/checkoutBranch, push/pull/publish, stagedDiff, showFromRef.
+  All thread `SshOptions`. parse helpers extracted for unit tests.
+- **Remote file ops (`core/remote-file.ts`):** `remoteListDir` (mirrors
+  listProjectDir: one level, skips dotfiles/node_modules/.git, dirs first,
+  MISSING/NOTDIR markers) and `remoteFileWrite` (`mkdir -p` + `cat >` with the
+  content piped on stdin — no shell quoting of content, safe for any text).
+- **Main routing (`src/main/index.ts`):** every git IPC now takes a `GitTarget`
+  (`{cwd}` local | `{remote}` ssh; new shared type). `resolveGitTarget`
+  validates the remote against the known project list (never an arbitrary
+  host/path), resolves the repo root on the correct side, and threads the
+  control path. `git:commit-message` fetches the remote staged diff over ssh
+  and runs the LOCAL agent CLI (`generateCommitMessageFromDiff` extracted in
+  `core/commit-message.ts`). files.read/write/list and diff.info accept an
+  optional remote; `resolveRemoteFileTarget` keeps every path inside the
+  project's remote root (OUTSIDE guard). Worktrees stay local-only (panel
+  hides the section for remote projects).
+- **Renderer:** `Canvas` takes the active project's `remote` (from App) and
+  passes it to the FileTree + editor/diff factories. FileTree browses
+  `remote.path` (title shows `user@host:path` via remoteLabel); the source
+  control panel shows an `ssh …` banner, sends GitTargets, and hides the
+  worktree section. Editor/diff nodes carry `data.remote` so open files read /
+  save / diff over ssh (a dialog-picked local file clears remote).
+- **End-to-end verify (running app, headless boot + CDP against the LXC):**
+  built the app, booted with a fresh user-data dir + raw debug port, and drove
+  the REAL preload→IPC→main→core→ssh→LXC chain from the renderer: addProject
+  with a remote persisted the project; git.snapshot returned the LXC repo's
+  branch + dirty file + commits; stage/unstage worked; git.commitMessage
+  generated "chore(index): bump export constant to 2" via local codex on the
+  REMOTE staged diff; files.list/read/write round-tripped over ssh; diff.info
+  returned HEAD vs working-tree content. **Found + fixed a second real bug:**
+  remoteDiffInfo passed the FILE path to `git -C` (needs a directory) — now
+  uses `posix.dirname(path)`, matching local diffInfo's findRepoRoot walk.
+  App + Xvfb killed by PID after; LXC test repo left clean.
 
 ### Task 9.2: Commit
 - `git commit -m "feat: ssh remote projects"`

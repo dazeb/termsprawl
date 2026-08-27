@@ -1,7 +1,17 @@
 // Phase 9 — SSH remote transport. TDD: the failing tests drive ssh.ts.
 import { describe, it, expect } from 'vitest'
-import { execFileSync } from 'node:child_process'
-import { parseRemote, connectionArgs, remoteCommand, shq } from './ssh'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { existsSync, mkdtempSync, statSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import {
+  parseRemote,
+  connectionArgs,
+  remoteCommand,
+  shq,
+  sshControlPath,
+  sameRemoteHost
+} from './ssh'
 
 describe('parseRemote', () => {
   it('parses a bare host (ssh alias)', () => {
@@ -68,4 +78,78 @@ describe('remoteCommand', () => {
     expect(shq("it's")).toBe("'it'\\''s'")
     expect(remoteCommand(['echo', "it's"])).toBe("'echo' 'it'\\''s'")
   })
+})
+
+describe('control-master multiplexing (connectionArgs opts)', () => {
+  it('adds ControlMaster/ControlPath/ControlPersist before the target', () => {
+    const args = connectionArgs({ user: 'root', host: 'h' }, { controlPath: '/tmp/ctl-h' })
+    expect(args).toContain('ControlMaster=auto')
+    expect(args).toContain('ControlPath=/tmp/ctl-h')
+    expect(args).toContain('ControlPersist=600')
+    // options must come before the target (ssh treats the first non-option as target)
+    const targetIdx = args.indexOf('root@h')
+    expect(targetIdx).toBeGreaterThan(args.indexOf('ControlPath=/tmp/ctl-h'))
+  })
+
+  it('omits control options when no controlPath is given (backward compatible)', () => {
+    const args = connectionArgs({ host: 'h' })
+    expect(args).not.toContain('ControlMaster=auto')
+    expect(args).toEqual([
+      '-o',
+      'BatchMode=yes',
+      '-o',
+      'StrictHostKeyChecking=accept-new',
+      'h'
+    ])
+  })
+})
+
+describe('sshControlPath', () => {
+  it('builds a sanitized per-host socket under userData/ssh and creates the dir', () => {
+    const base = mkdtempSync(join(tmpdir(), 'ts-ctl-'))
+    const cp = sshControlPath(base, { user: 'root', host: '192.168.8.221' })
+    expect(cp).toBe(join(base, 'ssh', 'ctl-root@192.168.8.221'))
+    expect(statSync(join(base, 'ssh')).isDirectory()).toBe(true)
+  })
+
+  it('sanitizes ports and odd host chars out of the filename', () => {
+    const cp = sshControlPath('/tmp/x', { user: 'deploy', host: 'my.host:2222' })
+    expect(cp).not.toContain(':')
+    expect(cp.startsWith('/tmp/x/ssh/ctl-')).toBe(true)
+  })
+})
+
+describe('sameRemoteHost', () => {
+  it('compares host/user/port but not path', () => {
+    expect(sameRemoteHost({ host: 'h' }, { host: 'h' })).toBe(true)
+    expect(sameRemoteHost({ user: 'root', host: 'h' }, { host: 'h' })).toBe(true)
+    expect(sameRemoteHost({ host: 'h', port: 2222 }, { host: 'h' })).toBe(false)
+    expect(sameRemoteHost({ host: 'a' }, { host: 'b' })).toBe(false)
+  })
+})
+
+describe('runSsh with control path (local ssh round-trip via localhost)', () => {
+  it('multiplexes two commands over one ControlMaster socket', () => {
+    // localhost ssh with key auth — skip unless we can connect without a prompt
+    const probe = spawnSync(
+      'ssh',
+      ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=3', 'localhost', 'true'],
+      { stdio: 'ignore' }
+    )
+    if (probe.status !== 0) return // no localhost sshd — skip silently
+    const base = mkdtempSync(join(tmpdir(), 'ts-ctl-live-'))
+    const cp = sshControlPath(base, { host: 'localhost' })
+    const first = spawnSync('ssh', [...connectionArgs({ host: 'localhost' }, { controlPath: cp }), "echo one"], {
+      encoding: 'utf8'
+    })
+    const second = spawnSync('ssh', [...connectionArgs({ host: 'localhost' }, { controlPath: cp }), "echo two"], {
+      encoding: 'utf8'
+    })
+    expect(first.status).toBe(0)
+    expect(first.stdout.trim()).toBe('one')
+    expect(second.status).toBe(0)
+    expect(second.stdout.trim()).toBe('two')
+    // a master socket now exists (the second call rode it)
+    expect(existsSync(cp)).toBe(true)
+  }, 20000)
 })

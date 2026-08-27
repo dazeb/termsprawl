@@ -22,6 +22,7 @@ export function App(): React.JSX.Element {
   const activeProjectId = useProjects((s) => s.activeProjectId)
   const projects = useProjects((s) => s.projects)
   const activeCwd = projects.find((p) => p.id === activeProjectId)?.cwd ?? undefined
+  const activeRemote = projects.find((p) => p.id === activeProjectId)?.remote
   const activeAccent = projects.find((p) => p.id === activeProjectId)?.settings?.accent
 
   useEffect(() => {
@@ -84,7 +85,7 @@ export function App(): React.JSX.Element {
       )}
       {loaded ? (
         <ReactFlowProvider>
-          <Canvas cwd={activeCwd} invertWheelZoom={settings?.invertWheelZoom ?? false} />
+          <Canvas cwd={activeCwd} remote={activeRemote} invertWheelZoom={settings?.invertWheelZoom ?? false} />
         </ReactFlowProvider>
       ) : (
         <div className="canvas" />

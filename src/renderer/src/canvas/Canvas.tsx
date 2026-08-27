@@ -39,6 +39,7 @@ import {
 } from '../state/workspace'
 import { agentIds, agentName, agentTitle } from '@shared/agents/config'
 import type { AgentId } from '@shared/agents/config'
+import type { ProjectRemote } from '@shared/types'
 import { useHistory } from '../state/history'
 import { useProjects } from '../state/projects'
 import { useCanvasRequests } from '../state/canvas-requests'
@@ -72,6 +73,9 @@ export function useCanvas(): CanvasApi {
 
 interface CanvasProps {
   cwd?: string
+  /** Remote project destination (Phase 9): terminals spawn over ssh, and the
+   * file tree / source control / editor+diff nodes run against the remote. */
+  remote?: ProjectRemote
   /** Invert the mousewheel zoom direction (scroll up = zoom out). */
   invertWheelZoom?: boolean
 }
@@ -81,7 +85,7 @@ interface CanvasProps {
 const MIN_ZOOM = 0.5
 const MAX_ZOOM = 2
 
-export function Canvas({ cwd, invertWheelZoom = false }: CanvasProps): React.JSX.Element {
+export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): React.JSX.Element {
   const activeProjectId = useProjects((s) => s.activeProjectId)
   const nodeCache = useProjects((s) => s.nodeCache)
   const saveNodes = useProjects((s) => s.saveNodes)
@@ -323,7 +327,7 @@ export function Canvas({ cwd, invertWheelZoom = false }: CanvasProps): React.JSX
         )
         return
       }
-      const node = createEditorNode(path)
+      const node = createEditorNode(path, remote)
       if (wrapperRef.current) {
         const box = wrapperRef.current.getBoundingClientRect()
         node.position = screenToFlowPosition({
@@ -334,7 +338,7 @@ export function Canvas({ cwd, invertWheelZoom = false }: CanvasProps): React.JSX
       appendOnTop(node)
       push()
     },
-    [appendOnTop, push, screenToFlowPosition]
+    [appendOnTop, push, remote, screenToFlowPosition]
   )
 
   const addTerminal = useCallback(() => {
@@ -364,17 +368,17 @@ export function Canvas({ cwd, invertWheelZoom = false }: CanvasProps): React.JSX
   }, [menu, push, screenToFlowPosition, appendOnTop])
 
   const addDiff = useCallback(() => {
-    const node = createDiffNode()
+    const node = createDiffNode(remote)
     if (menu && wrapperRef.current) {
       node.position = screenToFlowPosition({ x: menu.x, y: menu.y })
     }
     appendOnTop(node)
     push()
     setMenu(null)
-  }, [menu, push, screenToFlowPosition, appendOnTop])
+  }, [menu, push, remote, screenToFlowPosition, appendOnTop])
 
   const addEditor = useCallback(() => {
-    const node = createEditorNode()
+    const node = createEditorNode(null, remote)
     if (menu && wrapperRef.current) {
       node.position = screenToFlowPosition({ x: menu.x, y: menu.y })
     }
@@ -391,7 +395,7 @@ export function Canvas({ cwd, invertWheelZoom = false }: CanvasProps): React.JSX
     appendOnTop(node)
     push()
     setMenu(null)
-  }, [menu, push, screenToFlowPosition, appendOnTop])
+  }, [menu, push, remote, screenToFlowPosition, appendOnTop])
 
   // A druk terminal: launches the druk TUI code editor in the project cwd.
   const addDruk = useCallback(() => {
@@ -738,6 +742,7 @@ export function Canvas({ cwd, invertWheelZoom = false }: CanvasProps): React.JSX
       </div>
       <FileTree
         cwd={cwd}
+        remote={remote}
         onOpenFile={openFileFromTree}
         openEditors={openEditorTabs(nodes)}
       />

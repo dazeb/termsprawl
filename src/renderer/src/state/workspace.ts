@@ -3,7 +3,7 @@
 // no state, only the shapes.
 
 import type { Node } from 'reactflow'
-import type { SerializedNode } from '@shared/types'
+import type { ProjectRemote, SerializedNode } from '@shared/types'
 import { agentConfig, agentIds, agentTitle, agentCommand, type AgentId } from '@shared/agents/config'
 
 export const NODE_TYPES = ['terminal', 'sticky', 'group', 'diff', 'editor', 'browser'] as const
@@ -42,6 +42,9 @@ export interface DiffNodeData {
   path: string | null
   /** Which ref the "original" side comes from. */
   base: 'staged' | 'HEAD'
+  /** Remote project (Phase 9): the diff is fetched over ssh. Cleared when a
+   * local file is picked via the dialog. */
+  remote?: ProjectRemote | null
 }
 
 export interface EditorNodeData {
@@ -50,6 +53,9 @@ export interface EditorNodeData {
   path: string | null
   /** Markdown preview pane (ignored for non-markdown files). */
   preview: boolean
+  /** Remote project (Phase 9): read/save go over ssh. Cleared when a local
+   * file is picked via the dialog. */
+  remote?: ProjectRemote | null
 }
 
 /** One tab inside a browser node. Each tab is its own sandboxed <webview>
@@ -220,23 +226,26 @@ export function createStickyNode(): Node<StickyNodeData> {
   }
 }
 
-export function createDiffNode(): Node<DiffNodeData> {
+export function createDiffNode(remote?: ProjectRemote | null): Node<DiffNodeData> {
   return {
     id: nextId(),
     type: 'diff',
     position: { x: 60 + Math.random() * 240, y: 60 + Math.random() * 160 },
     style: { width: 560, height: 360 },
-    data: { kind: 'diff', path: null, base: 'HEAD' }
+    data: { kind: 'diff', path: null, base: 'HEAD', ...(remote ? { remote } : {}) }
   }
 }
 
-export function createEditorNode(path: string | null = null): Node<EditorNodeData> {
+export function createEditorNode(
+  path: string | null = null,
+  remote?: ProjectRemote | null
+): Node<EditorNodeData> {
   return {
     id: nextId(),
     type: 'editor',
     position: { x: 60 + Math.random() * 240, y: 60 + Math.random() * 160 },
     style: { width: 640, height: 420 },
-    data: { kind: 'editor', path, preview: false }
+    data: { kind: 'editor', path, preview: false, ...(remote ? { remote } : {}) }
   }
 }
 

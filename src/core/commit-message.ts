@@ -101,9 +101,19 @@ function runAgentCli(tool: CommitAgentCli, prompt: string, cwd: string): Promise
   })
 }
 
-/** Orchestrate: staged diff → detect CLI → spawn read-only → parse a subject. */
+/** Orchestrate: staged diff → detect CLI → spawn read-only → parse a subject.
+ * Local path: the diff is read from the local repo. */
 export async function generateCommitMessage(repoRoot: string): Promise<CommitMessageResult> {
   const diff = await stagedDiff(repoRoot)
+  return generateCommitMessageFromDiff(diff, repoRoot)
+}
+
+/** Same as above but the caller supplies the staged diff (remote projects fetch
+ * it over ssh first — see main's git:commit-message handler). */
+export async function generateCommitMessageFromDiff(
+  diff: string,
+  cwd = process.cwd()
+): Promise<CommitMessageResult> {
   if (!diff.trim()) return { ok: false, error: 'nothing staged to commit' }
 
   const tool = detectAgentCli(binOnPath)
@@ -111,7 +121,7 @@ export async function generateCommitMessage(repoRoot: string): Promise<CommitMes
     return { ok: false, error: 'no agent CLI found; install claude or codex' }
   }
 
-  const out = await runAgentCli(tool, buildCommitPrompt(diff), repoRoot)
+  const out = await runAgentCli(tool, buildCommitPrompt(diff), cwd)
   if (out.error) return { ok: false, error: out.error, tool }
   const message = parseCommitMessage(out.output ?? '')
   if (!message) return { ok: false, error: 'agent returned no commit message', tool }

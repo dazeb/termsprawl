@@ -25,10 +25,10 @@ export function DiffNode({ id, data, selected }: NodeProps<DiffNodeData>): React
   const [loading, setLoading] = useState(false)
 
   const load = useCallback(
-    async (path: string, base: 'staged' | 'HEAD') => {
+    async (path: string, base: 'staged' | 'HEAD', remote?: DiffNodeData['remote']) => {
       setLoading(true)
       try {
-        setInfo(await window.termsprawl.diff.info(path, base))
+        setInfo(await window.termsprawl.diff.info(path, base, remote ?? undefined))
       } catch (err) {
         console.error('[diff] info failed:', err)
         setInfo({ original: null, modified: null, error: { code: 'IO', message: String(err) } })
@@ -40,13 +40,13 @@ export function DiffNode({ id, data, selected }: NodeProps<DiffNodeData>): React
   )
 
   useEffect(() => {
-    if (data.path) void load(data.path, data.base)
+    if (data.path) void load(data.path, data.base, data.remote)
     else setInfo(null)
-  }, [data.path, data.base, load])
+  }, [data.path, data.base, data.remote, load])
 
   const openFile = useCallback(async () => {
     const path = await window.termsprawl.files.openDialog()
-    if (path) updateNodeData(id, { path }, true)
+    if (path) updateNodeData(id, { path, remote: null }, true)
   }, [id, updateNodeData])
 
   const toggleBase = useCallback(() => {

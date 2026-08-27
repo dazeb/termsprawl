@@ -1,13 +1,21 @@
 import { app, BrowserWindow, dialog, ipcMain, Notification, protocol, net, shell } from 'electron'
 import { execFileSync, spawn } from 'node:child_process'
 import { homedir } from 'node:os'
-import { dirname, isAbsolute, join } from 'node:path'
+import { dirname, isAbsolute, join, posix } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { IPC } from '../shared/ipc'
-import type { ContextLinkListResult, ContextLinkWriteResult, DiffBase, DiffInfoResult, ProjectRemote, ProjectSettings, PtyCreateRequest, PtyExitInfo, SerializedNode, AppSettings, GitPanelSnapshot, GitResult, CommitMessageResult, Announcement } from '../shared/types'
+import type { ContextLinkListResult, ContextLinkWriteResult, DiffBase, DiffInfoResult, ProjectRemote, ProjectSettings, PtyCreateRequest, PtyExitInfo, SerializedNode, AppSettings, GitPanelSnapshot, GitResult, GitTarget, CommitMessageResult, Announcement, FileReadResult, FileWriteResult, DirListResult } from '../shared/types'
 import type { CorePlatform } from '../core/platform'
 import { diffInfo, findRepoRoot, currentBranch, remoteUrl, syncState, gitStatus, listBranches, recentCommits, ghAuthed, stageChanges, unstageChanges, discardChanges, commitChanges, createBranch, checkoutBranch, push as gitPush, pull as gitPull, publish as gitPublish, listWorktrees, addWorktree, removeWorktree } from '../core/git-service'
-import { generateCommitMessage } from '../core/commit-message'
+import {
+  remoteRepoRoot, remoteCurrentBranch, remoteRemoteUrl, remoteSyncState, remoteGitStatusChanges,
+  remoteListBranches, remoteRecentCommits, remoteStageChanges, remoteUnstageChanges, remoteDiscardChanges,
+  remoteCreateBranch, remoteCheckoutBranch, remoteGitCommit, remotePush, remotePull, remotePublish,
+  remoteStagedDiff, remoteShowFromRef
+} from '../core/remote-git'
+import { remoteFileRead, remoteFileWrite, remoteListDir } from '../core/remote-file'
+import { sshControlPath, type RemoteHost } from '../core/ssh'
+import { generateCommitMessage, generateCommitMessageFromDiff } from '../core/commit-message'
 import { parseLatestRelease } from '../core/announcements'
 import { classifyFile, listProjectDir, readProjectFile, writeProjectFile } from '../core/file-service'
 import { addLink, listLinks, removeLink } from '../core/context-links'
@@ -297,7 +305,8 @@ function registerWorkspaceIpc(): void {
 function registerDiffIpc(): void {
   ipcMain.handle(
     IPC.diffInfo,
-    (_event, path: string, base: DiffBase): Promise<DiffInfoResult> => diffInfo(path, base)
+    (_event, path: string, base: DiffBase, remote?: ProjectRemote): Promise<DiffInfoResult> =>
+      remote ? remoteDiffInfo(remote, path, base) : diffInfo(path, base)
   )
   ipcMain.handle(IPC.dialogOpenFile, async () => {
     const win = BrowserWindow.getFocusedWindow()
@@ -309,14 +318,177 @@ function registerDiffIpc(): void {
   })
 }
 
+// ---------------------------------------------------------------------------
+// Phase 9 — remote op routing. The renderer sends a `GitTarget` ({cwd} for
+// local folder projects, {remote} for ssh projects); main resolves it to the
+// real repo root on the correct side and runs the op there. Remote ops share
+// one ControlMaster connection per host (sshControlPath under userData/ssh).
+// ---------------------------------------------------------------------------
+
+/** Mirror a ProjectRemote into the transport's RemoteHost shape. */
+function toRemoteHost(remote: ProjectRemote): RemoteHost {
+  return {
+    host: remote.host,
+    ...(remote.user ? { user: remote.user } : {}),
+    ...(remote.port ? { port: remote.port } : {})
+  }
+}
+
+/** The remote must belong to a known project (never an arbitrary host/path). */
+function isKnownProjectRemote(remote: ProjectRemote): boolean {
+  return workspaceStore.snapshot().index.projects.some(
+    (p) =>
+      p.remote !== undefined &&
+      p.remote.host === remote.host &&
+      (p.remote.user ?? 'root') === (remote.user ?? 'root') &&
+      (p.remote.port ?? 22) === (remote.port ?? 22) &&
+      p.remote.path === remote.path
+  )
+}
+
+type ResolvedGitTarget =
+  | { kind: 'local'; cwd: string; root: string }
+  | { kind: 'remote'; remote: RemoteHost; root: string; controlPath: string }
+  | { kind: 'none'; reason: string }
+
+/** Resolve a GitTarget to a concrete repo root (local or remote). For remote
+ * targets, `git rev-parse --show-toplevel` runs over ssh so a project path
+ * inside a repo resolves like findRepoRoot does locally. */
+async function resolveGitTarget(target: GitTarget): Promise<ResolvedGitTarget> {
+  if (target.remote) {
+    if (!isKnownProjectRemote(target.remote)) {
+      return { kind: 'none', reason: 'no project folder' }
+    }
+    const remote = toRemoteHost(target.remote)
+    const controlPath = sshControlPath(platform.userDataPath, remote)
+    const root = await remoteRepoRoot(remote, target.remote.path, { controlPath })
+    if (!root) return { kind: 'none', reason: 'not a git repository' }
+    return { kind: 'remote', remote, root, controlPath }
+  }
+  const cwd = target.cwd ?? ''
+  if (!cwd || !isKnownProjectCwd(cwd)) return { kind: 'none', reason: 'no project folder' }
+  const root = findRepoRoot(cwd)
+  if (!root) return { kind: 'none', reason: 'not a git repository' }
+  return { kind: 'local', cwd, root }
+}
+
+/** Run a git op against whatever side the target resolves to. */
+function runGitOp(
+  target: GitTarget,
+  localOp: (root: string) => Promise<GitResult>,
+  remoteOp: (res: { remote: RemoteHost; root: string; controlPath: string }) => Promise<GitResult>
+): Promise<GitResult> {
+  return resolveGitTarget(target).then((resolved) => {
+    if (resolved.kind === 'none') {
+      return Promise.resolve({ code: 1, stdout: '', stderr: resolved.reason })
+    }
+    return resolved.kind === 'remote'
+      ? remoteOp(resolved)
+      : localOp(resolved.root)
+  })
+}
+
+/** Validate a remote file path stays inside the project's remote root. */
+function resolveRemoteFileTarget(
+  remote: ProjectRemote,
+  path: string
+):
+  | { ok: true; remote: RemoteHost; path: string; controlPath: string }
+  | { ok: false; code: 'NO_FOLDER' | 'OUTSIDE' | 'IO'; message: string } {
+  if (!isKnownProjectRemote(remote)) {
+    return { ok: false, code: 'NO_FOLDER', message: 'no project folder' }
+  }
+  const root = posix.resolve(remote.path)
+  const target = posix.resolve(path)
+  if (target !== root && !target.startsWith(root + '/')) {
+    return { ok: false, code: 'OUTSIDE', message: 'path is outside the project folder' }
+  }
+  const host = toRemoteHost(remote)
+  return { ok: true, remote: host, path: target, controlPath: sshControlPath(platform.userDataPath, host) }
+}
+
+/** Diff info for a remote file: original from the git ref, modified from the
+ * working tree, both over ssh. Mirrors core's diffInfo semantics. */
+async function remoteDiffInfo(
+  remote: ProjectRemote,
+  path: string,
+  base: DiffBase
+): Promise<DiffInfoResult> {
+  const ctx = resolveRemoteFileTarget(remote, path)
+  if (!ctx.ok) {
+    // DiffInfoResult only carries IO/NO_REPO/MISSING — fold target errors into IO.
+    return { original: null, modified: null, error: { code: 'IO', message: ctx.message } }
+  }
+  // git -C needs a DIRECTORY (the local diffInfo walks up from dirname(path)).
+  const repoRoot = await remoteRepoRoot(ctx.remote, posix.dirname(ctx.path), { controlPath: ctx.controlPath })
+  if (!repoRoot) {
+    return { original: null, modified: null, error: { code: 'NO_REPO', message: 'not a git repository' } }
+  }
+  const rel = posix.relative(repoRoot, ctx.path)
+  const ref = base === 'staged' ? ':' : 'HEAD'
+  const [original, modified] = await Promise.all([
+    remoteShowFromRef(ctx.remote, repoRoot, ref, rel, { controlPath: ctx.controlPath }),
+    remoteFileRead(ctx.remote, ctx.path, { controlPath: ctx.controlPath }).then((r) =>
+      r.ok ? (r.content ?? null) : null
+    )
+  ])
+  if (original === null && modified === null) {
+    return {
+      original: null,
+      modified: null,
+      error: { code: 'IO', message: 'path is missing from the ref and the working tree' }
+    }
+  }
+  return { original, modified }
+}
+
 function registerFileIpc(): void {
-  ipcMain.handle(IPC.fileRead, (_event, path: string) => readProjectFile(path))
-  ipcMain.handle(IPC.fileWrite, (_event, path: string, content: string) =>
-    writeProjectFile(path, content)
+  ipcMain.handle(
+    IPC.fileRead,
+    (_event, path: string, remote?: ProjectRemote) => remote ? remoteReadFile(path, remote) : readProjectFile(path)
   )
-  ipcMain.handle(IPC.fileList, (_event, root: string, rel?: string) =>
-    listProjectDir(root, rel ?? '.')
+  ipcMain.handle(
+    IPC.fileWrite,
+    (_event, path: string, content: string, remote?: ProjectRemote) =>
+      remote ? remoteWriteFile(path, content, remote) : writeProjectFile(path, content)
   )
+  ipcMain.handle(
+    IPC.fileList,
+    (_event, root: string, rel: string, remote?: ProjectRemote) =>
+      remote ? remoteListFolder(root, rel ?? '.', remote) : listProjectDir(root, rel ?? '.')
+  )
+}
+
+/** Remote file read mirroring readProjectFile: classify by extension, reject
+ * binary/image (the local preview protocol can't serve remote images). */
+async function remoteReadFile(path: string, remote: ProjectRemote): Promise<FileReadResult> {
+  const ctx = resolveRemoteFileTarget(remote, path)
+  if (!ctx.ok) {
+    return { error: { code: ctx.code === 'OUTSIDE' ? 'IO' : 'MISSING', message: ctx.message } }
+  }
+  const kind = classifyFile(ctx.path)
+  if (kind === 'binary' || kind === 'image') {
+    return { error: { code: 'UNSUPPORTED', message: 'binary file — open it elsewhere' } }
+  }
+  const r = await remoteFileRead(ctx.remote, ctx.path, { controlPath: ctx.controlPath })
+  if (!r.ok) return { error: { code: 'MISSING', message: r.error ?? 'file not found' } }
+  return kind === 'markdown'
+    ? { kind: 'markdown', content: r.content ?? '' }
+    : { kind: 'text', content: r.content ?? '' }
+}
+
+async function remoteWriteFile(path: string, content: string, remote: ProjectRemote): Promise<FileWriteResult> {
+  const ctx = resolveRemoteFileTarget(remote, path)
+  if (!ctx.ok) return { error: { code: 'IO', message: ctx.message } }
+  const r = await remoteFileWrite(ctx.remote, ctx.path, content, { controlPath: ctx.controlPath })
+  return r.ok ? { ok: true } : { error: { code: 'IO', message: r.error ?? 'write failed' } }
+}
+
+async function remoteListFolder(root: string, rel: string, remote: ProjectRemote): Promise<DirListResult> {
+  const target = posix.resolve(root, rel)
+  const ctx = resolveRemoteFileTarget(remote, target)
+  if (!ctx.ok) return { error: { code: ctx.code === 'NO_FOLDER' ? 'IO' : ctx.code, message: ctx.message } }
+  return remoteListDir(ctx.remote, ctx.path, { controlPath: ctx.controlPath })
 }
 
 /** Context-link IPC (Phase 7, 7.5): link files are the source of truth. cwd is
@@ -345,7 +517,7 @@ function registerContextLinkIpc(): void {
   })
 }
 
-function gitEmptySnapshot(cwd: string): GitPanelSnapshot {
+function gitEmptySnapshot(cwd: string | null): GitPanelSnapshot {
   return {
     cwd,
     branch: '',
@@ -359,73 +531,104 @@ function gitEmptySnapshot(cwd: string): GitPanelSnapshot {
 }
 
 function registerGitIpc(): void {
-  ipcMain.handle(IPC.gitSnapshot, async (_event, cwd: string): Promise<GitPanelSnapshot> => {
-    if (!isKnownProjectCwd(cwd)) return gitEmptySnapshot(cwd)
-    const root = findRepoRoot(cwd)
-    if (!root) return gitEmptySnapshot(cwd)
+  ipcMain.handle(IPC.gitSnapshot, async (_event, target: GitTarget): Promise<GitPanelSnapshot> => {
+    const resolved = await resolveGitTarget(target)
+    if (resolved.kind === 'none') return gitEmptySnapshot(target.cwd ?? null)
+    const opts = resolved.kind === 'remote' ? { controlPath: resolved.controlPath } : undefined
     const [branch, remote, sync, changes, branches, commits, authed] = await Promise.all([
-      currentBranch(root),
-      remoteUrl(root),
-      syncState(root),
-      gitStatus(root),
-      listBranches(root),
-      recentCommits(root, 20),
+      resolved.kind === 'remote'
+        ? remoteCurrentBranch(resolved.remote, resolved.root, opts)
+        : currentBranch(resolved.root),
+      resolved.kind === 'remote'
+        ? remoteRemoteUrl(resolved.remote, resolved.root, 'origin', opts)
+        : remoteUrl(resolved.root),
+      resolved.kind === 'remote'
+        ? remoteSyncState(resolved.remote, resolved.root, opts)
+        : syncState(resolved.root),
+      resolved.kind === 'remote'
+        ? remoteGitStatusChanges(resolved.remote, resolved.root, opts)
+        : gitStatus(resolved.root),
+      resolved.kind === 'remote'
+        ? remoteListBranches(resolved.remote, resolved.root, opts)
+        : listBranches(resolved.root),
+      resolved.kind === 'remote'
+        ? remoteRecentCommits(resolved.remote, resolved.root, 20, opts)
+        : recentCommits(resolved.root, 20),
       ghAuthed()
     ])
-    return { cwd, branch, remote, sync, changes, branches, commits, ghAuthed: authed }
+    return {
+      cwd: resolved.kind === 'remote' ? null : resolved.cwd,
+      branch,
+      remote,
+      sync,
+      changes,
+      branches,
+      commits,
+      ghAuthed: authed
+    }
   })
 
-  // Writes run against the active project's cwd only (never an arbitrary root).
-  const guarded = (cwd: string, op: (root: string) => Promise<GitResult>): Promise<GitResult> => {
-    if (!isKnownProjectCwd(cwd)) {
-      return Promise.resolve({ code: 1, stdout: '', stderr: 'no project folder' })
-    }
-    const root = findRepoRoot(cwd)
-    if (!root) return Promise.resolve({ code: 1, stdout: '', stderr: 'not a git repository' })
-    return op(root)
-  }
-  ipcMain.handle(IPC.gitStage, (_event, cwd: string, paths: string[]) =>
-    guarded(cwd, (r) => stageChanges(r, paths))
+  ipcMain.handle(IPC.gitStage, (_event, target: GitTarget, paths: string[]) =>
+    runGitOp(target, (r) => stageChanges(r, paths), (r) => remoteStageChanges(r.remote, r.root, paths, { controlPath: r.controlPath }))
   )
-  ipcMain.handle(IPC.gitUnstage, (_event, cwd: string, paths: string[]) =>
-    guarded(cwd, (r) => unstageChanges(r, paths))
+  ipcMain.handle(IPC.gitUnstage, (_event, target: GitTarget, paths: string[]) =>
+    runGitOp(target, (r) => unstageChanges(r, paths), (r) => remoteUnstageChanges(r.remote, r.root, paths, { controlPath: r.controlPath }))
   )
-  ipcMain.handle(IPC.gitDiscard, (_event, cwd: string, paths: string[]) =>
-    guarded(cwd, (r) => discardChanges(r, paths))
+  ipcMain.handle(IPC.gitDiscard, (_event, target: GitTarget, paths: string[]) =>
+    runGitOp(target, (r) => discardChanges(r, paths), (r) => remoteDiscardChanges(r.remote, r.root, paths, { controlPath: r.controlPath }))
   )
-  ipcMain.handle(IPC.gitCommit, (_event, cwd: string, message: string) =>
-    guarded(cwd, (r) => commitChanges(r, message))
+  ipcMain.handle(IPC.gitCommit, (_event, target: GitTarget, message: string) =>
+    runGitOp(target, (r) => commitChanges(r, message), (r) => remoteGitCommit(r.remote, r.root, message, { controlPath: r.controlPath }))
   )
   ipcMain.handle(
     IPC.gitCommitMessage,
-    (_event, cwd: string): Promise<CommitMessageResult> => {
-      if (!isKnownProjectCwd(cwd)) {
-        return Promise.resolve({ ok: false, error: 'no project folder' })
+    async (_event, target: GitTarget): Promise<CommitMessageResult> => {
+      const resolved = await resolveGitTarget(target)
+      if (resolved.kind === 'none') return { ok: false, error: resolved.reason }
+      if (resolved.kind === 'remote') {
+        const diff = await remoteStagedDiff(resolved.remote, resolved.root, {
+          controlPath: resolved.controlPath
+        })
+        return generateCommitMessageFromDiff(diff)
       }
-      const root = findRepoRoot(cwd)
-      if (!root) return Promise.resolve({ ok: false, error: 'not a git repository' })
-      return generateCommitMessage(root)
+      return generateCommitMessage(resolved.root)
     }
   )
-  ipcMain.handle(IPC.gitCreateBranch, (_event, cwd: string, name: string) =>
-    guarded(cwd, (r) => createBranch(r, name))
+  ipcMain.handle(IPC.gitCreateBranch, (_event, target: GitTarget, name: string) =>
+    runGitOp(target, (r) => createBranch(r, name), (r) => remoteCreateBranch(r.remote, r.root, name, { controlPath: r.controlPath }))
   )
-  ipcMain.handle(IPC.gitCheckout, (_event, cwd: string, name: string) =>
-    guarded(cwd, (r) => checkoutBranch(r, name))
+  ipcMain.handle(IPC.gitCheckout, (_event, target: GitTarget, name: string) =>
+    runGitOp(target, (r) => checkoutBranch(r, name), (r) => remoteCheckoutBranch(r.remote, r.root, name, { controlPath: r.controlPath }))
   )
-  ipcMain.handle(IPC.gitPush, (_event, cwd: string) => guarded(cwd, (r) => gitPush(r)))
-  ipcMain.handle(IPC.gitPull, (_event, cwd: string) => guarded(cwd, (r) => gitPull(r)))
-  ipcMain.handle(IPC.gitPublish, (_event, cwd: string) => guarded(cwd, (r) => gitPublish(r)))
-  ipcMain.handle(IPC.gitWorktrees, (_event, cwd: string) => {
-    if (!isKnownProjectCwd(cwd)) return []
-    const root = findRepoRoot(cwd)
-    return root ? listWorktrees(root) : []
+  ipcMain.handle(IPC.gitPush, (_event, target: GitTarget) =>
+    runGitOp(target, (r) => gitPush(r), (r) => remotePush(r.remote, r.root, { controlPath: r.controlPath }))
+  )
+  ipcMain.handle(IPC.gitPull, (_event, target: GitTarget) =>
+    runGitOp(target, (r) => gitPull(r), (r) => remotePull(r.remote, r.root, { controlPath: r.controlPath }))
+  )
+  ipcMain.handle(IPC.gitPublish, (_event, target: GitTarget) =>
+    runGitOp(target, (r) => gitPublish(r), (r) => remotePublish(r.remote, r.root, { controlPath: r.controlPath }))
+  )
+  // Worktrees are a local-dev workflow — remote projects get an empty list and
+  // the panel hides the section (see SourceControlPanel).
+  ipcMain.handle(IPC.gitWorktrees, async (_event, target: GitTarget) => {
+    const resolved = await resolveGitTarget(target)
+    if (resolved.kind !== 'local') return []
+    return listWorktrees(resolved.root)
   })
-  ipcMain.handle(IPC.gitWorktreeAdd, (_event, cwd: string, name: string, branch?: string) =>
-    guarded(cwd, (r) => addWorktree(r, isAbsolute(name) ? name : join(dirname(r), name), branch))
+  ipcMain.handle(IPC.gitWorktreeAdd, (_event, target: GitTarget, name: string, branch?: string) =>
+    runGitOp(
+      target,
+      (r) => addWorktree(r, isAbsolute(name) ? name : join(dirname(r), name), branch),
+      (r) => Promise.resolve({ code: 1, stdout: '', stderr: 'worktrees are not supported on remote projects' })
+    )
   )
-  ipcMain.handle(IPC.gitWorktreeRemove, (_event, cwd: string, path: string, force = false) =>
-    guarded(cwd, (r) => removeWorktree(r, path, force))
+  ipcMain.handle(IPC.gitWorktreeRemove, (_event, target: GitTarget, path: string, force = false) =>
+    runGitOp(
+      target,
+      (r) => removeWorktree(r, path, force),
+      (r) => Promise.resolve({ code: 1, stdout: '', stderr: 'worktrees are not supported on remote projects' })
+    )
   )
 }
 

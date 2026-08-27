@@ -29,11 +29,11 @@ export function EditorNode({ id, data, selected }: NodeProps<EditorNodeData>): R
   const [loading, setLoading] = useState(false)
   const saveRef = useRef<() => Promise<void>>(async () => {})
 
-  const load = useCallback(async (path: string) => {
+  const load = useCallback(async (path: string, remote?: EditorNodeData['remote']) => {
     setLoading(true)
     setStatus(null)
     try {
-      const result: FileReadResult = await window.termsprawl.files.read(path)
+      const result: FileReadResult = await window.termsprawl.files.read(path, remote ?? undefined)
       if ('error' in result) {
         setKind(null)
         setContent('')
@@ -58,33 +58,33 @@ export function EditorNode({ id, data, selected }: NodeProps<EditorNodeData>): R
   }, [])
 
   useEffect(() => {
-    if (data.path) void load(data.path)
+    if (data.path) void load(data.path, data.remote)
     else {
       setKind(null)
       setContent('')
       setSaved('')
       setStatus(null)
     }
-  }, [data.path, load])
+  }, [data.path, data.remote, load])
 
   const dirty = kind !== 'image' && kind !== null && content !== saved
 
   const save = useCallback(async () => {
     if (!data.path || kind === 'image' || kind === null) return
-    const result = await window.termsprawl.files.write(data.path, content)
+    const result = await window.termsprawl.files.write(data.path, content, data.remote ?? undefined)
     if ('error' in result) {
       setStatus(result.error.message)
       return
     }
     setSaved(content)
     setStatus(null)
-  }, [content, data.path, kind])
+  }, [content, data.path, data.remote, kind])
 
   saveRef.current = save
 
   const openFile = useCallback(async () => {
     const path = await window.termsprawl.files.openDialog()
-    if (path) updateNodeData(id, { path }, true)
+    if (path) updateNodeData(id, { path, remote: null }, true)
   }, [id, updateNodeData])
 
   const togglePreview = useCallback(() => {

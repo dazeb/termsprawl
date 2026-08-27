@@ -7,11 +7,15 @@
 // head, no close button, full width of the sidebar.
 
 import { useCallback, useEffect, useState } from 'react'
-import type { GitFileChange, GitPanelSnapshot, GitResult, GitWorktree } from '@shared/types'
+import type { GitFileChange, GitPanelSnapshot, GitResult, GitTarget, GitWorktree, ProjectRemote } from '@shared/types'
+import { remoteLabel } from '@shared/remote-project'
 import { HelpBadge } from './HelpBadge'
 
 interface SourceControlPanelProps {
   cwd: string
+  /** Remote project (Phase 9): git runs over ssh on the remote host. When set,
+   * cwd is the remote path (the tree root) and every op targets `remote`. */
+  remote?: ProjectRemote
   onClose?: () => void
   /** Render inside the sidebar: no floating head/close, full-width content. */
   embedded?: boolean
@@ -19,6 +23,7 @@ interface SourceControlPanelProps {
 
 export function SourceControlPanel({
   cwd,
+  remote,
   onClose,
   embedded = false
 }: SourceControlPanelProps): React.JSX.Element {
@@ -35,14 +40,18 @@ export function SourceControlPanel({
   const [confirmRemoveWt, setConfirmRemoveWt] = useState<string | null>(null)
   const [aiBusy, setAiBusy] = useState(false)
 
+  // Where ops run: a local folder project sends { cwd }; a remote project sends
+  // { remote } (main resolves the repo root on the correct side).
+  const target: GitTarget = remote ? { remote } : { cwd }
+
   const refresh = useCallback(async () => {
     const [next, wt] = await Promise.all([
-      window.termsprawl.git.snapshot(cwd),
-      window.termsprawl.git.worktrees(cwd)
+      window.termsprawl.git.snapshot(target),
+      window.termsprawl.git.worktrees(target)
     ])
     setSnap(next)
     setWorktrees(wt)
-  }, [cwd])
+  }, [target])
 
   useEffect(() => {
     void refresh()
@@ -63,30 +72,31 @@ export function SourceControlPanel({
 
   const toggleStage = (change: GitFileChange): void => {
     void run(
-      () => (change.staged ? window.termsprawl.git.unstage(cwd, [change.path]) : window.termsprawl.git.stage(cwd, [change.path])),
+      () => (change.staged ? window.termsprawl.git.unstage(target, [change.path]) : window.termsprawl.git.stage(target, [change.path])),
       change.staged ? 'unstaged' : 'staged'
     )
   }
 
   const discard = (path: string): void => {
-    void run(() => window.termsprawl.git.discard(cwd, [path]), 'discarded')
+    void run(() => window.termsprawl.git.discard(target, [path]), 'discarded')
     setConfirmDiscard(null)
   }
 
   const commit = (): void => {
     const text = msg.trim()
     if (!text) return
-    void run(() => window.termsprawl.git.commit(cwd, text), 'committed')
+    void run(() => window.termsprawl.git.commit(target, text), 'committed')
     setMsg('')
   }
 
   // Phase 8.4 — ask a local agent CLI for a conventional commit message. The
   // message fills the input (not committed), so the user can review/edit first.
+  // For remote projects the staged diff is fetched over ssh first (main).
   const generateCommitMsg = async (): Promise<void> => {
     setAiBusy(true)
     setError(null)
     setStatus(null)
-    const res = await window.termsprawl.git.commitMessage(cwd)
+    const res = await window.termsprawl.git.commitMessage(target)
     setAiBusy(false)
     if (!res.ok) {
       setError(res.error ?? 'could not generate a commit message')
@@ -100,7 +110,7 @@ export function SourceControlPanel({
     const name = newWtName.trim()
     if (!name) return
     const branch = newWtBranch.trim() || undefined
-    void run(() => window.termsprawl.git.worktreeAdd(cwd, name, branch), 'worktree created')
+    void run(() => window.termsprawl.git.worktreeAdd(target, name, branch), 'worktree created')
     setNewWtName('')
     setNewWtBranch('')
   }
@@ -108,7 +118,7 @@ export function SourceControlPanel({
   // Destructive: force-removes the worktree (and its uncommitted changes) after
   // the inline confirm.
   const removeWorktreeAt = (path: string): void => {
-    void run(() => window.termsprawl.git.worktreeRemove(cwd, path, true), 'worktree removed')
+    void run(() => window.termsprawl.git.worktreeRemove(target, path, true), 'worktree removed')
     setConfirmRemoveWt(null)
   }
 
@@ -142,6 +152,11 @@ export function SourceControlPanel({
 
       {error && <p className="source-control-error">{error}</p>}
       {status && <p className="source-control-status">{status}</p>}
+      {remote && (
+        <p className="source-control-remotehost" title={remoteLabel(remote)}>
+          ssh {remoteLabel(remote)}
+        </p>
+      )}
       {ghNeedsAuth && (
         <p className="source-control-gh">pushing to GitHub needs you logged in: run gh auth login</p>
       )}
@@ -163,10 +178,10 @@ export function SourceControlPanel({
                 </span>
               )}
             </span>
-            <button onClick={() => void run(() => window.termsprawl.git.push(cwd), 'pushed')}>push</button>
-            <button onClick={() => void run(() => window.termsprawl.git.pull(cwd), 'pulled')}>pull</button>
+            <button onClick={() => void run(() => window.termsprawl.git.push(target), 'pushed')}>push</button>
+            <button onClick={() => void run(() => window.termsprawl.git.pull(target), 'pulled')}>pull</button>
             {!snap.sync.upstream && (
-              <button onClick={() => void run(() => window.termsprawl.git.publish(cwd), 'published')}>
+              <button onClick={() => void run(() => window.termsprawl.git.publish(target), 'published')}>
                 publish
               </button>
             )}
@@ -189,7 +204,7 @@ export function SourceControlPanel({
                 <code className="source-control-cmd">git push</code>
                 <button
                   className="source-control-cmdbtn"
-                  onClick={() => void run(() => window.termsprawl.git.push(cwd), 'pushed')}
+                  onClick={() => void run(() => window.termsprawl.git.push(target), 'pushed')}
                 >
                   run
                 </button>
@@ -198,7 +213,7 @@ export function SourceControlPanel({
                 <code className="source-control-cmd">git pull</code>
                 <button
                   className="source-control-cmdbtn"
-                  onClick={() => void run(() => window.termsprawl.git.pull(cwd), 'pulled')}
+                  onClick={() => void run(() => window.termsprawl.git.pull(target), 'pulled')}
                 >
                   run
                 </button>
@@ -208,7 +223,7 @@ export function SourceControlPanel({
                   <code className="source-control-cmd">{publishCommand}</code>
                   <button
                     className="source-control-cmdbtn"
-                    onClick={() => void run(() => window.termsprawl.git.publish(cwd), 'published')}
+                    onClick={() => void run(() => window.termsprawl.git.publish(target), 'published')}
                   >
                     run
                   </button>
@@ -302,7 +317,7 @@ export function SourceControlPanel({
                 <button
                   className="source-control-branchpick"
                   disabled={b.current}
-                  onClick={() => void run(() => window.termsprawl.git.checkout(cwd, b.name), 'switched')}
+                  onClick={() => void run(() => window.termsprawl.git.checkout(target, b.name), 'switched')}
                 >
                   {b.current ? '● ' : ''}
                   {b.name}
@@ -317,7 +332,7 @@ export function SourceControlPanel({
                 onChange={(e) => setNewBranch(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && newBranch.trim()) {
-                    void run(() => window.termsprawl.git.createBranch(cwd, newBranch.trim()), 'branch created')
+                    void run(() => window.termsprawl.git.createBranch(target, newBranch.trim()), 'branch created')
                     setNewBranch('')
                   }
                 }}
@@ -325,7 +340,7 @@ export function SourceControlPanel({
               <button
                 disabled={!newBranch.trim()}
                 onClick={() => {
-                  void run(() => window.termsprawl.git.createBranch(cwd, newBranch.trim()), 'branch created')
+                  void run(() => window.termsprawl.git.createBranch(target, newBranch.trim()), 'branch created')
                   setNewBranch('')
                 }}
               >
@@ -334,58 +349,60 @@ export function SourceControlPanel({
             </div>
           </div>
 
-          <div className="source-control-worktrees">
-            <div className="source-control-subtitle">worktrees</div>
-            {worktrees.map((w) => (
-              <div key={w.path} className="source-control-wtrow">
-                <span className="source-control-wtpath" title={w.path}>
-                  {w.path === cwd ? '● ' : ''}
-                  {basenameOf(w.path)}
-                </span>
-                <span className="source-control-wtbranch">{w.branch ?? 'detached'}</span>
-                {w.path !== cwd &&
-                  (confirmRemoveWt === w.path ? (
-                    <span className="git-file-confirm">
-                      <span className="account-confirm-text">
-                        removes this worktree (discards its changes)
+          {!remote && (
+            <div className="source-control-worktrees">
+              <div className="source-control-subtitle">worktrees</div>
+              {worktrees.map((w) => (
+                <div key={w.path} className="source-control-wtrow">
+                  <span className="source-control-wtpath" title={w.path}>
+                    {w.path === cwd ? '● ' : ''}
+                    {basenameOf(w.path)}
+                  </span>
+                  <span className="source-control-wtbranch">{w.branch ?? 'detached'}</span>
+                  {w.path !== cwd &&
+                    (confirmRemoveWt === w.path ? (
+                      <span className="git-file-confirm">
+                        <span className="account-confirm-text">
+                          removes this worktree (discards its changes)
+                        </span>
+                        <button className="danger" onClick={() => removeWorktreeAt(w.path)}>
+                          confirm
+                        </button>
+                        <button onClick={() => setConfirmRemoveWt(null)}>keep</button>
                       </span>
-                      <button className="danger" onClick={() => removeWorktreeAt(w.path)}>
-                        confirm
+                    ) : (
+                      <button
+                        className="git-file-action git-file-discard"
+                        title="remove worktree"
+                        onClick={() => setConfirmRemoveWt(w.path)}
+                      >
+                        ✕
                       </button>
-                      <button onClick={() => setConfirmRemoveWt(null)}>keep</button>
-                    </span>
-                  ) : (
-                    <button
-                      className="git-file-action git-file-discard"
-                      title="remove worktree"
-                      onClick={() => setConfirmRemoveWt(w.path)}
-                    >
-                      ✕
-                    </button>
-                  ))}
+                    ))}
+                </div>
+              ))}
+              <div className="source-control-commit">
+                <input
+                  className="source-control-msg"
+                  value={newWtName}
+                  placeholder="worktree name"
+                  onChange={(event) => setNewWtName(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') createWorktree()
+                  }}
+                />
+                <input
+                  className="source-control-msg"
+                  value={newWtBranch}
+                  placeholder="branch (optional)"
+                  onChange={(event) => setNewWtBranch(event.target.value)}
+                />
+                <button disabled={!newWtName.trim()} onClick={createWorktree}>
+                  create
+                </button>
               </div>
-            ))}
-            <div className="source-control-commit">
-              <input
-                className="source-control-msg"
-                value={newWtName}
-                placeholder="worktree name"
-                onChange={(event) => setNewWtName(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') createWorktree()
-                }}
-              />
-              <input
-                className="source-control-msg"
-                value={newWtBranch}
-                placeholder="branch (optional)"
-                onChange={(event) => setNewWtBranch(event.target.value)}
-              />
-              <button disabled={!newWtName.trim()} onClick={createWorktree}>
-                create
-              </button>
             </div>
-          </div>
+          )}
         </div>
       )}
     </div>

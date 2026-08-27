@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
-import type { DirEntry } from '@shared/types'
+import type { DirEntry, ProjectRemote } from '@shared/types'
+import { remoteLabel } from '@shared/remote-project'
 import {
   applyFileTreeChrome,
   initialFileTreeChrome,
@@ -20,6 +21,9 @@ interface OpenEditorTab {
 
 interface FileTreeProps {
   cwd?: string
+  /** Remote project destination (Phase 9): the explorer + source control run
+   * against the remote host at remote.path instead of the local cwd. */
+  remote?: ProjectRemote
   onOpenFile: (path: string) => void
   /** Open editor nodes on the canvas (the sidebar's "tabs" section). */
   openEditors?: OpenEditorTab[]
@@ -28,10 +32,14 @@ interface FileTreeProps {
 // VS Code-style sidebar: an activity rail switches between the FILES (explorer
 // with open tabs + tree), SOURCE CONTROL, and PLUGINS (coming soon) sections —
 // all in the same edge-hover popout panel users already know.
-export function FileTree({ cwd, onOpenFile, openEditors = [] }: FileTreeProps): React.JSX.Element {
+export function FileTree({ cwd, remote, onOpenFile, openEditors = [] }: FileTreeProps): React.JSX.Element {
   const [chrome, dispatch] = useReducer(applyFileTreeChrome, undefined, initialFileTreeChrome)
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const ignoreLeave = useRef(false)
+
+  // The tree root: for a remote project the explorer browses the REMOTE path.
+  const root = remote ? remote.path : cwd
+  const rootLabel = remote ? remoteLabel(remote) : (root ? root.replace(/\/+$/, '').split('/').pop() || root : null)
 
   // A section switch requested from outside the canvas (cog menu → source).
   const sidebarRequest = useSidebarRequests((s) => s.request)
@@ -80,7 +88,6 @@ export function FileTree({ cwd, onOpenFile, openEditors = [] }: FileTreeProps): 
 
   useEffect(() => () => cancelClose(), [cancelClose])
 
-  const rootName = cwd ? cwd.replace(/\/+$/, '').split('/').pop() || cwd : null
   const { side, open, pinned, section } = chrome
   const otherSide = side === 'left' ? 'right' : 'left'
 
@@ -147,8 +154,8 @@ export function FileTree({ cwd, onOpenFile, openEditors = [] }: FileTreeProps): 
           </div>
 
           <div className="file-tree-head">
-            <span className="file-tree-title" title={cwd ?? 'no folder'}>
-              {section === 'files' && (rootName ?? 'explorer')}
+            <span className="file-tree-title" title={root ?? 'no folder'}>
+              {section === 'files' && (rootLabel ?? 'explorer')}
               {section === 'source' && 'source control'}
               {section === 'plugins' && 'plugins'}
             </span>
@@ -212,17 +219,17 @@ export function FileTree({ cwd, onOpenFile, openEditors = [] }: FileTreeProps): 
                   </ul>
                 )}
                 <div className="sidebar-section-label">files</div>
-                {!cwd ? (
+                {!root ? (
                   <div className="file-tree-empty">this project has no folder</div>
                 ) : (
-                  <TreeBranch root={cwd} rel="." depth={0} onOpenFile={onOpenFile} />
+                  <TreeBranch root={root} rel="." depth={0} onOpenFile={onOpenFile} remote={remote} />
                 )}
               </>
             )}
 
             {section === 'source' &&
-              (cwd ? (
-                <SourceControlPanel cwd={cwd} embedded />
+              (root ? (
+                <SourceControlPanel cwd={root} remote={remote} embedded />
               ) : (
                 <div className="file-tree-empty">this project has no folder</div>
               ))}
@@ -244,12 +251,15 @@ function TreeBranch({
   root,
   rel,
   depth,
-  onOpenFile
+  onOpenFile,
+  remote
 }: {
   root: string
   rel: string
   depth: number
   onOpenFile: (path: string) => void
+  /** Remote project (Phase 9): directory listing runs over ssh. */
+  remote?: ProjectRemote
 }): React.JSX.Element {
   const [entries, setEntries] = useState<DirEntry[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -257,7 +267,7 @@ function TreeBranch({
 
   useEffect(() => {
     let cancelled = false
-    void window.termsprawl.files.list(root, rel).then((result) => {
+    void window.termsprawl.files.list(root, rel, remote).then((result) => {
       if (cancelled) return
       if ('error' in result) {
         setError(result.error.message)
@@ -270,7 +280,7 @@ function TreeBranch({
     return () => {
       cancelled = true
     }
-  }, [root, rel])
+  }, [root, rel, remote])
 
   const toggle = (path: string): void => {
     setExpanded((prev) => {
@@ -308,7 +318,7 @@ function TreeBranch({
               <span className="file-tree-name">{entry.name}</span>
             </button>
             {entry.kind === 'dir' && open && (
-              <TreeBranch root={root} rel={childRel} depth={depth + 1} onOpenFile={onOpenFile} />
+              <TreeBranch root={root} rel={childRel} depth={depth + 1} onOpenFile={onOpenFile} remote={remote} />
             )}
           </li>
         )

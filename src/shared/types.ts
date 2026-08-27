@@ -28,6 +28,16 @@ export interface ProjectRemote {
   path: string
 }
 
+/** Where a git/file op runs (Phase 9). A local folder project sends `cwd`; a
+ * remote project sends `remote` (cwd null). Exactly one side is set by the
+ * renderer; main validates both against the known project list. */
+export interface GitTarget {
+  /** Local project folder path (null for remote projects). */
+  cwd?: string | null
+  /** Remote project destination — ops run over ssh at `remote.path`. */
+  remote?: ProjectRemote
+}
+
 export interface PtyCreateResult {
   id: string
   pid: number

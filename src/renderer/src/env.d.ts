@@ -18,6 +18,7 @@ import type {
   ContextLinkWriteResult,
   GitPanelSnapshot,
   GitResult,
+  GitTarget,
   GitWorktree,
   CommitMessageResult,
   Announcement,
@@ -78,13 +79,13 @@ declare global {
         onExit(id: string, cb: (info: PtyExitInfo) => void): () => void
       }
       diff: {
-        info(path: string, base: DiffBase): Promise<DiffInfoResult>
+        info(path: string, base: DiffBase, remote?: ProjectRemote): Promise<DiffInfoResult>
       }
       files: {
         openDialog(): Promise<string | null>
-        read(path: string): Promise<FileReadResult>
-        write(path: string, content: string): Promise<FileWriteResult>
-        list(root: string, rel?: string): Promise<DirListResult>
+        read(path: string, remote?: ProjectRemote): Promise<FileReadResult>
+        write(path: string, content: string, remote?: ProjectRemote): Promise<FileWriteResult>
+        list(root: string, rel?: string, remote?: ProjectRemote): Promise<DirListResult>
       }
       agent: {
         onStatus(sessionId: string, cb: (event: AgentStatusEvent) => void): () => void
@@ -99,20 +100,20 @@ declare global {
         remove(cwd: string, a: string, b: string): Promise<ContextLinkWriteResult>
       }
       git: {
-        snapshot(cwd: string): Promise<GitPanelSnapshot>
-        stage(cwd: string, paths: string[]): Promise<GitResult>
-        unstage(cwd: string, paths: string[]): Promise<GitResult>
-        discard(cwd: string, paths: string[]): Promise<GitResult>
-        commit(cwd: string, message: string): Promise<GitResult>
-        commitMessage(cwd: string): Promise<CommitMessageResult>
-        createBranch(cwd: string, name: string): Promise<GitResult>
-        checkout(cwd: string, name: string): Promise<GitResult>
-        push(cwd: string): Promise<GitResult>
-        pull(cwd: string): Promise<GitResult>
-        publish(cwd: string): Promise<GitResult>
-        worktrees(cwd: string): Promise<GitWorktree[]>
-        worktreeAdd(cwd: string, path: string, branch?: string): Promise<GitResult>
-        worktreeRemove(cwd: string, path: string, force?: boolean): Promise<GitResult>
+        snapshot(target: GitTarget): Promise<GitPanelSnapshot>
+        stage(target: GitTarget, paths: string[]): Promise<GitResult>
+        unstage(target: GitTarget, paths: string[]): Promise<GitResult>
+        discard(target: GitTarget, paths: string[]): Promise<GitResult>
+        commit(target: GitTarget, message: string): Promise<GitResult>
+        commitMessage(target: GitTarget): Promise<CommitMessageResult>
+        createBranch(target: GitTarget, name: string): Promise<GitResult>
+        checkout(target: GitTarget, name: string): Promise<GitResult>
+        push(target: GitTarget): Promise<GitResult>
+        pull(target: GitTarget): Promise<GitResult>
+        publish(target: GitTarget): Promise<GitResult>
+        worktrees(target: GitTarget): Promise<GitWorktree[]>
+        worktreeAdd(target: GitTarget, path: string, branch?: string): Promise<GitResult>
+        worktreeRemove(target: GitTarget, path: string, force?: boolean): Promise<GitResult>
       }
       cloud: {
         status(): Promise<CloudUser | null>
