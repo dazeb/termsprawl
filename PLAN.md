@@ -537,6 +537,38 @@ concepts, not a porting source.*
 
 ### Task 11.3: Telegram bot v2
 - Build local bot (no relay): commands: /terminals /attach /send /help.
+- **Status: DONE (2026-08-28).** A local, zero-dependency Telegram bot runs
+  INSIDE the app (long-polling over global fetch; no new npm deps). Command
+  surface: `/start` `/help` `/projects` `/terminals` `/send <id> <text>`
+  `/peek <id>` `/attach <id>` `/detach` `/status` — pairing is secure by
+  default (empty allowlist = the first chat to `/start` becomes the owner and
+  is persisted; non-empty = only listed chats may issue commands). `/attach`
+  streams a terminal's tmux pane every 2 s (auto-stops after 5 min, `/detach`
+  ends it). Session↔project awareness: terminals are listed under their owning
+  project; terminal ids are the stable node ids (= tmux session keys). Written
+  fresh from docs/OWN-WORK.md §A concepts — nothing ported.
+  - `src/core/telegram/api.ts` — minimal Bot API client (getMe/getUpdates/
+    sendMessage/sendChatAction/deleteWebhook; injectable fetch).
+  - `src/core/telegram/pairing.ts` — allowlist/pairing decision (pure).
+  - `src/core/telegram/commands.ts` — parse/format/dispatch via an AppAdapter
+    interface (pure, fully unit-tested).
+  - `src/main/telegram/bot.ts` — long-poll loop + adapter wiring
+    (workspaceStore + ptyManager + tmux capture) + `/attach` streaming.
+  - `AppSettings.telegram` (enabled/token/allowedChatIds) + Settings →
+    Connections → "Telegram bot" section (enable toggle, masked token,
+    allowlist). Token source: env `TERMSPRAWL_TELEGRAM_TOKEN` wins over
+    settings.telegram.token — never in the repo.
+  - PtyManager gained `liveSessionIds()` + `capturePane()` (local tmux capture;
+    remote via ssh); remote-pty gained `remoteTmuxCapture(Sync)`.
+  - Verified: 47 new tests (438 total green, typecheck + originality OK);
+    **live end-to-end**: token validated (bot = @termsprawlbot, no webhook →
+    long-poll OK), app booted headless with the env token enabled the bot, a
+    real phone `/start` was received and chat `1033877751` auto-paired +
+    persisted to settings.json, and a confirmation message was delivered to
+    that chat (`sendMessage` ok). App + Xvfb killed by PID after.
+  - Follow-ups (OWN-WORK.md §A ideas): desktop approval UI, inline keyboards
+    for node pick, read-only viewer mode, per-node allowlist, session-scoped
+    attach tokens.
 
 ### Task 11.4: Chat driver v2 (provider-agnostic)
 - SDK chat node with streaming, permission cards, cost chip.

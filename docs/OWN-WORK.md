@@ -43,6 +43,12 @@ v2 improvement ideas (design, don't inherit): multi-channel delivery
 (Telegram + Matrix later), inline keyboards for node pick, read-only viewer
 mode, per-node allowlist, session-scoped attach tokens.
 
+**v2 status (2026-08-28): DONE.** Built fresh in termsprawl as a local,
+zero-dependency bot (long-polling over global fetch) — see PLAN.md Task 11.3
+for the full record. `/attach` = output streaming (a v2 improvement over the
+fork's static viewer); pairing is secure by default (first `/start` becomes
+the owner); token from env or settings, never the repo.
+
 ## B. Hosted relay service (concept: E2E relay between hosts and phones)
 
 What we built in the fork: a standalone Node service (`src/relay-service/` —
