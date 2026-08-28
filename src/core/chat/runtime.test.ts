@@ -1,9 +1,9 @@
 // Phase 11 Task 11.4 — chat runtime wiring TDD. Fake drivers; asserts per-node
 // busy-locking, abort, approval plumbing, and event broadcasting.
 import { describe, it, expect, vi } from 'vitest'
-import { createChatRuntime, driverFor, type ChatProviderConfig, type ChatRuntimeDeps } from './chat'
-import type { ChatEvent, ChatMessage } from '../core/chat/types'
-import type { ChatDriver } from '../core/chat/tools'
+import { createChatRuntime, driverFor, type ChatProviderConfig, type ChatRuntimeDeps } from './runtime'
+import type { ChatEvent, ChatMessage } from './types'
+import type { ChatDriver } from './tools'
 
 const userMsg: ChatMessage = { id: 'u1', role: 'user', content: 'hi', ts: 1 }
 

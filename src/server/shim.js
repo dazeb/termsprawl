@@ -201,6 +201,16 @@
       offAgentOpen: function () { return function () {} }
     },
 
+    // Chat driver v2 (Phase 11 Task 11.4): the server runs the same core chat
+    // runtime (handlers.ts), so this is a real implementation, not a stub —
+    // events stream on the chat:event:<nodeId> broadcast channel.
+    chat: {
+      send: function (req) { return invoke('chat:send', [req]) },
+      stop: function (nodeId) { return invoke('chat:stop', [nodeId]) },
+      approve: function (nodeId, callId, decision) { return invoke('chat:approve', [nodeId, callId, decision]) },
+      onEvent: function (nodeId, cb) { return on('chat:event:' + nodeId, cb) }
+    },
+
     git: {
       snapshot: function (target) { return invoke('git:snapshot', [target]) },
       stage: function (target, paths) { return invoke('git:stage', [target, paths]) },

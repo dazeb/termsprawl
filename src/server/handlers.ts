@@ -23,6 +23,7 @@ import {
   listWorktrees, addWorktree, removeWorktree
 } from '../core/git-service'
 import { generateCommitMessage } from '../core/commit-message'
+import { createChatRuntime, type ChatSendRequest } from '../core/chat/runtime'
 import type { RpcHandler } from './rpc'
 import type { CorePlatform } from '../core/platform'
 import type {
@@ -55,6 +56,34 @@ export function buildHandlers(platform: CorePlatform): Record<string, RpcHandler
   const ptyManager = new PtyManager(platform)
   const userDataPath = platform.userDataPath
   mkdirSync(userDataPath, { recursive: true })
+
+  // Chat driver v2 (Phase 11 Task 11.4): same runtime shape as the desktop
+  // main process — settings-resolved provider + key, events broadcast on the
+  // per-node channel the shim subscribes to.
+  const chatRuntime = createChatRuntime({
+    resolveProvider: (req: ChatSendRequest) => {
+      const settings = loadAppSettings(userDataPath)
+      const chat = settings.chat
+      const providers = settings.apiProviders ?? []
+      const wanted = req.provider ?? chat?.defaultProvider ?? providers[0]?.id
+      const provider = providers.find((p) => p.id === wanted || p.name === wanted)
+      if (!provider) return null
+      const envKey = process.env[`TERMSPRAWL_PROVIDER_KEY_${provider.id.toUpperCase()}`]
+      const storedKey = chat?.keys?.find((k) => k.providerId === provider.id)?.key
+      const apiKey = envKey || storedKey || ''
+      if (!apiKey) return null
+      const isAnthropic = /anthropic/i.test(provider.baseUrl) || /anthropic/i.test(provider.name)
+      return {
+        id: provider.id,
+        baseUrl: provider.baseUrl,
+        apiKey,
+        api: isAnthropic ? 'anthropic' : 'openai',
+        model: req.model ?? chat?.defaultModel
+      }
+    },
+    broadcast: (nodeId: string, event: unknown) => platform.broadcast(`chat:event:${nodeId}`, event),
+    log: (msg: string) => console.log(`[chat] ${msg}`)
+  })
 
   return {
     [IPC.appVersion]: () => version,
@@ -269,6 +298,26 @@ export function buildHandlers(platform: CorePlatform): Record<string, RpcHandler
       const root = resolveRepoRoot(target)
       if (!root) return Promise.resolve({ code: 1, stdout: '', stderr: 'no project folder' })
       return removeWorktree(root, worktreePath, force ?? false)
+    },
+
+    // Chat driver v2 (Phase 11 Task 11.4). Events stream on the chat:event:<nodeId>
+    // broadcast channel; these are the invoke side.
+    [IPC.chatSend]: (args) => {
+      const req = args[0] as ChatSendRequest
+      if (!req || typeof req.nodeId !== 'string' || !Array.isArray(req.messages)) {
+        return Promise.resolve({ ok: false, error: 'bad chat request' })
+      }
+      return chatRuntime.send(req)
+    },
+    [IPC.chatStop]: (args) => {
+      const [nodeId] = args
+      if (typeof nodeId === 'string') chatRuntime.stop(nodeId)
+    },
+    [IPC.chatApprove]: (args) => {
+      const [nodeId, callId, decision] = args
+      if (typeof nodeId === 'string' && typeof callId === 'string' && (decision === 'approve' || decision === 'deny')) {
+        chatRuntime.approve(nodeId, callId, decision)
+      }
     }
   }
 }

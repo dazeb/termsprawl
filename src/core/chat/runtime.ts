@@ -1,17 +1,17 @@
-// Phase 11 Task 11.4 — chat driver v2 main-process runtime. Owns per-node
-// active runs (abort), pending approvals, event broadcasting, and provider/
-// key resolution (env wins over settings — same rule as the Telegram token).
-// All core logic is injected from src/core/chat (electron-free); this file
-// only wires it to the platform, so it is testable with a fake driver.
+// Phase 11 Task 11.4 — chat driver v2 runtime. Shared by the Electron main
+// process AND the Server Edition (both build a ChatRuntime with their own
+// deps). Owns per-node active runs (abort), pending approvals, event
+// broadcasting, and provider/key resolution (env wins over settings — same
+// rule as the Telegram token). Electron-free; testable with a fake driver.
 //
 // Clean-room: written fresh for termsprawl; nothing copied from the fork or
 // any other project.
 
-import { ChatError } from '../core/chat/types'
-import type { ChatEvent, ChatMessage } from '../core/chat/types'
-import { streamOpenAI } from '../core/chat/openai'
-import { streamAnthropic } from '../core/chat/anthropic'
-import { runChatLoop, type ChatDriver } from '../core/chat/tools'
+import { ChatError } from './types'
+import type { ChatEvent, ChatMessage } from './types'
+import { streamOpenAI } from './openai'
+import { streamAnthropic } from './anthropic'
+import { runChatLoop, type ChatDriver } from './tools'
 
 export interface ChatProviderConfig {
   /** provider id/name from settings.apiProviders */
