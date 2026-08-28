@@ -511,6 +511,11 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
             removeProvider={removeProvider}
           />
         )
+      },
+      {
+        id: 'telegram',
+        title: 'Telegram bot',
+        render: (c) => <TelegramSection ctx={c} />
       }
     ],
     updates: [
@@ -761,6 +766,105 @@ function ApiSection(props: { providers: ApiProviderConfig[]; providerName: strin
         <input className="account-label-input" value={providerName} placeholder="provider (e.g. xAI)" onChange={(e) => setProviderName(e.target.value)} />
         <input className="account-label-input" value={providerBaseUrl} placeholder="https://api.x.ai/v1" onChange={(e) => setProviderBaseUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void addProvider() }} />
         <button onClick={() => void addProvider()}>add provider</button>
+      </div>
+    </div>
+  )
+}
+
+/** Telegram bot (Phase 11 Task 11.3). Local bot the user's phone pairs with.
+ * The token is the user's own bot secret — stored in settings.json on this
+ * machine only (env TERMSPRAWL_TELEGRAM_TOKEN overrides it in dev). The
+ * allowlist is the paired phone(s); empty = first /start becomes the owner. */
+function TelegramSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
+  const { settings, update } = ctx
+  const tg = settings.telegram ?? { enabled: false, allowedChatIds: [] }
+  const allowed = (tg.allowedChatIds ?? []).join('\n')
+  const [draft, setDraft] = useState<{ token: string; allowed: string }>({
+    token: tg.token ?? '',
+    allowed
+  })
+
+  // Saves the whole telegram block; token only when the user typed a new one.
+  const save = (patch: { enabled?: boolean; token?: string; allowedChatIds?: string[] }): void => {
+    void update({
+      telegram: {
+        enabled: patch.enabled ?? tg.enabled === true,
+        token: patch.token !== undefined ? patch.token : (tg.token ?? ''),
+        allowedChatIds:
+          patch.allowedChatIds !== undefined ? patch.allowedChatIds : (tg.allowedChatIds ?? [])
+      }
+    })
+  }
+
+  return (
+    <div className="settings-section">
+      <p className="app-settings-hint">
+        Control termsprawl from your phone. Pair by messaging the bot with /start from
+        the phone; the first chat becomes the owner unless you list chats below. The bot
+        token is stored on this machine only — never committed to the repo (the
+        TERMSPRAWL_TELEGRAM_TOKEN env var overrides it).
+      </p>
+
+      <div className="settings-pref-row">
+        <div className="settings-pref-copy">
+          <span className="settings-pref-label">Enable Telegram bot</span>
+          <span className="settings-pref-sub">
+            On: the bot starts and watches for messages. Off (default): nothing runs
+          </span>
+        </div>
+        <label className="app-settings-toggle">
+          <input
+            type="checkbox"
+            checked={tg.enabled === true}
+            onChange={(e) => void save({ enabled: e.target.checked })}
+          />
+        </label>
+      </div>
+
+      <div className="settings-pref-row">
+        <div className="settings-pref-copy">
+          <span className="settings-pref-label">Bot token</span>
+          <span className="settings-pref-sub">
+            {tg.token ? `a token is set (${tg.token.slice(-4)})` : 'no token — get one from @BotFather'}
+          </span>
+        </div>
+        <input
+          type="password"
+          className="settings-text-input"
+          placeholder={tg.token ? '••••••••' : '123:bot-token'}
+          spellCheck={false}
+          value={draft.token}
+          onChange={(e) => setDraft((d) => ({ ...d, token: e.target.value }))}
+          onBlur={() => {
+            if (draft.token.trim() && draft.token !== (tg.token ?? '')) void save({ token: draft.token.trim() })
+          }}
+        />
+      </div>
+
+      <div className="settings-pref-row">
+        <div className="settings-pref-copy">
+          <span className="settings-pref-label">Allowed chat ids</span>
+          <span className="settings-pref-sub">
+            empty = the first chat to /start becomes the owner; otherwise only these chats
+            may issue commands
+          </span>
+        </div>
+        <textarea
+          className="settings-text-input"
+          rows={3}
+          placeholder="one chat id per line"
+          spellCheck={false}
+          value={draft.allowed}
+          onChange={(e) => setDraft((d) => ({ ...d, allowed: e.target.value }))}
+          onBlur={() =>
+            void save({
+              allowedChatIds: draft.allowed
+                .split(/\n|,/)
+                .map((s) => s.trim())
+                .filter(Boolean)
+            })
+          }
+        />
       </div>
     </div>
   )
