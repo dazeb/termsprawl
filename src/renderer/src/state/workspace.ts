@@ -6,7 +6,7 @@ import type { Node } from 'reactflow'
 import type { ProjectRemote, SerializedNode } from '@shared/types'
 import { agentConfig, agentIds, agentTitle, agentCommand, type AgentId } from '@shared/agents/config'
 
-export const NODE_TYPES = ['terminal', 'sticky', 'group', 'diff', 'editor', 'browser'] as const
+export const NODE_TYPES = ['terminal', 'sticky', 'group', 'diff', 'editor', 'browser', 'chat'] as const
 export type NodeKind = (typeof NODE_TYPES)[number]
 
 export interface TerminalNodeData {
@@ -80,6 +80,28 @@ export interface BrowserNodeData {
   activeTabId?: string
 }
 
+/** Chat node persisted data — mirrors shared ChatNodeData (re-declared here to
+ * keep workspace.ts free of core imports in its type surface). */
+export interface ChatNodeData {
+  kind: 'chat'
+  provider?: string
+  model?: string
+  system?: string
+  messages: Array<{
+    id: string
+    role: 'user' | 'assistant' | 'system' | 'tool'
+    content: string
+    thinking?: string
+    stopped?: boolean
+    usage?: { inputTokens: number; outputTokens: number }
+    model?: string
+    ts: number
+  }>
+  cost?: { usd: number; estimated: boolean }
+  /** While a reply is streaming (cache only — never persisted mid-flight). */
+  streaming?: boolean
+}
+
 export type SprawlNodeData =
   | TerminalNodeData
   | StickyNodeData
@@ -87,6 +109,7 @@ export type SprawlNodeData =
   | DiffNodeData
   | EditorNodeData
   | BrowserNodeData
+  | ChatNodeData
 
 let counter = 0
 const TERMINAL_DIMENSIONS = { width: 720, height: 420 } as const
@@ -288,6 +311,21 @@ export function createBrowserNode(url: string = DEFAULT_BROWSER_URL): Node<Brows
   }
 }
 
+/** A chat node (Phase 11 Task 11.4): SDK chat, not a PTY — streaming replies,
+ * thinking blocks, cost chip. History rides in node data and persists with
+ * the project file. */
+export const CHAT_NODE_SIZE = { width: 420, height: 480 } as const
+
+export function createChatNode(model?: string): Node<ChatNodeData> {
+  return {
+    id: nextId(),
+    type: 'chat',
+    position: { x: 60 + Math.random() * 240, y: 60 + Math.random() * 160 },
+    style: { width: CHAT_NODE_SIZE.width, height: CHAT_NODE_SIZE.height },
+    data: { kind: 'chat', messages: [], ...(model ? { model } : {}) }
+  }
+}
+
 let tabCounter = 0
 
 export function nextBrowserTabId(): string {
@@ -370,6 +408,7 @@ export function nodeTitle(data: SprawlNodeData): string {
   if (data.kind === 'diff') return data.path ? data.path.split('/').pop() ?? 'diff' : 'diff'
   if (data.kind === 'editor') return data.path ? data.path.split('/').pop() ?? 'editor' : 'editor'
   if (data.kind === 'browser') return browserTitle(data.url)
+  if (data.kind === 'chat') return data.model ?? 'chat'
   const firstLine = data.text.split('\n')[0].trim()
   return firstLine || 'sticky note'
 }
@@ -405,7 +444,8 @@ const DEFAULT_SIZE: Record<string, { w: number; h: number }> = {
   group: { w: 200, h: 130 },
   diff: { w: 560, h: 360 },
   editor: { w: 640, h: 420 },
-  browser: { w: 320, h: 240 }
+  browser: { w: 320, h: 240 },
+  chat: { w: 420, h: 480 }
 }
 
 function nodeSize(n: Node<SprawlNodeData>): { w: number; h: number } {
@@ -527,6 +567,12 @@ export function deserializeNodes(serialized: SerializedNode[]): Node<SprawlNodeD
       return {
         ...base,
         data: { kind: 'browser', url: 'about:blank', ...data } as BrowserNodeData
+      }
+    }
+    if (data.kind === 'chat') {
+      return {
+        ...base,
+        data: { kind: 'chat', messages: [], ...data, streaming: false } as ChatNodeData
       }
     }
     // Terminal (default branch). The node's DOM size comes from `style.width/

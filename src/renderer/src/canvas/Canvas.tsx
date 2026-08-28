@@ -18,6 +18,7 @@ import { GroupNode } from '../nodes/GroupNode'
 import { DiffNode } from '../nodes/DiffNode'
 import { EditorNode } from '../nodes/EditorNode'
 import { BrowserNode } from '../nodes/BrowserNode'
+import { ChatNode } from '../nodes/ChatNode'
 import {
   createAgentLoginNode,
   createAgentNode,
@@ -29,6 +30,7 @@ import {
   createStickyNode,
   createTerminalNode,
   createBrowserNode,
+  createChatNode,
   isAgentCommand,
   removeNode,
   resolveHomeUrl,
@@ -52,7 +54,8 @@ const nodeTypes = {
   group: GroupNode,
   diff: DiffNode,
   editor: EditorNode,
-  browser: BrowserNode
+  browser: BrowserNode,
+  chat: ChatNode
 }
 
 // Canvas context: lets custom nodes update their own data and record undo
@@ -397,6 +400,16 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
     setMenu(null)
   }, [menu, push, remote, screenToFlowPosition, appendOnTop])
 
+  const addChat = useCallback(() => {
+    const node = createChatNode()
+    if (menu && wrapperRef.current) {
+      node.position = screenToFlowPosition({ x: menu.x, y: menu.y })
+    }
+    appendOnTop(node)
+    push()
+    setMenu(null)
+  }, [menu, push, screenToFlowPosition, appendOnTop])
+
   // A druk terminal: launches the druk TUI code editor in the project cwd.
   const addDruk = useCallback(() => {
     const node = createDrukNode(cwd)
@@ -713,6 +726,7 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
           <button onClick={addDiff}>New diff</button>
           <button onClick={addEditor}>New editor</button>
           <button onClick={addBrowser}>New browser</button>
+          <button onClick={addChat}>New chat</button>
           <button onClick={addDruk}>Open druk</button>
           <button
             className="context-submenu-toggle"

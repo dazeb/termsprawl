@@ -36,18 +36,23 @@ sprawls, nothing hides in tabs.
 
 ## Status
 
-Actively developed. Phases 0–10 of [PLAN.md](PLAN.md) are shipped:
+Actively developed. Phases 0–12 of [PLAN.md](PLAN.md) are shipped:
 
 - **Desktop app** — terminal canvas, tmux session continuity, projects &
   persistence, sticky/group/editor/diff nodes, agents with context links
   and managed accounts, source control (git status, staging, commits,
   branches, sync, worktrees, AI commit messages), SSH remote projects,
   embedded browser nodes (opt-in agent control via CDP), Telegram bot v2,
-  and auto-update with announcements.
+  provider-agnostic chat nodes (OpenAI-compatible + Anthropic, streaming,
+  thinking blocks, slash commands), and auto-update with announcements.
 - **Server Edition** — the same app runs in a browser via plain `node:http`
   + WebSocket RPC. Serves the built renderer, tunnels all core services
-  (terminals, projects, git, agent hooks, file tree), with auto-save and
-  shutdown safety.
+  (terminals, projects, git, agent hooks, file tree, chat), with auto-save
+  and shutdown safety.
+- **Standalone relay service** (`relay/`) — E2E-encrypted host↔client frames
+  (the relay sees ciphertext only), GitHub device-flow auth, single-use
+  invites with expiry/revocation/quotas, admin API. App-side client seam
+  shipped; in-app pairing UI is a follow-up.
 
 Current version: **0.10.1**.
 

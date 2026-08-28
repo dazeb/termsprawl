@@ -91,7 +91,20 @@ export const IPC = {
   browserNavigate: 'browser:navigate',
   // Push channel main → renderer when an external agent asks to open a browser
   // node (from the reachable loopback agent-control server).
-  browserAgentOpen: 'browser:agent-open'
+  browserAgentOpen: 'browser:agent-open',
+
+  // Chat driver v2 (Phase 11 Task 11.4). chatEvent is a push channel suffixed
+  // ':<nodeId>'; send/stop/approve are invokes handled by the platform shim
+  // (Electron main or the Server Edition WS-RPC handlers).
+  chatSend: 'chat:send',
+  chatStop: 'chat:stop',
+  chatApprove: 'chat:approve',
+  chatEvent: 'chat:event',
+
+  // Relay seam (Phase 11 Task 11.2). Minimal surface: the app can dial the
+  // relay and report status; pairing UI + terminal frames are follow-ups.
+  relayConnect: 'relay:connect',
+  relayStatus: 'relay:status'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]
@@ -106,4 +119,8 @@ export function ptyExitChannel(sessionId: string): string {
 
 export function agentSessionNameChannel(sessionId: string): string {
   return `${IPC.agentSessionName}:${sessionId}`
+}
+
+export function chatEventChannel(nodeId: string): string {
+  return `${IPC.chatEvent}:${nodeId}`
 }

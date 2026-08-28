@@ -224,4 +224,32 @@ describe('app-settings', () => {
     const loaded = loadAppSettings(dir)
     expect(loaded.telegram).toEqual({ enabled: true, token: '123:roundtrip', allowedChatIds: ['42'] })
   })
+
+  it('chat settings round-trip through disk (11.4)', () => {
+    const dir = scratch()
+    saveAppSettings(dir, {
+      chat: {
+        defaultProvider: 'p1',
+        defaultModel: 'gpt-4o-mini',
+        keys: [{ providerId: 'p1', key: 'sk-local-only' }],
+        priceOverrides: { 'gpt-4o-mini': { in: 0.15, out: 0.6 } }
+      }
+    })
+    const loaded = loadAppSettings(dir)
+    expect(loaded.chat).toEqual({
+      defaultProvider: 'p1',
+      defaultModel: 'gpt-4o-mini',
+      keys: [{ providerId: 'p1', key: 'sk-local-only' }],
+      priceOverrides: { 'gpt-4o-mini': { in: 0.15, out: 0.6 } }
+    })
+  })
+
+  it('chat garbage is tolerated (11.4)', () => {
+    const s = normalizeAppSettings({ chat: { defaultProvider: 7, keys: 'nope', priceOverrides: { m: 'x' } } })
+    expect(s.chat).toBeUndefined()
+    const s2 = normalizeAppSettings({ chat: { keys: [{ providerId: '', key: 'x' }, { providerId: 'ok', key: 5 }] } })
+    expect(s2.chat).toBeUndefined()
+    const s3 = normalizeAppSettings({ chat: { keys: [{ providerId: 'ok', key: 'sk-live' }] } })
+    expect(s3.chat).toEqual({ keys: [{ providerId: 'ok', key: 'sk-live' }] })
+  })
 })

@@ -4,7 +4,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import type { AppSettings, TelegramSettings } from '../shared/types'
+import type { AppSettings, ChatSettings, ProviderKey, TelegramSettings } from '../shared/types'
 
 export type { AppSettings }
 
@@ -65,6 +65,48 @@ function normalizeTelegram(raw: unknown): TelegramSettings {
     )
   }
   return out
+}
+
+/** Chat driver v2 settings (11.4): default provider/model + locally-stored
+ * provider keys + optional price overrides. Keys live on this machine only.
+ * Returns undefined when nothing is configured (keeps the default-settings
+ * shape stable for existing tests/consumers). */
+function normalizeChat(raw: unknown): ChatSettings | undefined {
+  const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  const out: ChatSettings = {}
+  if (typeof obj.defaultProvider === 'string' && obj.defaultProvider.length > 0) {
+    out.defaultProvider = obj.defaultProvider
+  }
+  if (typeof obj.defaultModel === 'string' && obj.defaultModel.length > 0) {
+    out.defaultModel = obj.defaultModel
+  }
+  if (Array.isArray(obj.keys)) {
+    out.keys = obj.keys
+      .filter(
+        (k): k is ProviderKey =>
+          k !== null && typeof k === 'object' &&
+          typeof (k as ProviderKey).providerId === 'string' &&
+          (k as ProviderKey).providerId.length > 0 &&
+          typeof (k as ProviderKey).key === 'string'
+      )
+      .map((k) => ({ providerId: k.providerId, key: k.key }))
+    if (out.keys && out.keys.length === 0) delete out.keys
+  }
+  if (obj.priceOverrides && typeof obj.priceOverrides === 'object') {
+    const overrides: Record<string, { in: number; out: number }> = {}
+    for (const [model, price] of Object.entries(obj.priceOverrides as Record<string, unknown>)) {
+      if (
+        price && typeof price === 'object' &&
+        typeof (price as { in?: unknown }).in === 'number' &&
+        typeof (price as { out?: unknown }).out === 'number'
+      ) {
+        overrides[model] = { in: (price as { in: number }).in, out: (price as { out: number }).out }
+      }
+    }
+    // only carry overrides when at least one parsed
+    if (Object.keys(overrides).length > 0) out.priceOverrides = overrides
+  }
+  return Object.keys(out).length > 0 ? out : undefined
 }
 
 export function normalizeAppSettings(raw: unknown): AppSettings {
@@ -144,6 +186,7 @@ export function normalizeAppSettings(raw: unknown): AppSettings {
     agentBrowserControl: obj.agentBrowserControl === true,
     invertWheelZoom: obj.invertWheelZoom === true,
     telegram: normalizeTelegram(obj.telegram),
+    ...(normalizeChat(obj.chat) ? { chat: normalizeChat(obj.chat) } : {}),
     ...(typeof obj.browserHomeUrl === 'string' && obj.browserHomeUrl.trim().length > 0
       ? { browserHomeUrl: obj.browserHomeUrl.trim() }
       : {})

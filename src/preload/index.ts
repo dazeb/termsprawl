@@ -30,8 +30,11 @@ import type {
   CloudDeviceStart,
   CloudUser,
   BrowserCdpInfo,
-  BrowserNavigateResult
+  BrowserNavigateResult,
+  ChatSettings
 } from '../shared/types'
+import type { ChatEvent } from '../core/chat/types'
+import { chatEventChannel } from '../shared/ipc'
 import type { UpdateStatus } from '../shared/update-status'
 
 // The narrow API surface exposed to the renderer as window.termsprawl.
@@ -231,6 +234,24 @@ const api = {
       ipcRenderer.on(IPC.browserAgentOpen, listener)
       return () => {
         ipcRenderer.removeListener(IPC.browserAgentOpen, listener)
+      }
+    }
+  },
+
+  chat: {
+    /** Send the conversation for a chat node; events arrive via onEvent. */
+    send: (req: { nodeId: string; messages: unknown[]; model?: string; provider?: string }): Promise<{ ok: boolean; error?: string; stopReason?: string }> =>
+      ipcRenderer.invoke(IPC.chatSend, req),
+    stop: (nodeId: string): Promise<void> => ipcRenderer.invoke(IPC.chatStop, nodeId),
+    approve: (nodeId: string, callId: string, decision: 'approve' | 'deny'): Promise<void> =>
+      ipcRenderer.invoke(IPC.chatApprove, nodeId, callId, decision),
+    /** Subscribe to streamed chat events for one chat node. */
+    onEvent: (nodeId: string, cb: (event: ChatEvent) => void): (() => void) => {
+      const channel = chatEventChannel(nodeId)
+      const listener = (_event: Electron.IpcRendererEvent, ev: ChatEvent): void => cb(ev)
+      ipcRenderer.on(channel, listener)
+      return () => {
+        ipcRenderer.removeListener(channel, listener)
       }
     }
   }

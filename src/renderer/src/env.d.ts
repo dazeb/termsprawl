@@ -31,6 +31,7 @@ import type {
 } from '@shared/types'
 import type { AgentStatusEvent } from '@shared/agent-status'
 import type { UpdateStatus } from '@shared/update-status'
+import type { ChatEvent } from '../../core/chat/types'
 
 // The shape of window.termsprawl as exposed by the preload bridge.
 declare global {
@@ -129,6 +130,17 @@ declare global {
         unregister(nodeId: string, tabId: string): Promise<void>
         navigate(nodeId: string, tabId: string, url: string): Promise<BrowserNavigateResult>
         onAgentOpen(cb: (info: { url: string }) => void): () => void
+      }
+      chat: {
+        send(req: {
+          nodeId: string
+          messages: unknown[]
+          model?: string
+          provider?: string
+        }): Promise<{ ok: boolean; error?: string; stopReason?: string }>
+        stop(nodeId: string): Promise<void>
+        approve(nodeId: string, callId: string, decision: 'approve' | 'deny'): Promise<void>
+        onEvent(nodeId: string, cb: (event: ChatEvent) => void): () => void
       }
     }
   }

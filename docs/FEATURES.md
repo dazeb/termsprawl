@@ -46,13 +46,16 @@ macOS-specific features are in scope, ever.
 - Managed accounts (per-account config dirs, Claude).
 - Permission mode selection with CLI version gating.
 
-## 5. Chat node **[own concept, reimplemented]**
+## 5. Chat node **[own concept, reimplemented]** ✅ SHIPPED (11.4)
 
-- SDK-driven chat (not a PTY): streaming, permission cards, stop, thinking
-  blocks, slash commands, image paste, diff cards, cost chip.
-- Provider-agnostic LLM driver (our own design — original was Claude-only SDK;
-  ours supports multiple providers).
-- Resume-based continuity via persisted session id.
+- SDK-driven chat (not a PTY): streaming replies, collapsed thinking blocks,
+  stop, slash commands (`/clear` `/model` `/system` `/cost`), token chip.
+- Provider-agnostic driver: any OpenAI-compatible endpoint (OpenAI, Groq,
+  OpenRouter, LM Studio, llama.cpp, Ollama) + Anthropic, hand-rolled SSE,
+  zero new deps. Cost table with per-model price overrides.
+- History persists in node data (byte-capped serialization keeps project
+  files git-shareable). Tool loop with an approval gate is wired in core;
+  permission-card UI + cost USD chip are follow-ups.
 
 ## 6. Source control
 
@@ -79,10 +82,14 @@ macOS-specific features are in scope, ever.
 > Concept reference for what we originated lives in `docs/OWN-WORK.md` —
 > consult it when designing the v2 rebuilds (we rebuild, we do not port).
 
-- Telegram bot: control terminals from the phone (list, attach, send). Local,
-  no relay needed.
-- Hosted relay foundation: GitHub device-flow auth, host sessions, invite
-  quotas, E2E-encrypted relay frames.
+- ✅ Telegram bot (11.3): control terminals from the phone — pair, list
+  projects/terminals, send keys, attach to live output. Local, zero-dep,
+  secure-by-default pairing.
+- ✅ Standalone relay service (11.2, `relay/`): GitHub device-flow auth,
+  host sessions, single-use invites with expiry/revocation/quotas,
+  E2E-encrypted frames (X25519 + AES-256-GCM; the relay sees ciphertext only),
+  admin API + metrics, offline queueing. App-side client seam shipped;
+  in-app pairing UI + terminal frames over the tunnel are follow-ups.
 - Auto-update + announcements feed.
 
 ## 10. Platform
