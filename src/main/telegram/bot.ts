@@ -138,8 +138,11 @@ export function createTelegramBot(deps: TelegramBotDeps): TelegramBot {
       adapter
     )
 
-    for (const reply of result.replies) {
-      await client.sendMessage(chatId, reply)
+    // One message per command: join the reply fragments (multi-line blocks) and
+    // drop empties, so a chat never gets a blank bubble or split fragments.
+    const text = result.replies.filter((r) => r.trim().length > 0).join('\n')
+    if (text.trim().length > 0) {
+      await client.sendMessage(chatId, text)
     }
 
     if (result.attach) {

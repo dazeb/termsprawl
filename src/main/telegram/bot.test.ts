@@ -94,9 +94,14 @@ describe('telegram bot runtime — handleUpdate', () => {
   })
 
   it('/start on an empty allowlist persists the pairing', async () => {
-    const { bot, tags } = makeBot({ allowedChatIds: () => [], saveAllowedChatIds: (ids) => tags.splice(0, tags.length, ...ids) })
+    const { bot, tags, sent } = makeBot({ allowedChatIds: () => [], saveAllowedChatIds: (ids) => tags.splice(0, tags.length, ...ids) })
     await bot.handleUpdate(upd('/start', 7))
     expect(tags).toEqual(['7'])
+    // ONE message with the help folded in — no blank bubble, no split fragments.
+    expect(sent.length).toBe(1)
+    expect(sent[0]?.text).toContain('paired')
+    expect(sent[0]?.text).toContain('/projects')
+    expect(sent[0]?.text).not.toEqual('')
   })
 
   it('denies non-paired chats', async () => {

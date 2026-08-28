@@ -68,6 +68,26 @@ export function truncate(text: string, max = MAX_REPLY_CHARS): string {
   return `${cut}\n…(+${text.length - cut.length} chars)`
 }
 
+/** Clean terminal pane output for a chat message: strip ANSI escape sequences
+ * (colors/cursor ops), drop other control chars (keep \n and \t), trim trailing
+ * whitespace per line, and collapse runs of blank lines — so an /peek or
+ * /attach pane reads as tidy text instead of raw terminal noise. */
+// eslint-disable-next-line no-control-regex
+const ANSI_RE = /\u001B\[[0-9;?]*[A-Za-z]|\u001B\][^\u0007]*\u0007|\u001B[()][A-Z0-9]/g
+// eslint-disable-next-line no-control-regex
+const CONTROL_RE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g
+
+export function sanitizePane(text: string): string {
+  const stripped = text.replace(ANSI_RE, '').replace(CONTROL_RE, '')
+  const collapsed: string[] = []
+  for (const line of stripped.split('\n')) {
+    const trimmed = line.replace(/\s+$/g, '')
+    if (trimmed === '' && collapsed[collapsed.length - 1] === '') continue
+    collapsed.push(trimmed)
+  }
+  return collapsed.join('\n').trim()
+}
+
 export function formatProjects(projects: BotProject[]): string {
   if (projects.length === 0) return 'no projects yet'
   return projects
@@ -145,11 +165,7 @@ export function handleCommand(ctx: CommandContext, adapter: AppAdapter): Command
   if (decision === 'pair-me' && name === 'start') {
     ctx.pairChat(ctx.chatId)
     return {
-      replies: [
-        'paired — this chat can now control termsprawl.',
-        '',
-        formatHelp()
-      ]
+      replies: [`paired — this chat can now control termsprawl.\n\n${formatHelp()}`]
     }
   }
 
@@ -191,7 +207,7 @@ export function handleCommand(ctx: CommandContext, adapter: AppAdapter): Command
       if (pane === null || pane.trim().length === 0) {
         return { replies: [`terminal ${id} has no captured output`] }
       }
-      return { replies: [truncate(`terminal ${id}:\n\n${pane}`)] }
+      return { replies: [truncate(`terminal ${id}:\n\n${sanitizePane(pane)}`)] }
     }
 
     case 'attach': {
@@ -202,7 +218,7 @@ export function handleCommand(ctx: CommandContext, adapter: AppAdapter): Command
       const pane = adapter.captureTerminal(id)
       const first =
         pane !== null && pane.trim().length > 0
-          ? truncate(`streaming ${id} — here is the current pane:\n\n${pane}`)
+          ? truncate(`streaming ${id} — here is the current pane:\n\n${sanitizePane(pane)}`)
           : `streaming ${id} — waiting for output…`
       return { replies: [first], attach: { terminalId: id } }
     }

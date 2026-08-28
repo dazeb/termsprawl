@@ -8,6 +8,7 @@ import {
   formatHelp,
   handleCommand,
   resolveTerminalId,
+  sanitizePane,
   type AppAdapter,
   type BotProject,
   type BotTerminal
@@ -77,6 +78,20 @@ describe('truncate', () => {
   })
 })
 
+describe('sanitizePane', () => {
+  it('strips ANSI color/cursor sequences', () => {
+    expect(sanitizePane('\u001b[31mred\u001b[0m text\u001b[2J')).toBe('red text')
+  })
+
+  it('drops other control chars but keeps newlines and tabs', () => {
+    expect(sanitizePane('a\u0000b\u0007c\nd\te')).toBe('abc\nd\te')
+  })
+
+  it('trims trailing whitespace per line and collapses blank runs', () => {
+    expect(sanitizePane('  line1   \n\n\n   \nline2  ')).toBe('line1\n\nline2')
+  })
+})
+
 describe('formatProjects / formatTerminals', () => {
   it('renders projects with location and terminal counts', () => {
     expect(formatProjects(fakeAdapter().listProjects())).toBe(
@@ -108,6 +123,10 @@ describe('pairing gate', () => {
     const res = handleCommand(c, fakeAdapter())
     expect(pairedLog).toEqual([7])
     expect(res.replies[0]).toContain('paired')
+    // ONE message: the help is folded into the same reply, no blank bubble.
+    expect(res.replies.length).toBe(1)
+    expect(res.replies[0]).toContain('/projects')
+    expect(res.replies[0]).not.toEqual('')
   })
 
   it('does not pair on empty allowlist until /start', () => {
