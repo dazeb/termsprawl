@@ -246,6 +246,9 @@ export interface AppSettings {
    * it in dev). Allowed chats = the paired phone(s); empty list = the first
    * chat to /start becomes the owner. */
   telegram?: TelegramSettings
+  /** Chat driver v2 (11.4): default provider/model + stored API keys (local
+   * machine only; env TERMSPRAWL_PROVIDER_KEY_<ID> overrides per key). */
+  chat?: ChatSettings
 }
 
 /** Telegram bot settings (Phase 11 Task 11.3). */
@@ -253,6 +256,48 @@ export interface TelegramSettings {
   enabled?: boolean
   token?: string
   allowedChatIds?: string[]
+}
+
+/** API key for one configured provider (Phase 11 Task 11.4). Stored in
+ * settings.json on this machine only (same decision as the Telegram token);
+ * env TERMSPRAWL_PROVIDER_KEY_<ID uppercased> overrides it. Never committed. */
+export interface ProviderKey {
+  providerId: string
+  key: string
+}
+
+/** Chat driver v2 settings: which provider/model new chats default to, plus
+ * the stored keys. Keys live here (local machine only), never in project
+ * files. */
+export interface ChatSettings {
+  defaultProvider?: string
+  defaultModel?: string
+  keys?: ProviderKey[]
+  /** Optional per-model price overrides ($/Mtok) for the cost chip. */
+  priceOverrides?: Record<string, { in: number; out: number }>
+}
+
+/** A chat node's persisted state (Phase 11 Task 11.4). History rides in node
+ * data, so it survives restarts via the project file (serialized with the
+ * conversation's byte cap). */
+export interface ChatNodeData {
+  kind: 'chat'
+  provider?: string
+  model?: string
+  /** Slash/system preamble for this chat. */
+  system?: string
+  messages: Array<{
+    id: string
+    role: 'user' | 'assistant' | 'system' | 'tool'
+    content: string
+    thinking?: string
+    stopped?: boolean
+    usage?: { inputTokens: number; outputTokens: number }
+    model?: string
+    ts: number
+  }>
+  /** Running total for the cost chip (usd + estimated flag). */
+  cost?: { usd: number; estimated: boolean }
 }
 
 /** An A2A (agent-to-agent) peer the user may route tasks to. */

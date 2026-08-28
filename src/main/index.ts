@@ -27,6 +27,7 @@ import { FILE_PROTOCOL, fromFilePreviewUrl } from '../shared/file-url'
 import { PtyManager } from '../core/pty-manager'
 import { shouldNotify, type AgentStatus } from '../shared/agent-status'
 import { createTelegramBot, type TelegramBot } from './telegram/bot'
+import { createChatRuntime, type ChatRuntime } from './chat'
 import { WorkspaceStore } from '../core/workspace-store'
 import type { ProjectMeta } from '../core/workspace-files'
 import { deleteProjectAndDestroyTerminals } from '../core/project-deletion'
@@ -257,6 +258,52 @@ function syncAgentBrowserControl(): void {
   } else {
     stopBrowserControlEndpoints()
   }
+}
+
+// ---------------------------------------------------------------------------
+// Chat driver v2 (Phase 11 Task 11.4). Provider/key resolution: settings.chat
+// holds keys locally (never committed); env TERMSPRAWL_PROVIDER_KEY_<ID>
+// wins per provider — same rule as the Telegram token.
+// ---------------------------------------------------------------------------
+const chatRuntime: ChatRuntime = createChatRuntime({
+  resolveProvider: (req) => {
+    const chat = appSettings.current.chat
+    const providers = appSettings.current.apiProviders ?? []
+    const wanted = req.provider ?? chat?.defaultProvider ?? providers[0]?.id
+    const provider = providers.find((p) => p.id === wanted || p.name === wanted)
+    if (!provider) return null
+    const envKey = process.env[`TERMSPRAWL_PROVIDER_KEY_${provider.id.toUpperCase()}`]
+    const storedKey = chat?.keys?.find((k) => k.providerId === provider.id)?.key
+    const apiKey = envKey || storedKey || ''
+    if (!apiKey) return null
+    const isAnthropic = /anthropic/i.test(provider.baseUrl) || /anthropic/i.test(provider.name)
+    return {
+      id: provider.id,
+      baseUrl: provider.baseUrl,
+      apiKey,
+      api: isAnthropic ? 'anthropic' : 'openai',
+      model: req.model ?? chat?.defaultModel
+    }
+  },
+  broadcast: (nodeId, event) => platform.broadcast(`chat:event:${nodeId}`, event),
+  log: (msg) => console.log(`[chat] ${msg}`)
+})
+
+function registerChatIpc(): void {
+  ipcMain.handle(IPC.chatSend, (_event, req: { nodeId: string; messages: unknown[]; model?: string; provider?: string }) => {
+    if (typeof req?.nodeId !== 'string' || !Array.isArray(req.messages)) {
+      return Promise.resolve({ ok: false, error: 'bad chat request' })
+    }
+    return chatRuntime.send(req as Parameters<ChatRuntime['send']>[0])
+  })
+  ipcMain.handle(IPC.chatStop, (_event, nodeId: string) => {
+    if (typeof nodeId === 'string') chatRuntime.stop(nodeId)
+  })
+  ipcMain.handle(IPC.chatApprove, (_event, nodeId: string, callId: string, decision: 'approve' | 'deny') => {
+    if (typeof nodeId === 'string' && typeof callId === 'string' && (decision === 'approve' || decision === 'deny')) {
+      chatRuntime.approve(nodeId, callId, decision)
+    }
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -917,6 +964,7 @@ void app.whenReady().then(async () => {
   registerAnnouncementIpc()
   registerCloudIpc()
   registerBrowserIpc()
+  registerChatIpc()
   if (app.isPackaged) void fetchLatestAnnouncement()
 
   for (const entry of workspaceStore.pendingTerminalNodeCleanup()) {

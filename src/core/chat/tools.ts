@@ -32,6 +32,9 @@ export interface ChatLoopHooks {
   onEvent(e: ChatEvent): void
   requestApproval(call: ChatToolCall): Promise<ApprovalDecision>
   maxIterations?: number
+  /** Abort signal: when fired, the current stream is cut and the loop returns
+   * with stopReason 'end_turn' (the stopped flag lands on the message). */
+  signal?: AbortSignal
 }
 
 export interface ChatLoopResult {
@@ -103,7 +106,7 @@ export async function runChatLoop(
     const pending: ChatToolCall[] = []
     let stopped = false
 
-    for await (const ev of driver.stream({ model, messages: working, tools })) {
+    for await (const ev of driver.stream({ model, messages: working, tools, signal: hooks.signal })) {
       try {
         hooks.onEvent(ev)
       } catch {
