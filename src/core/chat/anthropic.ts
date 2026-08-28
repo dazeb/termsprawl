@@ -31,17 +31,19 @@ export function toAnthropicBody(messages: ChatMessage[], system?: string): {
   messages: Array<{ role: 'user' | 'assistant'; content: string }>
 } {
   let sys = system
-  const rest: ChatMessage[] = []
+  const rest: Array<{ role: 'user' | 'assistant'; content: string }> = []
   for (const m of messages) {
     if (m.role === 'system' && sys === undefined && rest.length === 0) {
       sys = m.content
       continue
     }
-    if (m.role === 'user' || m.role === 'assistant') rest.push(m)
+    if (m.role === 'user' || m.role === 'assistant') {
+      rest.push({ role: m.role, content: m.content })
+    }
   }
   return {
     system: sys,
-    messages: rest.map((m) => ({ role: m.role, content: m.content }))
+    messages: rest
   }
 }
 
