@@ -36,12 +36,20 @@ sprawls, nothing hides in tabs.
 
 ## Status
 
-Actively developed. Phases 0–7 of [PLAN.md](PLAN.md) are shipped (scaffold,
-terminal nodes, canvas, tmux continuity, projects/persistence, sticky/group/
-editor/diff nodes, agents with context links and managed accounts); Phase 8
-(source control panel with git status, staging, commits, branches, sync, and
-worktrees) is shipped through 8.3. Phase 13 (embedded browser nodes with
-opt-in agent control) is shipped. Current version: **0.9.1**.
+Actively developed. Phases 0–10 of [PLAN.md](PLAN.md) are shipped:
+
+- **Desktop app** — terminal canvas, tmux session continuity, projects &
+  persistence, sticky/group/editor/diff nodes, agents with context links
+  and managed accounts, source control (git status, staging, commits,
+  branches, sync, worktrees, AI commit messages), SSH remote projects,
+  embedded browser nodes (opt-in agent control via CDP), Telegram bot v2,
+  and auto-update with announcements.
+- **Server Edition** — the same app runs in a browser via plain `node:http`
+  + WebSocket RPC. Serves the built renderer, tunnels all core services
+  (terminals, projects, git, agent hooks, file tree), with auto-save and
+  shutdown safety.
+
+Current version: **0.9.1**.
 
 Linux only — AppImage and `.deb` artifacts. No macOS support, by design.
 
@@ -72,6 +80,20 @@ pnpm test           # vitest suite (unit + integration)
 pnpm run build      # production build into out/
 pnpm run dist       # AppImage + .deb into dist/
 ```
+
+### Server Edition
+
+The app also runs as a plain Node web server (no Electron). Build and start:
+
+```bash
+pnpm run build && pnpm run build:server
+TERMSPRAWL_SERVER_ENTRY=1 PORT=3110 node out/server/index.js
+# → http://localhost:3110
+```
+
+The Server Edition serves the same UI, tunnels all core services (terminals,
+projects, git, agent hooks, file tree) over a WebSocket RPC shim, and
+persists state to `~/.config/termsprawl/` (or `$TERMSPRAWL_DATA`).
 
 ## Docs
 
