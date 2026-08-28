@@ -28,6 +28,7 @@ import { PtyManager } from '../core/pty-manager'
 import { shouldNotify, type AgentStatus } from '../shared/agent-status'
 import { createTelegramBot, type TelegramBot } from './telegram/bot'
 import { createChatRuntime, type ChatRuntime } from '../core/chat/runtime'
+import { createRelayRuntime, type RelayRuntime } from './relay'
 import { WorkspaceStore } from '../core/workspace-store'
 import type { ProjectMeta } from '../core/workspace-files'
 import { deleteProjectAndDestroyTerminals } from '../core/project-deletion'
@@ -304,6 +305,27 @@ function registerChatIpc(): void {
       chatRuntime.approve(nodeId, callId, decision)
     }
   })
+}
+
+// Relay seam (Phase 11 Task 11.2) — nothing dials the relay unless asked.
+const relayRuntime: RelayRuntime = createRelayRuntime({
+  resolveTarget: () => {
+    const relay = appSettings.current.relay
+    if (!relay?.url) return null
+    return {
+      url: relay.url,
+      role: relay.role === 'client' ? 'client' : 'host',
+      invite: relay.invite,
+      token: process.env.TERMSPRAWL_RELAY_GITHUB_TOKEN
+    }
+  },
+  broadcast: (channel, payload) => platform.broadcast(channel, payload),
+  log: (msg) => console.log(`[relay] ${msg}`)
+})
+
+function registerRelayIpc(): void {
+  ipcMain.handle(IPC.relayStatus, () => ({ state: relayRuntime.state(), error: relayRuntime.lastError() }))
+  ipcMain.handle(IPC.relayConnect, () => relayRuntime.connect())
 }
 
 // ---------------------------------------------------------------------------
@@ -965,6 +987,7 @@ void app.whenReady().then(async () => {
   registerCloudIpc()
   registerBrowserIpc()
   registerChatIpc()
+  registerRelayIpc()
   if (app.isPackaged) void fetchLatestAnnouncement()
 
   for (const entry of workspaceStore.pendingTerminalNodeCleanup()) {

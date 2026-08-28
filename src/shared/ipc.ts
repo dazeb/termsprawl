@@ -99,7 +99,12 @@ export const IPC = {
   chatSend: 'chat:send',
   chatStop: 'chat:stop',
   chatApprove: 'chat:approve',
-  chatEvent: 'chat:event'
+  chatEvent: 'chat:event',
+
+  // Relay seam (Phase 11 Task 11.2). Minimal surface: the app can dial the
+  // relay and report status; pairing UI + terminal frames are follow-ups.
+  relayConnect: 'relay:connect',
+  relayStatus: 'relay:status'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

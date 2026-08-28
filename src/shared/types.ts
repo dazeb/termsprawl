@@ -249,6 +249,9 @@ export interface AppSettings {
   /** Chat driver v2 (11.4): default provider/model + stored API keys (local
    * machine only; env TERMSPRAWL_PROVIDER_KEY_<ID> overrides per key). */
   chat?: ChatSettings
+  /** Relay service (11.2): the URL to dial + role. Nothing connects unless
+   * the user asks (relay:connect IPC). */
+  relay?: { url?: string; role?: 'host' | 'client'; invite?: string }
 }
 
 /** Telegram bot settings (Phase 11 Task 11.3). */
