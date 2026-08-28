@@ -533,6 +533,34 @@ concepts, not a porting source.*
 ### Task 11.2: Relay service v2
 - Build standalone: `relay/` — GitHub device flow, host sessions, invite
   quotas, E2E relay frames. Its own README.
+- **Status: DONE (2026-08-28, live-verified).** Standalone zero-dep service
+  (`relay/`, plain ESM `.mjs`, only dep `ws`) on branch `feature/relay-service`:
+  - `store.mjs` — atomic JSON store (tmp+rename; crash-safe), invite model
+    (8-char codes, expiry/revocation/max-uses, per-host active-invite quota).
+  - `github-auth.mjs` — device flow (injectable fetch + sleep): pending/slow_down
+    back-off, login lookup; only the SHA-256 token hash is stored, never the token.
+  - `crypto.mjs` — X25519 keypairs + ECDH→HKDF-SHA256 shared keys + AES-256-GCM
+    envelopes with the sender id as AAD (tamper/wrong-peer → throw; 1000-seal
+    nonce uniqueness tested).
+  - `hub.mjs` — WS hub: host sessions (token-hash auth, replacement on
+    re-login), client pairing via invites (typed errors EXPIRED/REVOKED/
+    EXHAUSTED/UNKNOWN), peers frames carrying each side's pub key, opaque
+    `{from,to,env}` routing, offline queue (cap 100, flush on resume),
+    direct-path hint pass-through, metrics counters.
+  - `admin.mjs` + `index.mjs` — /healthz (open), /admin/stats + invite
+    revocation + user delete (Bearer token), env config (PORT, RELAY_DATA_DIR,
+    GITHUB_CLIENT_ID/SECRET, ADMIN_TOKEN), RELAY_DEV_AUTH=1 dev bypass that
+    hard-refuses in production and prefixes dev logins; binds 127.0.0.1.
+  - `README.md` — protocol, security model (relay sees ciphertext only), ops.
+  - **Verified live** (`/tmp/relay-e2e2.mjs` against a real booted relay):
+    invite mint → host register → client redeem+pair (pub keys exchanged via
+    peers frames) → E2E envelope round-trip decrypted with the derived key →
+    stats counters advanced → **relay stdout contains no plaintext** (AAD binds
+    the sender id; the log only ever sees routing metadata). 64 relay tests
+    green alongside the app's 506.
+  - Follow-ups: app-side client seam (`core/relay-client`), in-app pairing UI,
+    terminal frames over the tunnel, direct-path connection actually dialing
+    the offered endpoint.
 
 ### Task 11.3: Telegram bot v2
 - Build local bot (no relay): commands: /terminals /attach /send /help.
