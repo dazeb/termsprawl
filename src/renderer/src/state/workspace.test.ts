@@ -78,6 +78,52 @@ describe('sticky nodes', () => {
     expect(restored.style).toEqual({ width: 900, height: 500 })
   })
 
+  it('synthesizes a default style for a legacy terminal saved without one', () => {
+    // A terminal node persisted before the style fix (or any agent/druk preset
+    // created before it) has width/height but NO style object. Deserializing it
+    // must synthesize a style, or React Flow sizes the node from its collapsed
+    // content — the "terminals minimise to the left" bug.
+    const restored = deserializeNodes([
+      {
+        id: 'legacy-term',
+        type: 'terminal',
+        position: { x: 120, y: 140 },
+        width: 720,
+        height: 420,
+        data: { kind: 'terminal', title: 'claude', command: 'claude' }
+      }
+    ])[0]
+    expect(restored.type).toBe('terminal')
+    expect(restored.style).toEqual({ width: 720, height: 420 })
+    // A resized legacy node keeps its saved size in the synthesized style.
+    const resized = deserializeNodes([
+      {
+        id: 'legacy-resized',
+        type: 'terminal',
+        position: { x: 0, y: 0 },
+        width: 960,
+        height: 540,
+        data: { kind: 'terminal', title: 'codex', command: 'codex' }
+      }
+    ])[0]
+    expect(resized.style).toEqual({ width: 960, height: 540 })
+  })
+
+  it('every terminal preset carries a style so it cannot collapse on the canvas', () => {
+    for (const node of [
+      createTerminalNode('/tmp'),
+      createDrukNode('/tmp'),
+      createAgentNode('claude', '/tmp'),
+      createResumeAgentNode('claude', 'nOld', '/tmp'),
+      createAgentLoginNode('claude auth login', '/tmp')
+    ]) {
+      expect(node.type).toBe('terminal')
+      expect(node.style).toBeDefined()
+      expect(node.style?.width).toBeGreaterThan(0)
+      expect(node.style?.height).toBeGreaterThan(0)
+    }
+  })
+
   it('creates a druk preset terminal that persists its command', () => {
     const node = createDrukNode('/repo')
     expect(node.type).toBe('terminal')

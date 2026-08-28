@@ -90,6 +90,11 @@ export type SprawlNodeData =
 
 let counter = 0
 const TERMINAL_DIMENSIONS = { width: 720, height: 420 } as const
+/** The inline style every terminal node must carry. React Flow sizes the node
+ * DOM element from `style.width/height` (NOT the top-level `width`/`height`,
+ * which are measured dimensions). A terminal without this collapses to a
+ * narrow left column — the "terminals minimise to the left" bug. */
+const TERMINAL_NODE_STYLE = { width: TERMINAL_DIMENSIONS.width, height: TERMINAL_DIMENSIONS.height } as const
 
 function nextId(): string {
   counter += 1
@@ -104,7 +109,7 @@ export function createTerminalNode(cwd?: string): Node<TerminalNodeData> {
     // Explicit wrapper size (style) — the NodeResizer updates THIS, and the
     // node root fills it (width/height 100%). Without it the root's old fixed
     // px size kept the content from actually resizing (learned 2026-08-27).
-    style: { width: TERMINAL_DIMENSIONS.width, height: TERMINAL_DIMENSIONS.height },
+    style: { ...TERMINAL_NODE_STYLE },
     position: { x: 60 + Math.random() * 240, y: 60 + Math.random() * 160 },
     data: { kind: 'terminal', title: 'shell', cwd }
   }
@@ -118,6 +123,7 @@ export function createDrukNode(cwd?: string): Node<TerminalNodeData> {
     id: nextId(),
     type: 'terminal',
     ...TERMINAL_DIMENSIONS,
+    style: { ...TERMINAL_NODE_STYLE },
     position: { x: 60 + Math.random() * 240, y: 60 + Math.random() * 160 },
     data: {
       kind: 'terminal',
@@ -148,6 +154,7 @@ export function createAgentNode(agentId: AgentId, cwd?: string): Node<TerminalNo
     id,
     type: 'terminal',
     ...TERMINAL_DIMENSIONS,
+    style: { ...TERMINAL_NODE_STYLE },
     position: { x: 60 + Math.random() * 240, y: 60 + Math.random() * 160 },
     data: {
       kind: 'terminal',
@@ -172,6 +179,7 @@ export function createResumeAgentNode(
     id: nextId(),
     type: 'terminal',
     ...TERMINAL_DIMENSIONS,
+    style: { ...TERMINAL_NODE_STYLE },
     position: { x: 60 + Math.random() * 240, y: 60 + Math.random() * 160 },
     data: {
       kind: 'terminal',
@@ -199,6 +207,7 @@ export function createAgentLoginNode(command: string, cwd?: string): Node<Termin
     id: nextId(),
     type: 'terminal',
     ...TERMINAL_DIMENSIONS,
+    style: { ...TERMINAL_NODE_STYLE },
     position: { x: 60 + Math.random() * 240, y: 60 + Math.random() * 160 },
     data: { kind: 'terminal', title: 'claude login', cwd, command }
   }
@@ -520,11 +529,19 @@ export function deserializeNodes(serialized: SerializedNode[]): Node<SprawlNodeD
         data: { kind: 'browser', url: 'about:blank', ...data } as BrowserNodeData
       }
     }
+    // Terminal (default branch). The node's DOM size comes from `style.width/
+    // height` — NOT the top-level width/height (React Flow's measured dims). A
+    // terminal rehydrated without a style (legacy saved nodes, or any preset
+    // created before the style fix) collapses to a narrow left column, so
+    // synthesize a default style when one is missing.
+    const width = n.width ?? TERMINAL_DIMENSIONS.width
+    const height = n.height ?? TERMINAL_DIMENSIONS.height
     return {
       ...base,
       ...TERMINAL_DIMENSIONS,
       ...(n.width != null ? { width: n.width } : {}),
       ...(n.height != null ? { height: n.height } : {}),
+      style: n.style ? { ...n.style } : { width, height },
       data: { kind: 'terminal', title: 'shell', linkedIds: [], ...data } as TerminalNodeData
     }
   })
