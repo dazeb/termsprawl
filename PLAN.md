@@ -592,6 +592,19 @@ concepts, not a porting source.*
 
 ### Task 12.3: CI
 - GitHub Actions: typecheck + test + build on PR; release on tag.
+- **Status: DONE with a caveat (2026-08-28).** Gitea Actions pipeline was
+  already live (`.gitea/workflows/ci.yml`, commits 45c1732/84ba174): verify job
+  (install/typecheck/test/build) + release job on `v*` tags publishing to BOTH
+  the Gitea release and GitHub Releases (GH_TOKEN secret; runner = CT 109
+  actrunner). This task added the GitHub Actions mirror
+  (`.github/workflows/ci.yml`, PR #6): same verify job + tag release publishing
+  the three assets (AppImage/.deb/latest-linux.yml). **Caveat:** GitHub Actions
+  runs do NOT trigger on this repo/account (0 runs, 0 actions check-suites,
+  while third-party deploy apps respond — Actions disabled at the account or
+  org level for dazeb). The workflow is committed and correct; PR #6 stays open
+  until the user enables Actions at https://github.com/settings/actions (or the
+  org settings), after which the PR check will run on its next synchronize.
+  Release publishing remains guaranteed by the Gitea pipeline.
 
 ---
 
