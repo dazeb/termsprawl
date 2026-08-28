@@ -90,6 +90,7 @@ function normalizeChat(raw: unknown): ChatSettings | undefined {
           typeof (k as ProviderKey).key === 'string'
       )
       .map((k) => ({ providerId: k.providerId, key: k.key }))
+    if (out.keys && out.keys.length === 0) delete out.keys
   }
   if (obj.priceOverrides && typeof obj.priceOverrides === 'object') {
     const overrides: Record<string, { in: number; out: number }> = {}
