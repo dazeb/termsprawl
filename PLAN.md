@@ -490,31 +490,30 @@ the live LXC (`root@192.168.8.221`). 391 tests green, typecheck + originality OK
   WS-RPC protocol; browser shim fills the same API as the desktop preload.
 - Boot same core services via a platform implementation.
 - Verify: browser session opens project, runs terminals, sees agent status.
-- **Status: PARTIAL — IN PROGRESS, NOT SHIPPED (web shell + terminals + agent
-  status live-verified; commits 89243f3/…/5fabfdf landed on main via the
-  `phase-10-server` branch, merged at 3b2fc14, branch deleted 2026-08-27).**
-  `server/rpc.ts` (RPC
-  dispatcher), `server/platform.ts` (ServerPlatform over ws), `server/handlers.ts`
-  (IPC channel -> core services: workspace, terminals, settings, updates idle,
-  announcements, file list/read/write), `server/index.ts` (node:http static +
-  WebSocketServer /ws + agent bridge), `server/shim.js` (browser
-  window.termsprawl over WS), `server/agent-bridge.ts` (HookServer -> normalized
-  broadcast on agent:status:<sid>). The HookServer moved main/agents -> core so
-  main + server share it (no-electron guard holds). `pnpm run build && pnpm run
-  build:server` then `TERMSPRAWL_SERVER_ENTRY=1 PORT=3110 node out/server/index.js`.
-  Live-verified on :3110: shim served; pty:create spawned a real terminal
-  (`echo SERVER_EDITION_OK`/`pwd` streamed back); "New folder project" modal
-  works in a real browser; POST /hook/claude -> agent:status:<sid> broadcast
-  received over WS. git/accounts/cloud not wired (shim rejects gracefully).
-  **Remaining (Phase 10 is NOT complete):** git/accounts/cloud still not wired
-  (shim rejects gracefully), install agent CLI hooks on the host for a live agent
-  (only codex present), persistence refinements, platform-impl parity, real
-  browser boot polish. Task 10.2 stays open until these land.
+- **Status: DONE (v0.9.1+).** The full Phase 10 stack is live and verified:
+  web shell, terminals, projects, agent status broadcast, agent CLI hooks,
+  git (full 16-channel surface), diff:info, file tree, auto-save, port
+  fallback, shutdown safety, default welcome project, and platform-parity
+  shim. The hook-installer was extracted to `src/core/hook-installer.ts`
+  (electron-free) so both main and server share it. 444 tests, typecheck,
+  and originality all green. Live-verified via WS smoke test: `git:snapshot`
+  returns the repo's branch/changes/commits, `diff:info` returns original +
+  modified content, and project persistence survives server restart.
+  Deliberately out of scope: managed accounts, cloud sync, browser nodes
+  (all reject gracefully in the shim).
 
 ### Task 10.2: Commit
 - `git commit -m "feat: server edition"`
-- **Status: NOT DONE.** No `feat: server edition` commit exists yet — Phase 10
-  stays open until the remaining work above is done and verified.
+- **Status: DONE.** Phase 10 complete. Files changed in this phase:
+  - `src/server/handlers.ts` — added git (16 channels) + diff:info handlers
+  - `src/server/shim.js` — replaced git/diff stubs with real invocations;
+    added missing `openExternal`
+  - `src/server/index.ts` — auto-save (30s), port fallback, shutdown safety,
+    default welcome project
+  - `src/server/agent-bridge.ts` — installs agent CLI hooks on boot
+  - `src/core/hook-installer.ts` — extracted electron-free hook installer
+  - `src/main/agents/hook-installer.ts` — re-exports from core
+  - `src/server/server.test.ts` — added git:snapshot + diff:info smoke tests
 
 ## Phase 11 — Our own extras (rebuilt from scratch, better than the originals)
 

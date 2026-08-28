@@ -14,18 +14,22 @@ import { PtyManager } from '../core/pty-manager'
 import { loadAppSettings, saveAppSettings } from '../core/app-settings'
 import { idleUpdateStatus } from '../shared/update-status'
 import { IPC } from '../shared/ipc'
+import { diffInfo } from '../core/git-service'
+import {
+  findRepoRoot, currentBranch, remoteUrl, syncState, gitStatus,
+  listBranches, recentCommits, ghAuthed, stageChanges, unstageChanges,
+  discardChanges, commitChanges, createBranch, checkoutBranch,
+  push as gitPush, pull as gitPull, publish as gitPublish,
+  listWorktrees, addWorktree, removeWorktree
+} from '../core/git-service'
+import { generateCommitMessage } from '../core/commit-message'
 import type { RpcHandler } from './rpc'
 import type { CorePlatform } from '../core/platform'
 import type {
-  AppSettings,
-  DirEntry,
-  DirListResult,
-  FileReadResult,
-  FileWriteResult,
-  ProjectRemote,
-  ProjectSettings,
-  PtyCreateRequest,
-  SerializedNode
+  AppSettings, DirEntry, DirListResult, FileReadResult, FileWriteResult,
+  ProjectRemote, ProjectSettings, PtyCreateRequest, SerializedNode,
+  GitPanelSnapshot, GitResult, GitTarget, DiffBase, DiffInfoResult,
+  CommitMessageResult, GitWorktree
 } from '../shared/types'
 
 /** Version of the app served. Read from package.json at boot, fallback if absent. */
@@ -137,6 +141,141 @@ export function buildHandlers(platform: CorePlatform): Record<string, RpcHandler
       } catch (error) {
         return { error: { code: 'IO', message: String(error) } }
       }
+    },
+
+    // -- Source control (git) + diff -------------------------------------------
+
+    [IPC.diffInfo]: (args): Promise<DiffInfoResult> => {
+      const [path, base] = args
+      return diffInfo(String(path), (base as DiffBase | undefined) ?? 'HEAD') as Promise<DiffInfoResult>
+    },
+
+    [IPC.gitSnapshot]: async (args): Promise<GitPanelSnapshot> => {
+      const [target] = args as [GitTarget]
+      const cwd = target?.cwd ?? ''
+      if (!cwd || !existsSync(cwd)) {
+        return {
+          cwd: cwd || null, branch: '', remote: null,
+          sync: { upstream: null, ahead: 0, behind: 0 },
+          changes: [], branches: [], commits: [], ghAuthed: false
+        }
+      }
+      const root = findRepoRoot(cwd)
+      if (!root) {
+        return {
+          cwd, branch: '', remote: null,
+          sync: { upstream: null, ahead: 0, behind: 0 },
+          changes: [], branches: [], commits: [], ghAuthed: false
+        }
+      }
+      const [branch, remote, sync, changes, branches, commits, authed] = await Promise.all([
+        currentBranch(root),
+        remoteUrl(root),
+        syncState(root),
+        gitStatus(root),
+        listBranches(root),
+        recentCommits(root, 20),
+        ghAuthed()
+      ])
+      return { cwd, branch, remote, sync, changes, branches, commits, ghAuthed: authed }
+    },
+
+    [IPC.gitStage]: (args): Promise<GitResult> => {
+      const [target, paths] = args as [GitTarget, string[]]
+      const root = resolveRepoRoot(target)
+      if (!root) return Promise.resolve({ code: 1, stdout: '', stderr: 'no project folder' })
+      return stageChanges(root, paths)
+    },
+
+    [IPC.gitUnstage]: (args): Promise<GitResult> => {
+      const [target, paths] = args as [GitTarget, string[]]
+      const root = resolveRepoRoot(target)
+      if (!root) return Promise.resolve({ code: 1, stdout: '', stderr: 'no project folder' })
+      return unstageChanges(root, paths)
+    },
+
+    [IPC.gitDiscard]: (args): Promise<GitResult> => {
+      const [target, paths] = args as [GitTarget, string[]]
+      const root = resolveRepoRoot(target)
+      if (!root) return Promise.resolve({ code: 1, stdout: '', stderr: 'no project folder' })
+      return discardChanges(root, paths)
+    },
+
+    [IPC.gitCommit]: (args): Promise<GitResult> => {
+      const [target, message] = args as [GitTarget, string]
+      const root = resolveRepoRoot(target)
+      if (!root) return Promise.resolve({ code: 1, stdout: '', stderr: 'no project folder' })
+      return commitChanges(root, message)
+    },
+
+    [IPC.gitCommitMessage]: (args): Promise<CommitMessageResult> => {
+      const [target] = args as [GitTarget]
+      const root = resolveRepoRoot(target)
+      if (!root) return Promise.resolve({ ok: false, error: 'no project folder' })
+      return generateCommitMessage(root)
+    },
+
+    [IPC.gitCreateBranch]: (args): Promise<GitResult> => {
+      const [target, name] = args as [GitTarget, string]
+      const root = resolveRepoRoot(target)
+      if (!root) return Promise.resolve({ code: 1, stdout: '', stderr: 'no project folder' })
+      return createBranch(root, name)
+    },
+
+    [IPC.gitCheckout]: (args): Promise<GitResult> => {
+      const [target, name] = args as [GitTarget, string]
+      const root = resolveRepoRoot(target)
+      if (!root) return Promise.resolve({ code: 1, stdout: '', stderr: 'no project folder' })
+      return checkoutBranch(root, name)
+    },
+
+    [IPC.gitPush]: (args): Promise<GitResult> => {
+      const [target] = args as [GitTarget]
+      const root = resolveRepoRoot(target)
+      if (!root) return Promise.resolve({ code: 1, stdout: '', stderr: 'no project folder' })
+      return gitPush(root)
+    },
+
+    [IPC.gitPull]: (args): Promise<GitResult> => {
+      const [target] = args as [GitTarget]
+      const root = resolveRepoRoot(target)
+      if (!root) return Promise.resolve({ code: 1, stdout: '', stderr: 'no project folder' })
+      return gitPull(root)
+    },
+
+    [IPC.gitPublish]: (args): Promise<GitResult> => {
+      const [target] = args as [GitTarget]
+      const root = resolveRepoRoot(target)
+      if (!root) return Promise.resolve({ code: 1, stdout: '', stderr: 'no project folder' })
+      return gitPublish(root)
+    },
+
+    [IPC.gitWorktrees]: (args): Promise<GitWorktree[]> => {
+      const [target] = args as [GitTarget]
+      const root = resolveRepoRoot(target)
+      if (!root) return Promise.resolve([])
+      return listWorktrees(root)
+    },
+
+    [IPC.gitWorktreeAdd]: (args): Promise<GitResult> => {
+      const [target, path, branch] = args as [GitTarget, string, string | undefined]
+      const root = resolveRepoRoot(target)
+      if (!root) return Promise.resolve({ code: 1, stdout: '', stderr: 'no project folder' })
+      return addWorktree(root, path, branch)
+    },
+
+    [IPC.gitWorktreeRemove]: (args): Promise<GitResult> => {
+      const [target, worktreePath, force] = args as [GitTarget, string, boolean | undefined]
+      const root = resolveRepoRoot(target)
+      if (!root) return Promise.resolve({ code: 1, stdout: '', stderr: 'no project folder' })
+      return removeWorktree(root, worktreePath, force ?? false)
     }
   }
+}
+
+/** Resolve a GitTarget to a local repo root, or null when there's no folder or repo. */
+function resolveRepoRoot(target: GitTarget | undefined | null): string | null {
+  const cwd = target?.cwd
+  if (!cwd || !existsSync(cwd)) return null
+  return findRepoRoot(cwd)
 }

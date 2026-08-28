@@ -71,8 +71,24 @@ describe('server handlers', () => {
   })
 
   it('an unhandled channel rejects with a clear error', async () => {
-    const res = await dispatch({ id: 6, method: 'git:snapshot', args: ['/x'] })
+    const res = await dispatch({ id: 6, method: 'does:not-exist', args: ['/x'] })
     expect(res?.ok).toBe(false)
     expect(res?.error).toContain('unhandled')
+  })
+
+  it('git:snapshot returns a snapshot for a known repo', async () => {
+    const res = await dispatch({ id: 7, method: IPC.gitSnapshot, args: [{ cwd: process.cwd() }] })
+    expect(res?.ok).toBe(true)
+    const snap = res?.result as Record<string, unknown>
+    expect(typeof snap?.branch).toBe('string')
+    expect(Array.isArray(snap?.changes)).toBe(true)
+  })
+
+  it('diff:info returns a result for a known file', async () => {
+    const res = await dispatch({ id: 8, method: IPC.diffInfo, args: ['package.json', 'HEAD'] })
+    expect(res?.ok).toBe(true)
+    const info = res?.result as Record<string, unknown>
+    expect(typeof info?.original).toBe('string')
+    expect(typeof info?.modified).toBe('string')
   })
 })

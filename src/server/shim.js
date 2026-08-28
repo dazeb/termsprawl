@@ -72,6 +72,10 @@
 
   window.termsprawl = {
     appVersion: function () { return invoke('app:version') },
+    openExternal: function (url) {
+      window.open(url, '_blank')
+      return Promise.resolve()
+    },
 
     settings: {
       get: function () { return invoke('app:settings-get') },
@@ -159,9 +163,7 @@
     },
 
     diff: {
-      info: function () {
-        return Promise.resolve({ original: null, modified: null, error: { code: 'NO_REPO', message: 'not available in server edition' } })
-      }
+      info: function (path, base) { return invoke('diff:info', [path, base]) }
     },
 
     files: {
@@ -200,20 +202,20 @@
     },
 
     git: {
-      snapshot: notAvailable('source control'),
-      stage: notAvailable('source control'),
-      unstage: notAvailable('source control'),
-      discard: notAvailable('source control'),
-      commit: notAvailable('source control'),
-      commitMessage: notAvailable('source control'),
-      createBranch: notAvailable('source control'),
-      checkout: notAvailable('source control'),
-      push: notAvailable('source control'),
-      pull: notAvailable('source control'),
-      publish: notAvailable('source control'),
-      worktrees: function () { return Promise.resolve([]) },
-      worktreeAdd: notAvailable('source control'),
-      worktreeRemove: notAvailable('source control')
+      snapshot: function (target) { return invoke('git:snapshot', [target]) },
+      stage: function (target, paths) { return invoke('git:stage', [target, paths]) },
+      unstage: function (target, paths) { return invoke('git:unstage', [target, paths]) },
+      discard: function (target, paths) { return invoke('git:discard', [target, paths]) },
+      commit: function (target, message) { return invoke('git:commit', [target, message]) },
+      commitMessage: function (target) { return invoke('git:commit-message', [target]) },
+      createBranch: function (target, name) { return invoke('git:branch-create', [target, name]) },
+      checkout: function (target, name) { return invoke('git:branch-checkout', [target, name]) },
+      push: function (target) { return invoke('git:push', [target]) },
+      pull: function (target) { return invoke('git:pull', [target]) },
+      publish: function (target) { return invoke('git:publish', [target]) },
+      worktrees: function (target) { return invoke('git:worktrees', [target]) },
+      worktreeAdd: function (target, path, branch) { return invoke('git:worktree-add', [target, path, branch]) },
+      worktreeRemove: function (target, path, force) { return invoke('git:worktree-remove', [target, path, force]) }
     },
 
     cloud: {

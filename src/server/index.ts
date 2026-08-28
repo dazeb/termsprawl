@@ -10,12 +10,12 @@
 // renderer-side "not available" rejections in src/server/shim.js.
 
 import { createServer, type ServerResponse, type IncomingMessage } from 'node:http'
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync, existsSync, mkdirSync } from 'node:fs'
 import { extname, join, resolve } from 'node:path'
 import { WebSocketServer, WebSocket } from 'ws'
 import { ServerPlatform } from './platform'
 import { buildHandlers } from './handlers'
-import { createDispatcher } from './rpc'
+import { createDispatcher, type RpcDispatcher, type RpcResponse } from './rpc'
 import { startAgentBridge } from './agent-bridge'
 
 const PORT = Number(process.env.PORT ?? process.argv[2] ?? 3110)
@@ -39,6 +39,14 @@ const MIME: Record<string, string> = {
 
 function contentType(path: string): string {
   return MIME[extname(path)] ?? 'application/octet-stream'
+}
+
+/** Wrap the dispatcher to track dirty state for auto-save. */
+function trackDirty(dispatch: RpcDispatcher): { dispatch: RpcDispatcher; markDirty: () => void } {
+  return {
+    dispatch,
+    markDirty: () => { /* no-op at boot */ }
+  }
 }
 
 export async function createApp(): Promise<{
@@ -136,9 +144,104 @@ export async function createApp(): Promise<{
 if (process.env.TERMSPRAWL_SERVER_ENTRY === '1') {
   const app = await createApp()
   const { server, port, platform } = app
-  server.listen(port, () => {
-    console.log(`termsprawl Server Edition listening on http://localhost:${port}`)
-    console.log(`data dir: ${platform.userDataPath}`)
-    console.log(`agent hooks: ${app.hookUrl}`)
-  })
+  const dispatch = createDispatcher(buildHandlers(platform))
+
+  /** Invoke an RPC and return the response. */
+  function call(method: string, args: unknown[]): Promise<RpcResponse | null> {
+    return dispatch({ id: 0, method, args })
+  }
+
+  /** Invoke and pluck the result field. */
+  async function callResult(method: string, args: unknown[]): Promise<unknown> {
+    const res = await call(method, args)
+    return res?.ok ? res.result : undefined
+  }
+
+  // ---- Auto-save: track dirty state ----
+  let dirty = false
+  // Patch the WS message handler to flag dirty state. We do this by
+  // re-reading the handler: the wss is already set up in createApp, so
+  // we install a proxy on the first message handler. Simpler: just poll
+  // workspace:snapshot and save on any change.
+  const currentProjectNodes = new Map<string, unknown[]>()
+
+  // ---- Port fallback: try PORT, PORT+1, ... PORT+10 ----
+  function listenWithFallback(portNum: number, maxAttempts = 10): Promise<number> {
+    return new Promise((resolve, reject) => {
+      function tryPort(p: number, attempt: number) {
+        if (attempt > maxAttempts) {
+          console.error(`[server] could not bind any port in range ${portNum}-${portNum + maxAttempts}`)
+          process.exit(1)
+        }
+        server.once('error', (err: NodeJS.ErrnoException) => {
+          if (err.code === 'EADDRINUSE') {
+            console.log(`[server] port ${p} in use, trying ${p + 1}`)
+            tryPort(p + 1, attempt + 1)
+          } else {
+            reject(err)
+          }
+        })
+        server.listen(p, () => resolve(p))
+      }
+      tryPort(portNum, 0)
+    })
+  }
+
+  const actualPort = await listenWithFallback(PORT)
+  console.log(`termsprawl Server Edition listening on http://localhost:${actualPort}`)
+  console.log(`data dir: ${platform.userDataPath}`)
+  console.log(`agent hooks: ${app.hookUrl}`)
+
+  // ---- Default welcome project ----
+  const snap = await callResult('workspace:snapshot', [])
+  const snapObj = snap as { index?: { projects?: unknown[] }; currentProjectId?: string; projects?: Record<string, { nodes?: unknown[] }> } | undefined
+  if (snapObj?.index && Array.isArray(snapObj.index.projects) && snapObj.index.projects.length === 0) {
+    await call('project:add', ['Welcome', null, undefined])
+    console.log('[server] created default welcome project')
+  }
+
+  // ---- Auto-save interval ----
+  setInterval(async () => {
+    try {
+      const s = await callResult('workspace:snapshot', [])
+      const state = s as { currentProjectId?: string; projects?: Record<string, { nodes?: unknown[] }> } | undefined
+      if (state?.currentProjectId && state.projects?.[state.currentProjectId]) {
+        const projectId = state.currentProjectId
+        const nodes = state.projects[projectId]?.nodes ?? []
+        const prev = currentProjectNodes.get(projectId)
+        // Compare by JSON to detect changes (cheap for node arrays)
+        const key = JSON.stringify(nodes)
+        if (key !== JSON.stringify(prev)) {
+          currentProjectNodes.set(projectId, nodes)
+          await call('workspace:save-nodes', [projectId, nodes])
+        }
+      }
+    } catch {
+      // best-effort
+    }
+  }, 30_000)
+
+  // ---- Shutdown safety ----
+  async function shutdown() {
+    console.log('[server] shutting down...')
+    // Flush dirty state: save all projects
+    try {
+      const s = await callResult('workspace:snapshot', [])
+      const state = s as { index?: { projects?: Array<{ id: string }> }; projects?: Record<string, { nodes?: unknown[] }> } | undefined
+      if (state?.projects) {
+        for (const [pid, project] of Object.entries(state.projects)) {
+          if (project?.nodes) {
+            await call('workspace:save-nodes', [pid, project.nodes])
+          }
+        }
+      }
+    } catch {
+      // best-effort
+    }
+    await app.close()
+    process.exit(0)
+  }
+
+  process.on('SIGTERM', shutdown)
+  process.on('SIGINT', shutdown)
 }
