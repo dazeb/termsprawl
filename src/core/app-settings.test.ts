@@ -47,7 +47,8 @@ describe('app-settings', () => {
       defaultPermission: 'workspaceWrite',
       enterBehavior: 'queue',
       agentBrowserControl: false,
-      invertWheelZoom: false
+      invertWheelZoom: false,
+      telegram: { enabled: false, allowedChatIds: [] }
     }
     expect(saveAppSettings(dir, { autoDownloadUpdates: true })).toEqual(base)
     expect(loadAppSettings(dir)).toEqual(base)
@@ -187,5 +188,40 @@ describe('app-settings', () => {
   it('DEFAULT_APP_SETTINGS has the new empty arrays', () => {
     expect(DEFAULT_APP_SETTINGS.a2aPeers).toEqual([])
     expect(DEFAULT_APP_SETTINGS.apiProviders).toEqual([])
+  })
+
+  it('telegram defaults to disabled with an empty allowlist', () => {
+    expect(DEFAULT_APP_SETTINGS.telegram).toEqual({ enabled: false, allowedChatIds: [] })
+    expect(normalizeAppSettings(undefined).telegram).toEqual({ enabled: false, allowedChatIds: [] })
+  })
+
+  it('normalizes a full telegram config (enabled + token + allowlist)', () => {
+    const s = normalizeAppSettings({
+      telegram: {
+        enabled: true,
+        token: '123:secret-bot-token',
+        allowedChatIds: ['42', '7', 9, '', 'junk']
+      }
+    })
+    expect(s.telegram).toEqual({
+      enabled: true,
+      token: '123:secret-bot-token',
+      allowedChatIds: ['42', '7', 'junk']
+    })
+  })
+
+  it('telegram garbage is tolerated and never leaks a partial token', () => {
+    const s = normalizeAppSettings({ telegram: { enabled: 'yes', token: 7, allowedChatIds: '42' } })
+    expect(s.telegram).toEqual({ enabled: false, allowedChatIds: [] })
+    expect(JSON.stringify(s.telegram)).not.toContain('token')
+  })
+
+  it('telegram round-trips through disk', () => {
+    const dir = scratch()
+    saveAppSettings(dir, {
+      telegram: { enabled: true, token: '123:roundtrip', allowedChatIds: ['42'] }
+    })
+    const loaded = loadAppSettings(dir)
+    expect(loaded.telegram).toEqual({ enabled: true, token: '123:roundtrip', allowedChatIds: ['42'] })
   })
 })

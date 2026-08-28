@@ -241,6 +241,18 @@ export interface AppSettings {
   /** Browser home page for new browser nodes + new tabs (14.1). Unset =
    * the app default (DuckDuckGo). */
   browserHomeUrl?: string
+  /** Local Telegram bot (11.3). Token is the user's own bot secret — stored in
+   * settings.json on this machine only (env TERMSPRAWL_TELEGRAM_TOKEN overrides
+   * it in dev). Allowed chats = the paired phone(s); empty list = the first
+   * chat to /start becomes the owner. */
+  telegram?: TelegramSettings
+}
+
+/** Telegram bot settings (Phase 11 Task 11.3). */
+export interface TelegramSettings {
+  enabled?: boolean
+  token?: string
+  allowedChatIds?: string[]
 }
 
 /** An A2A (agent-to-agent) peer the user may route tasks to. */

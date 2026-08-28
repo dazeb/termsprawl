@@ -4,7 +4,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import type { AppSettings } from '../shared/types'
+import type { AppSettings, TelegramSettings } from '../shared/types'
 
 export type { AppSettings }
 
@@ -24,7 +24,9 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   // surface (CDP facade + /open server) is opt-in, off by default.
   agentBrowserControl: false,
   // Mousewheel zooms the canvas; scroll-up = zoom in by default.
-  invertWheelZoom: false
+  invertWheelZoom: false,
+  // Telegram bot is opt-in, off by default (token required to start).
+  telegram: { enabled: false, allowedChatIds: [] }
 }
 
 const SETTINGS_FILE = 'settings.json'
@@ -47,6 +49,22 @@ function asSafePeer(raw: unknown): { id?: string; label?: string; endpoint?: str
 
 function asSafeProvider(raw: unknown): { id?: string; name?: string; baseUrl?: string } {
   return raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+}
+
+/** Telegram settings normalization: booleans coerced, token kept only as a
+ * non-empty string, allowed chat ids filtered to strings. Garbage tolerated.
+ * Always returns the full default shape so a fresh file equals the defaults. */
+function normalizeTelegram(raw: unknown): TelegramSettings {
+  const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  const out: TelegramSettings = { enabled: false, allowedChatIds: [] }
+  if (obj.enabled === true) out.enabled = true
+  if (typeof obj.token === 'string' && obj.token.length > 0) out.token = obj.token
+  if (Array.isArray(obj.allowedChatIds)) {
+    out.allowedChatIds = obj.allowedChatIds.filter(
+      (id): id is string => typeof id === 'string' && id.length > 0
+    )
+  }
+  return out
 }
 
 export function normalizeAppSettings(raw: unknown): AppSettings {
@@ -125,6 +143,7 @@ export function normalizeAppSettings(raw: unknown): AppSettings {
       typeof obj.enterBehavior === 'string' && obj.enterBehavior.length > 0 ? obj.enterBehavior : 'queue',
     agentBrowserControl: obj.agentBrowserControl === true,
     invertWheelZoom: obj.invertWheelZoom === true,
+    telegram: normalizeTelegram(obj.telegram),
     ...(typeof obj.browserHomeUrl === 'string' && obj.browserHomeUrl.trim().length > 0
       ? { browserHomeUrl: obj.browserHomeUrl.trim() }
       : {})
