@@ -7,81 +7,86 @@ import type { ChatNodeData } from '../state/workspace'
 import { HelpBadge } from '../components/HelpBadge'
 import type { ChatEvent } from '../../../core/chat/types'
 
+type ChatMsg = ChatNodeData['messages'][number]
+
 // Phase 11 Task 11.4 — SDK chat node (not a PTY): streaming replies with
 // thinking blocks, a token chip, slash commands (/clear /model /system /cost),
-// and a stop button. All streaming work happens in main via
-// window.termsprawl.chat; this component is a thin transcript + input.
+// and a stop button. Streaming accumulates in LOCAL state (functional updates
+// — stream events can outrun React Flow re-renders); the transcript is written
+// into node data when a turn completes, so it persists with the project file.
+// All provider work happens in main via window.termsprawl.chat.
 export function ChatNode({ id, data, selected }: NodeProps<ChatNodeData>): React.JSX.Element {
   const { updateNodeData, closeNode } = useCanvas()
+  const [messages, setMessages] = useState<ChatMsg[]>(data.messages ?? [])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const streamingMsgId = useRef<string | null>(null)
+  const systemRef = useRef(data.system)
 
-  /** Patch the streaming assistant message (create when absent). */
-  const patchStreaming = (patch: { content?: string; thinking?: string; usage?: ChatNodeData['messages'][number]['usage']; model?: string }, record = false): void => {
-    const mid = streamingMsgId.current
-    if (!mid) return
-    const msgs = data.messages.map((m) =>
-      m.id === mid
-        ? {
-            ...m,
-            ...(patch.content !== undefined ? { content: m.content + patch.content } : {}),
-            ...(patch.thinking !== undefined ? { thinking: (m.thinking ?? '') + patch.thinking } : {}),
-            ...(patch.usage ? { usage: patch.usage } : {}),
-            ...(patch.model ? { model: patch.model } : {})
-          }
-        : m
-    )
+  /** Push the current local transcript into node data (persistence). */
+  const commitMessages = (msgs: ChatMsg[], record = false): void => {
     updateNodeData(id, { messages: msgs }, record)
   }
 
-  const ensureStreamingMessage = (): string => {
-    if (streamingMsgId.current) return streamingMsgId.current
-    const mid = crypto.randomUUID()
-    streamingMsgId.current = mid
-    updateNodeData(id, {
-      messages: [
-        ...data.messages,
-        { id: mid, role: 'assistant' as const, content: '', ts: Date.now() }
-      ]
-    })
-    return mid
-  }
-
-  // Subscribe to the per-node push channel while mounted.
+  // Subscribe to the per-node push channel while mounted. Functional updates
+  // keep every event applying to the latest transcript.
   useEffect(() => {
     return window.termsprawl.chat.onEvent(id, (ev: ChatEvent) => {
-      if (ev.kind === 'delta') {
-        ensureStreamingMessage()
-        patchStreaming({ content: ev.text })
-      } else if (ev.kind === 'thinking') {
-        ensureStreamingMessage()
-        patchStreaming({ thinking: ev.text })
-      } else if (ev.kind === 'usage') {
-        ensureStreamingMessage()
-        patchStreaming({
-          usage: { inputTokens: ev.inputTokens, outputTokens: ev.outputTokens },
-          model: ev.model
-        })
-      } else if (ev.kind === 'toolCall') {
-        // Tool calls (permission cards) are a follow-up — surface as text note.
-        ensureStreamingMessage()
-        patchStreaming({ content: `\n[tool: ${ev.call.name} → ${ev.call.result ?? ev.call.status}]` })
-      } else if (ev.kind === 'done') {
-        const stopped = ev.reason === 'stopped'
-        const mid = streamingMsgId.current
-        const msgs = mid
-          ? data.messages.map((m) => (m.id === mid ? { ...m, stopped: stopped || undefined } : m))
-          : data.messages
-        updateNodeData(id, { messages: msgs, streaming: false }, true)
-        streamingMsgId.current = null
-        setBusy(false)
-      }
+      setMessages((prev) => {
+        let next = prev
+        const ensureAssistant = (): ChatMsg[] => {
+          if (streamingMsgId.current) return next
+          const mid = crypto.randomUUID()
+          streamingMsgId.current = mid
+          next = [...next, { id: mid, role: 'assistant', content: '', ts: Date.now() }]
+          return next
+        }
+        if (ev.kind === 'delta' || ev.kind === 'thinking') {
+          ensureAssistant()
+          const mid = streamingMsgId.current as string
+          next = next.map((m) => {
+            if (m.id !== mid) return m
+            if (ev.kind === 'delta') return { ...m, content: m.content + ev.text }
+            return { ...m, thinking: (m.thinking ?? '') + ev.text }
+          })
+        } else if (ev.kind === 'usage') {
+          ensureAssistant()
+          const mid = streamingMsgId.current as string
+          next = next.map((m) =>
+            m.id === mid
+              ? {
+                  ...m,
+                  usage: { inputTokens: ev.inputTokens, outputTokens: ev.outputTokens },
+                  ...(ev.model ? { model: ev.model } : {})
+                }
+              : m
+          )
+        } else if (ev.kind === 'toolCall') {
+          ensureAssistant()
+          const mid = streamingMsgId.current as string
+          next = next.map((m) =>
+            m.id === mid
+              ? { ...m, content: `${m.content}\n[tool: ${ev.call.name} → ${ev.call.result ?? ev.call.status}]` }
+              : m
+          )
+        } else if (ev.kind === 'done') {
+          const stopped = ev.reason === 'stopped'
+          const mid = streamingMsgId.current
+          if (mid) {
+            next = next.map((m) => (m.id === mid ? { ...m, stopped: stopped || undefined } : m))
+          }
+          streamingMsgId.current = null
+          setBusy(false)
+          // persist the completed transcript (one undo record per turn)
+          commitMessages(next, true)
+        }
+        return next
+      })
     })
-    // data is intentionally not a dependency: handlers close over the latest
-    // render's data (the subscription is stable for the node's lifetime).
+    // subscribe once per node; handlers read no stale props (all state via
+    // functional updates + refs)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
@@ -102,6 +107,7 @@ export function ChatNode({ id, data, selected }: NodeProps<ChatNodeData>): React
       const arg = rest.join(' ')
       const w = word.toLowerCase()
       if (w === 'clear') {
+        setMessages([])
         updateNodeData(id, { messages: [], cost: undefined, streaming: false }, true)
         setInput('')
         return
@@ -112,38 +118,40 @@ export function ChatNode({ id, data, selected }: NodeProps<ChatNodeData>): React
         return
       }
       if (w === 'system' && arg) {
+        systemRef.current = arg
         updateNodeData(id, { system: arg }, true)
         setInput('')
         return
       }
       if (w === 'cost') {
-        const total = data.messages.reduce(
+        const total = messages.reduce(
           (acc, m) => acc + (m.usage ? m.usage.inputTokens + m.usage.outputTokens : 0),
           0
         )
-        updateNodeData(
-          id,
-          {
-            messages: [
-              ...data.messages,
-              { id: crypto.randomUUID(), role: 'system' as const, content: `${total} tokens so far`, ts: Date.now() }
-            ]
-          },
-          false
-        )
+        const note: ChatMsg = { id: crypto.randomUUID(), role: 'system', content: `${total} tokens so far`, ts: Date.now() }
+        const next = [...messages, note]
+        setMessages(next)
+        commitMessages(next)
         setInput('')
         return
       }
+      // unknown slash → fall through as a normal message
     }
 
-    const userMsg = { id: crypto.randomUUID(), role: 'user' as const, content: text, ts: Date.now() }
-    const messages = [...data.messages, userMsg]
-    updateNodeData(id, { messages, streaming: true })
+    const userMsg: ChatMsg = { id: crypto.randomUUID(), role: 'user', content: text, ts: Date.now() }
+    const messagesForSend = [...messages, userMsg]
+    setMessages(messagesForSend)
+    updateNodeData(id, { streaming: true })
     setInput('')
     setBusy(true)
     streamingMsgId.current = null
     void window.termsprawl.chat
-      .send({ nodeId: id, messages: messages.map((m) => ({ ...m })), model: data.model, provider: data.provider })
+      .send({
+        nodeId: id,
+        messages: messagesForSend.map((m) => ({ ...m })),
+        model: data.model,
+        provider: data.provider
+      })
       .then((res) => {
         if (!res.ok) {
           setError(res.error ?? 'send failed')
@@ -157,7 +165,7 @@ export function ChatNode({ id, data, selected }: NodeProps<ChatNodeData>): React
     void window.termsprawl.chat.stop(id)
   }
 
-  const totalTokens = data.messages.reduce(
+  const totalTokens = messages.reduce(
     (acc, m) => acc + (m.usage ? m.usage.inputTokens + m.usage.outputTokens : 0),
     0
   )
@@ -193,7 +201,7 @@ export function ChatNode({ id, data, selected }: NodeProps<ChatNodeData>): React
 
       <div className="chat-node-transcript nodrag nowheel" ref={scrollRef}>
         {data.system && <div className="chat-msg chat-system">{data.system}</div>}
-        {data.messages.map((m) => (
+        {messages.map((m) => (
           <div key={m.id} className={`chat-msg chat-${m.role}`}>
             {m.thinking && (
               <details className="chat-thinking">
