@@ -571,6 +571,51 @@ concepts, not a porting source.*
 
 ### Task 11.4: Chat driver v2 (provider-agnostic)
 - SDK chat node with streaming, permission cards, cost chip.
+- **Status: DONE (2026-08-28, verified live).** Built fresh against termsprawl's
+  own core (no ports). Zero new npm deps — SSE parsed by hand from fetch
+  streams (injectable fetch, like the Telegram client).
+  - `src/core/chat/` (all electron-free, guard-tested):
+    `types.ts` (ChatMessage/ChatEvent/ChatError), `conversation.ts` (message
+    model + slash detection + byte-capped serialization that drops oldest
+    user+assistant pairs, keeps system), `sse.ts` (shared SSE reader — blank
+    line blocks, data:/event:/comments, CRLF, trailing flush), `openai.ts`
+    (any OpenAI-shaped endpoint: /v1 normalization, delta + reasoning_content +
+    index-keyed tool_call assembly + usage-only chunks, abort → stopped),
+    `anthropic.ts` (x-api-key + anthropic-version; content_block events;
+    thinking_delta; input_json_delta tool assembly; system top-level),
+    `cost.ts` (longest-prefix model prices, user overrides, estimated flag for
+    unknown models), `tools.ts` (provider-neutral loop: permission gate with
+    approve/deny, max-iterations guard, consumer exceptions never break the
+    loop), `runtime.ts` (shared main/server runtime: per-node runs, abort =
+    normal stop, approval plumbing, env-wins key resolution).
+  - IPC: `chat:send` / `chat:stop` / `chat:approve` invokes + `chat:event:<nodeId>`
+    push channel (`chatEventChannel`); preload `window.termsprawl.chat.*`;
+    env.d.ts typed. Server Edition: same runtime via buildHandlers + shim chat
+    namespace (REAL implementation, not a stub).
+  - Settings: `AppSettings.chat` (defaultProvider/defaultModel/keys/
+    priceOverrides; normalize round-trip tested, empty-shape-stable); Settings →
+    Connections → "Chat models" section (provider select, model, masked
+    per-provider keys; env TERMSPRAWL_PROVIDER_KEY_<ID> overrides; local-only).
+  - `ChatNode.tsx`: streaming transcript with collapsed thinking blocks, token
+    chip, slash commands, stop button; streaming accumulates in LOCAL state
+    with functional updates (events outran React Flow re-renders — found live),
+    committed to node data per completed turn so history persists via the
+    project file. Context menu "New chat". Node resize via NodeResizer
+    (min 280×220), DEFAULT_SIZE chat 420×480.
+  - Verified live (headless boot + raw CDP): booted the BUILT app with a stub
+    OpenAI-compatible provider on loopback, created a chat node via the real
+    context menu, typed through the real textarea, pressed Enter, and the
+    streamed reply ("Hello from the stub provider! Streaming works.") rendered
+    in the transcript end-to-end through preload → IPC → runtime → adapter.
+    **Found + fixed two real bugs:** settings.normalizeAppSettings stripped the
+    new `chat` field (provider lookup failed at runtime), and the
+    ChatNode stale-closures race above.
+  - Gates: 506 tests green (52 chat + 6 runtime + 3 settings new), typecheck
+    clean, originality OK.
+  - Follow-ups: permission-card UI for tool calls (core loop + approval IPC
+    already wired; ChatNode renders tool results as text), cost chip USD
+    display (usage + price table already collected), tool schema surfacing in
+    provider requests.
 
 ### Task 11.5: Commit
 - `git commit -m "feat: rebuild own extras (relay, telegram, chat)"`
