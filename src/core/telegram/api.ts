@@ -7,7 +7,11 @@
 
 const API_BASE = 'https://api.telegram.org'
 
-export type FetchLike = (url: string, init?: { method?: string; body?: string }) => Promise<{
+export type FetchLike = (url: string, init?: {
+  method?: string
+  body?: string
+  signal?: AbortSignal
+}) => Promise<{
   ok: boolean
   status: number
   json(): Promise<unknown>
@@ -51,15 +55,17 @@ export async function telegramRequest<T>(
   token: string,
   method: string,
   params: Record<string, unknown> = {},
-  fetchImpl: FetchLike = fetch as unknown as FetchLike
+  fetchImpl: FetchLike = fetch as unknown as FetchLike,
+  signal?: AbortSignal
 ): Promise<TelegramApiResult<T>> {
   const url = `${API_BASE}/bot${token}/${method}`
   try {
-    const init: { method?: string; body?: string } = {}
+    const init: { method?: string; body?: string; signal?: AbortSignal } = {}
     if (Object.keys(params).length > 0) {
       init.method = 'POST'
       init.body = JSON.stringify(params)
     }
+    if (signal) init.signal = signal
     const res = await fetchImpl(url, init)
     const json = (await res.json()) as {
       ok?: boolean
@@ -88,40 +94,47 @@ export class TelegramClient {
     private readonly fetchImpl: FetchLike = fetch as unknown as FetchLike
   ) {}
 
-  getMe(): Promise<TelegramApiResult<TelegramUser>> {
-    return telegramRequest<TelegramUser>(this.token, 'getMe', {}, this.fetchImpl)
+  getMe(signal?: AbortSignal): Promise<TelegramApiResult<TelegramUser>> {
+    return telegramRequest<TelegramUser>(this.token, 'getMe', {}, this.fetchImpl, signal)
   }
 
   /** Drop any webhook so long-polling getUpdates works (409 otherwise). */
-  deleteWebhook(): Promise<TelegramApiResult<boolean>> {
-    return telegramRequest<boolean>(this.token, 'deleteWebhook', {}, this.fetchImpl)
+  deleteWebhook(signal?: AbortSignal): Promise<TelegramApiResult<boolean>> {
+    return telegramRequest<boolean>(this.token, 'deleteWebhook', {}, this.fetchImpl, signal)
   }
 
   /** Fetch updates after `offset`; pass timeout=20 for long polling. */
-  getUpdates(offset: number, timeout = 20): Promise<TelegramApiResult<TelegramUpdate[]>> {
+  getUpdates(offset: number, timeout = 20, signal?: AbortSignal): Promise<TelegramApiResult<TelegramUpdate[]>> {
     return telegramRequest<TelegramUpdate[]>(
       this.token,
       'getUpdates',
       { offset, timeout },
-      this.fetchImpl
+      this.fetchImpl,
+      signal
     )
   }
 
-  sendMessage(chatId: number, text: string): Promise<TelegramApiResult<TelegramMessage>> {
+  sendMessage(chatId: number, text: string, signal?: AbortSignal): Promise<TelegramApiResult<TelegramMessage>> {
     return telegramRequest<TelegramMessage>(
       this.token,
       'sendMessage',
       { chat_id: chatId, text },
-      this.fetchImpl
+      this.fetchImpl,
+      signal
     )
   }
 
-  sendChatAction(chatId: number, action: 'typing' | 'upload_photo' | 'record_video'): Promise<TelegramApiResult<boolean>> {
+  sendChatAction(
+    chatId: number,
+    action: 'typing' | 'upload_photo' | 'record_video',
+    signal?: AbortSignal
+  ): Promise<TelegramApiResult<boolean>> {
     return telegramRequest<boolean>(
       this.token,
       'sendChatAction',
       { chat_id: chatId, action },
-      this.fetchImpl
+      this.fetchImpl,
+      signal
     )
   }
 }

@@ -25,6 +25,7 @@ import { claudeLoginCommand, claudeSupportsPermissionMode } from '../core/agent-
 import { FILE_PROTOCOL, fromFilePreviewUrl } from '../shared/file-url'
 import { PtyManager } from '../core/pty-manager'
 import { shouldNotify, type AgentStatus } from '../shared/agent-status'
+import { createTelegramBot, type TelegramBot } from './telegram/bot'
 import { WorkspaceStore } from '../core/workspace-store'
 import type { ProjectMeta } from '../core/workspace-files'
 import { deleteProjectAndDestroyTerminals } from '../core/project-deletion'
@@ -255,6 +256,53 @@ function syncAgentBrowserControl(): void {
   } else {
     stopBrowserControlEndpoints()
   }
+}
+
+// ---------------------------------------------------------------------------
+// Telegram bot (Phase 11 Task 11.3). Started/stopped from the settings toggle.
+// Token: env TERMSPRAWL_TELEGRAM_TOKEN wins over settings.telegram.token — never
+// hardcoded, never committed. Pairing persists via saveAppSettings.
+// ---------------------------------------------------------------------------
+let telegramBot: TelegramBot | null = null
+let telegramBotActiveToken: string | null = null
+
+function telegramToken(): string | null {
+  return process.env.TERMSPRAWL_TELEGRAM_TOKEN || appSettings.current.telegram?.token || null
+}
+
+/** Keep the bot in sync with settings (enabled + token). Recreates on token change. */
+function syncTelegramBot(): void {
+  const enabled = appSettings.current.telegram?.enabled === true
+  const token = telegramToken()
+  if (!enabled || !token) {
+    if (telegramBot) {
+      telegramBot.stop()
+      telegramBot = null
+      telegramBotActiveToken = null
+    }
+    return
+  }
+  if (telegramBot && telegramBotActiveToken !== token) {
+    telegramBot.stop()
+    telegramBot = null
+  }
+  if (!telegramBot) {
+    telegramBot = createTelegramBot({
+      token,
+      allowedChatIds: () => appSettings.current.telegram?.allowedChatIds ?? [],
+      saveAllowedChatIds: (ids) => {
+        appSettings.current = saveAppSettings(platform.userDataPath, {
+          telegram: { ...appSettings.current.telegram, allowedChatIds: ids }
+        })
+      },
+      workspaceStore,
+      ptyManager,
+      version: () => app.getVersion(),
+      log: (msg) => console.log(`[telegram] ${msg}`)
+    })
+    telegramBotActiveToken = token
+  }
+  void telegramBot.start()
 }
 
 function registerWorkspaceIpc(): void {
@@ -648,6 +696,7 @@ function registerUpdateIpc(): void {
     appSettings.current = saveAppSettings(platform.userDataPath, patch)
     updateBridge.setAutoDownload(appSettings.current.autoDownloadUpdates)
     syncAgentBrowserControl()
+    syncTelegramBot()
     return appSettings.current
   })
   ipcMain.handle(IPC.accountCreate, (_event, label: unknown): AppSettings => {
@@ -903,6 +952,8 @@ void app.whenReady().then(async () => {
     await startBrowserControlEndpoints()
   }
 
+  syncTelegramBot()
+
   createWindow()
 
   setTimeout(() => {
@@ -920,6 +971,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   ptyManager.killAll()
+  telegramBot?.stop()
   void agentServer?.close()
   void cdpFacade?.close()
 })
