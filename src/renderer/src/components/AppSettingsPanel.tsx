@@ -516,6 +516,11 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
         id: 'telegram',
         title: 'Telegram bot',
         render: (c) => <TelegramSection ctx={c} />
+      },
+      {
+        id: 'chat',
+        title: 'Chat models',
+        render: (c) => <ChatSection ctx={c} />
       }
     ],
     updates: [
@@ -866,6 +871,103 @@ function TelegramSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
           }
         />
       </div>
+    </div>
+  )
+}
+
+/** Chat models (Phase 11 Task 11.4). Default provider/model for new chats +
+ * per-provider API keys. Keys are stored in settings.json on this machine
+ * only (env TERMSPRAWL_PROVIDER_KEY_<ID> overrides per provider) — never
+ * committed, never written into project files. */
+function ChatSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
+  const { settings, update } = ctx
+  const chat = settings.chat ?? {}
+  const providers: ApiProviderConfig[] = settings.apiProviders ?? []
+  const [drafts, setDrafts] = useState<Record<string, string>>({})
+
+  const keyFor = (id: string): string => chat.keys?.find((k: { providerId: string }) => k.providerId === id)?.key ?? ''
+  const envName = (id: string): string => `TERMSPRAWL_PROVIDER_KEY_${id.toUpperCase()}`
+
+  const saveChat = (patch: Partial<NonNullable<typeof settings.chat>>): void => {
+    void update({ chat: { ...chat, ...patch } })
+  }
+
+  const saveKey = (providerId: string, value: string): void => {
+    const keys = (chat.keys ?? []).filter((k: { providerId: string }) => k.providerId !== providerId)
+    if (value.trim()) keys.push({ providerId, key: value.trim() })
+    saveChat({ keys })
+  }
+
+  return (
+    <div className="settings-section">
+      <p className="app-settings-hint">
+        Chat nodes talk to an OpenAI-compatible or Anthropic endpoint. Add a provider under
+        API providers, then paste its key below. Keys are stored on this machine only —
+        never committed (the {providers.length > 0 ? envName(providers[0].id) : 'TERMSPRAWL_PROVIDER_KEY_<ID>'} env var overrides a stored key).
+      </p>
+
+      <div className="settings-pref-row">
+        <div className="settings-pref-copy">
+          <span className="settings-pref-label">Default provider</span>
+          <span className="settings-pref-sub">which configured provider new chat nodes use</span>
+        </div>
+        <select
+          className="settings-text-input"
+          value={chat.defaultProvider ?? ''}
+          onChange={(e) => void saveChat({ defaultProvider: e.target.value || undefined })}
+        >
+          <option value="">first configured</option>
+          {providers.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name || p.id}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="settings-pref-row">
+        <div className="settings-pref-copy">
+          <span className="settings-pref-label">Default model</span>
+          <span className="settings-pref-sub">e.g. gpt-4o-mini, claude-sonnet-4-5, llama3 — /model overrides per chat</span>
+        </div>
+        <input
+          className="settings-text-input"
+          placeholder="model id"
+          spellCheck={false}
+          value={chat.defaultModel ?? ''}
+          onChange={(e) => void saveChat({ defaultModel: e.target.value || undefined })}
+        />
+      </div>
+
+      {providers.length === 0 ? (
+        <p className="app-settings-hint">No providers configured yet — add one under “API providers” above.</p>
+      ) : (
+        providers.map((p) => {
+          const stored = keyFor(p.id)
+          const draft = drafts[p.id] ?? ''
+          return (
+            <div className="settings-pref-row" key={p.id}>
+              <div className="settings-pref-copy">
+                <span className="settings-pref-label">{p.name || p.id} API key</span>
+                <span className="settings-pref-sub">
+                  {stored ? `a key is set (…${stored.slice(-4)})` : `no key — or set ${envName(p.id)}`}
+                </span>
+              </div>
+              <input
+                type="password"
+                className="settings-text-input"
+                placeholder={stored ? '••••••••' : 'sk-…'}
+                spellCheck={false}
+                value={draft}
+                onChange={(e) => setDrafts((d: Record<string, string>) => ({ ...d, [p.id]: e.target.value }))}
+                onBlur={() => {
+                  if (draft.trim() && draft !== stored) saveKey(p.id, draft)
+                }}
+              />
+            </div>
+          )
+        })
+      )}
     </div>
   )
 }
