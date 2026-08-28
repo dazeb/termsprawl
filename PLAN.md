@@ -619,6 +619,10 @@ concepts, not a porting source.*
 
 ### Task 11.5: Commit
 - `git commit -m "feat: rebuild own extras (relay, telegram, chat)"`
+- **Status: DONE.** Phase 11 complete (2026-08-28): 11.3 Telegram bot v2
+  (local, live-verified), 11.4 chat driver v2 (SDK chat node, live-verified),
+  11.2 relay service v2 (standalone + app-side client seam, live-verified).
+  All rebuilt fresh from the OWN-WORK.md concepts — zero code ported.
 
 ## Phase 12 — Packaging & release
 
