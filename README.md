@@ -49,7 +49,7 @@ Actively developed. Phases 0–10 of [PLAN.md](PLAN.md) are shipped:
   (terminals, projects, git, agent hooks, file tree), with auto-save and
   shutdown safety.
 
-Current version: **0.9.1**.
+Current version: **0.10.0**.
 
 Linux only — AppImage and `.deb` artifacts. No macOS support, by design.
 
