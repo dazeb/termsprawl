@@ -228,9 +228,27 @@ export function createTelegramBot(deps: TelegramBotDeps): TelegramBot {
       if (running) return
       abort = new AbortController()
       running = true
-      const me = await client.getMe(abort.signal)
-      if (!me.ok) {
-        deps.log(`telegram: getMe failed (${me.error ?? 'unknown'}) — bot not started`)
+      // A guard so a hung getMe can never silently block the bot: abort after
+      // 12s and log instead of waiting indefinitely (fetch has no default
+      // timeout, and a proxy/DNS stall would otherwise leave the bot "starting"
+      // forever with no poller).
+      const timeout = setTimeout(() => {
+        deps.log('telegram: getMe timed out — bot not started')
+        abort?.abort()
+      }, 12000)
+      let me
+      try {
+        me = await client.getMe(abort.signal)
+      } finally {
+        clearTimeout(timeout)
+      }
+      if ((!me || !me.ok) && (abort?.signal.aborted || !running)) {
+        running = false
+        abort = null
+        return
+      }
+      if (!me?.ok) {
+        deps.log(`telegram: getMe failed (${me?.error ?? 'unknown'}) — bot not started`)
         running = false
         abort = null
         return

@@ -159,6 +159,23 @@ describe('telegram bot runtime — lifecycle', () => {
     expect(logs.some((l) => l.includes('getMe failed'))).toBe(true)
   })
 
+  it('start() aborts a hung getMe after the timeout guard instead of hanging', async () => {
+    const hangingFetch: FetchLike = async (url, init) => {
+      if (url.includes('/getMe')) {
+        // never resolves unless aborted
+        await new Promise((resolve) => init?.signal?.addEventListener('abort', resolve))
+        return { ok: false, status: 408, json: async () => ({ ok: false, description: 'aborted' }) }
+      }
+      return { ok: true, status: 200, json: async () => ({ ok: true, result: [] }) }
+    }
+    const { bot, logs } = makeBot({ fetchImpl: hangingFetch })
+    const startedAt = Date.now()
+    await bot.start()
+    expect(bot.isRunning()).toBe(false)
+    expect(Date.now() - startedAt).toBeLessThan(30000) // aborted, not timed out at outer level
+    expect(logs.some((l) => l.includes('getMe timed out'))).toBe(true)
+  }, 20000)
+
   it('stop() halts an in-flight poll via abort', async () => {
     let released = false
     const hangingFetch: FetchLike = async (url, init) => {

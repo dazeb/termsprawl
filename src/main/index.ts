@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, Notification, protocol, net, shell } from 'electron'
 import { execFileSync, spawn } from 'node:child_process'
+import { appendFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, join, posix } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -287,6 +288,7 @@ function syncTelegramBot(): void {
     telegramBot = null
   }
   if (!telegramBot) {
+    const botLogPath = join(platform.userDataPath, 'telegram.log')
     telegramBot = createTelegramBot({
       token,
       allowedChatIds: () => appSettings.current.telegram?.allowedChatIds ?? [],
@@ -298,7 +300,17 @@ function syncTelegramBot(): void {
       workspaceStore,
       ptyManager,
       version: () => app.getVersion(),
-      log: (msg) => console.log(`[telegram] ${msg}`)
+      // console.log is buffered when stdout is a pipe/file (an unflushed few
+      // lines vanish on a long-running app), so ALSO append synchronously to a
+      // log file that always flushes — human-readable bot history + diagnostics.
+      log: (msg) => {
+        console.log(`[telegram] ${msg}`)
+        try {
+          appendFileSync(botLogPath, `${new Date().toISOString()} ${msg}\n`, 'utf8')
+        } catch {
+          // best-effort
+        }
+      }
     })
     telegramBotActiveToken = token
   }
