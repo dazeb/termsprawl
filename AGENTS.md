@@ -183,6 +183,12 @@ v3.2.0, host executor, label `ubuntu-latest`):
   `.deb`, and `latest-linux.yml` to **both** the Gitea release and GitHub
   Releases (via `gh`, token = `GH_TOKEN` secret, user-scoped in Gitea).
 
+CI does **not** run `check-originality.sh` (it needs the prior fork's tree,
+which CI never checks out) — that gate stays local: run it after significant
+changes before pushing to main. CI does install the relay workspace
+(`pnpm --dir relay install`) so relay tests don't rely on `ws` leaking from
+the root dependency tree.
+
 Releasing a version (the ritual):
 
 ```bash

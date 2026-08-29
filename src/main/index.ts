@@ -889,6 +889,19 @@ function createWindow(): void {
     }
   })
 
+  // Renderer compromise must not mint new Electron windows carrying the full
+  // preload (audit B9). Legitimate external links go through the openExternal
+  // IPC (http/https-validated) — never through window.open.
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//.test(url)) void shell.openExternal(url)
+    return { action: 'deny' }
+  })
+  win.webContents.on('will-navigate', (event) => {
+    // Same policy as webview guests: never navigate the app window itself.
+    // (Vite HMR full-reloads go through reload(), not will-navigate.)
+    event.preventDefault()
+  })
+
   // electron-vite dev serves the renderer over HTTP; prod loads the file.
   if (process.env['ELECTRON_RENDERER_URL']) {
     void win.loadURL(process.env['ELECTRON_RENDERER_URL'])

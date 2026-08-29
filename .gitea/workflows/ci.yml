@@ -18,6 +18,12 @@ jobs:
       - name: install
         run: pnpm install --frozen-lockfile
 
+      - name: install relay deps
+        # Relay tests import `ws` from relay/package.json. They only passed
+        # historically because `ws` happened to be a root dependency; install
+        # the relay workspace explicitly so that coincidence can't break CI.
+        run: pnpm --dir relay install --frozen-lockfile
+
       - name: typecheck
         run: pnpm run typecheck
 
