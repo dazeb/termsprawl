@@ -133,7 +133,9 @@ export interface DiffInfoResult {
 }
 
 // Editor node (Phase 6): read/write a local file through core/file-service.
-export type FileErrorCode = 'MISSING' | 'IO' | 'UNSUPPORTED'
+// 'OUTSIDE' added by the audit (B1): the Server Edition refuses paths that
+// leave every known project folder.
+export type FileErrorCode = 'MISSING' | 'IO' | 'UNSUPPORTED' | 'OUTSIDE'
 
 export type FileReadResult =
   | { kind: 'text'; content: string }

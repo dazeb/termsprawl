@@ -24,6 +24,7 @@ import {
 } from '../core/git-service'
 import { generateCommitMessage } from '../core/commit-message'
 import { createChatRuntime, type ChatSendRequest } from '../core/chat/runtime'
+import { resolveGitScope, resolveFileScope, resolvePtyScope } from '../core/project-scope'
 import type { RpcHandler } from './rpc'
 import type { CorePlatform } from '../core/platform'
 import type {
@@ -50,12 +51,56 @@ function safeResolve(root: string, rel?: string): string {
   return target
 }
 
+// ---------------------------------------------------------------------------
+// Secret redaction (audit B1/B2): settings leaving this process must never
+// carry key material. The renderer gets `hasKey` flags; writes go back through
+// app:settings-set with the full values (the renderer read them from the user
+// in the first place). Desktop main shares this shape via its own settings.get.
+// ---------------------------------------------------------------------------
+/** A settings shape where secrets are replaced by hasKey flags (what crosses
+ * the boundary to any renderer). */
+export type RedactedProviderKey = { providerId: string; hasKey: boolean }
+
+export function redactSettings(settings: AppSettings): {
+  chat?: Omit<NonNullable<AppSettings['chat']>, 'keys'> & { keys?: RedactedProviderKey[] }
+  telegram?: Omit<NonNullable<AppSettings['telegram']>, 'token'> & { token?: undefined }
+} & Omit<AppSettings, 'chat' | 'telegram'> {
+  // Work on a structural clone typed as the UNREDACTED shape; the function's
+  // return type is the REDACTED shape (hasKey flags, no token).
+  type Unredacted = {
+    chat?: { keys?: Array<{ providerId: string; key?: string }> } & Record<string, unknown>
+    telegram?: { token?: string } & Record<string, unknown>
+  } & Omit<AppSettings, 'chat' | 'telegram'>
+  const out = JSON.parse(JSON.stringify(settings)) as unknown as Unredacted
+  if (out.chat?.keys) {
+    ;(out.chat as { keys?: RedactedProviderKey[] }).keys = (out.chat.keys ?? []).map((k) => ({
+      providerId: k.providerId,
+      hasKey: typeof k.key === 'string' && k.key.length > 0
+    }))
+  }
+  if (out.telegram?.token) {
+    ;(out.telegram as { token?: string }).token = undefined
+  }
+  return out as {
+    chat?: Omit<NonNullable<AppSettings['chat']>, 'keys'> & { keys?: RedactedProviderKey[] }
+    telegram?: Omit<NonNullable<AppSettings['telegram']>, 'token'> & { token?: undefined }
+  } & Omit<AppSettings, 'chat' | 'telegram'>
+}
+
 export function buildHandlers(platform: CorePlatform): Record<string, RpcHandler> {
   const version = readVersion()
   const workspaceStore = new WorkspaceStore(platform)
   const ptyManager = new PtyManager(platform)
   const userDataPath = platform.userDataPath
   mkdirSync(userDataPath, { recursive: true })
+
+  /** Resolve a GitTarget to a local repo root — ONLY for known projects
+   * (audit B1; desktop parity with resolveGitTarget in main/index.ts). */
+  const resolveRepoRoot = (target: GitTarget | undefined | null): string | null => {
+    const scope = resolveGitScope(workspaceStore, target)
+    if (scope.kind !== 'local') return null
+    return findRepoRoot(scope.cwd)
+  }
 
   // Chat driver v2 (Phase 11 Task 11.4): same runtime shape as the desktop
   // main process — settings-resolved provider + key, events broadcast on the
@@ -88,7 +133,10 @@ export function buildHandlers(platform: CorePlatform): Record<string, RpcHandler
   return {
     [IPC.appVersion]: () => version,
 
-    [IPC.appSettingsGet]: () => loadAppSettings(userDataPath),
+    // -- Settings (redacted) --------------------------------------------------
+    // Audit B1/B2: settings leaving this process never carry key material.
+    // The renderer reads hasKey flags; writes go through app:settings-set.
+    [IPC.appSettingsGet]: () => redactSettings(loadAppSettings(userDataPath)),
     [IPC.appSettingsSet]: (args) => saveAppSettings(userDataPath, (args[0] ?? {}) as Partial<AppSettings>),
 
     [IPC.updateCheck]: () => idleUpdateStatus(),
@@ -118,7 +166,15 @@ export function buildHandlers(platform: CorePlatform): Record<string, RpcHandler
       workspaceStore.updateSettings(String(args[0]), args[1] as ProjectSettings),
     [IPC.projectRename]: (args) => workspaceStore.renameProject(String(args[0]), String(args[1])),
 
-    [IPC.ptyCreate]: (args): ReturnType<PtyManager['create']> => ptyManager.create(args[0] as PtyCreateRequest),
+    [IPC.ptyCreate]: (args): ReturnType<PtyManager['create']> | { ok: false; error: string } => {
+      const req = args[0] as PtyCreateRequest
+      // Audit B1: the server bridge must NOT grant command execution to a WS
+      // client, and terminals may only spawn in known projects. (Desktop main
+      // allows commands — its renderer is the trusted UI.)
+      const scope = resolvePtyScope(workspaceStore, req as unknown as { cwd?: string | null; command?: string; remote?: unknown }, { allowCommands: false })
+      if (!scope.ok) return { ok: false, error: scope.reason }
+      return ptyManager.create(req)
+    },
     [IPC.ptyWrite]: (args): null => {
       ptyManager.write(String(args[0]), String(args[1]))
       return null
@@ -141,6 +197,9 @@ export function buildHandlers(platform: CorePlatform): Record<string, RpcHandler
       const [root, rel] = args
       try {
         const dir = safeResolve(String(root), rel as string | undefined)
+        // Audit B1: the root itself must be a known project folder.
+        const scope = resolveFileScope(workspaceStore, dir)
+        if (!scope.ok) return { error: { code: 'OUTSIDE', message: scope.reason } }
         if (!existsSync(dir)) return { error: { code: 'MISSING', message: 'no such directory' } }
         const entries: DirEntry[] = readdirSync(dir, { withFileTypes: true }).map((d) => ({
           name: d.name,
@@ -153,19 +212,26 @@ export function buildHandlers(platform: CorePlatform): Record<string, RpcHandler
       }
     },
     [IPC.fileRead]: (args): FileReadResult => {
-      const [path] = args
+      const [path, hint] = args as [string, { cwd?: string; projectId?: string } | undefined]
+      // Audit B1: reads are confined to known project folders. The renderer
+      // sends {cwd, projectId} hints; without a hint the path must fall under
+      // SOME known project (still confined, just more permissive).
+      const scope = resolveFileScope(workspaceStore, String(path), hint)
+      if (!scope.ok) return { error: { code: 'OUTSIDE', message: scope.reason } }
       try {
-        const content = readFileSync(String(path), 'utf8')
+        const content = readFileSync(scope.path, 'utf8')
         return { kind: 'text', content }
       } catch (error) {
         return { error: { code: 'MISSING', message: String(error) } }
       }
     },
     [IPC.fileWrite]: (args): FileWriteResult => {
-      const [path, content] = args
+      const [path, content, hint] = args as [string, string, { cwd?: string; projectId?: string } | undefined]
+      const scope = resolveFileScope(workspaceStore, String(path), hint)
+      if (!scope.ok) return { error: { code: 'OUTSIDE', message: scope.reason } }
       try {
-        mkdirSync(dirname(String(path)), { recursive: true })
-        writeFileSync(String(path), String(content), 'utf8')
+        mkdirSync(dirname(scope.path), { recursive: true })
+        writeFileSync(scope.path, String(content), 'utf8')
         return { ok: true }
       } catch (error) {
         return { error: { code: 'IO', message: String(error) } }
@@ -182,17 +248,21 @@ export function buildHandlers(platform: CorePlatform): Record<string, RpcHandler
     [IPC.gitSnapshot]: async (args): Promise<GitPanelSnapshot> => {
       const [target] = args as [GitTarget]
       const cwd = target?.cwd ?? ''
-      if (!cwd || !existsSync(cwd)) {
+      // Audit B1: only KNOWN projects (desktop parity with resolveGitTarget).
+      const scope = resolveGitScope(workspaceStore, target)
+      if (scope.kind === 'none' || scope.kind === 'remote') {
+        // remote git over the server bridge is desktop-main territory; the
+        // server returns an empty panel rather than executing anything.
         return {
           cwd: cwd || null, branch: '', remote: null,
           sync: { upstream: null, ahead: 0, behind: 0 },
           changes: [], branches: [], commits: [], ghAuthed: false
         }
       }
-      const root = findRepoRoot(cwd)
+      const root = findRepoRoot(scope.cwd)
       if (!root) {
         return {
-          cwd, branch: '', remote: null,
+          cwd: scope.cwd, branch: '', remote: null,
           sync: { upstream: null, ahead: 0, behind: 0 },
           changes: [], branches: [], commits: [], ghAuthed: false
         }
@@ -322,9 +392,3 @@ export function buildHandlers(platform: CorePlatform): Record<string, RpcHandler
   }
 }
 
-/** Resolve a GitTarget to a local repo root, or null when there's no folder or repo. */
-function resolveRepoRoot(target: GitTarget | undefined | null): string | null {
-  const cwd = target?.cwd
-  if (!cwd || !existsSync(cwd)) return null
-  return findRepoRoot(cwd)
-}

@@ -17,6 +17,7 @@ import { ServerPlatform } from './platform'
 import { buildHandlers } from './handlers'
 import { createDispatcher, type RpcDispatcher, type RpcResponse } from './rpc'
 import { startAgentBridge } from './agent-bridge'
+import { createAuthPolicy, authorizeUpgrade, type AuthPolicy } from './server-auth'
 
 const PORT = Number(process.env.PORT ?? process.argv[2] ?? 3110)
 const RENDERER_DIR = resolve('out/renderer')
@@ -41,6 +42,16 @@ function contentType(path: string): string {
   return MIME[extname(path)] ?? 'application/octet-stream'
 }
 
+/** Pull ?token= out of an upgrade URL (fallback auth channel for browsers). */
+function tokenFromUrl(url?: string): string | undefined {
+  if (!url) return undefined
+  try {
+    return new URL(url, 'http://localhost').searchParams.get('token') ?? undefined
+  } catch {
+    return undefined
+  }
+}
+
 /** Wrap the dispatcher to track dirty state for auto-save. */
 function trackDirty(dispatch: RpcDispatcher): { dispatch: RpcDispatcher; markDirty: () => void } {
   return {
@@ -49,13 +60,19 @@ function trackDirty(dispatch: RpcDispatcher): { dispatch: RpcDispatcher; markDir
   }
 }
 
-export async function createApp(): Promise<{
+export async function createApp(opts?: { auth?: AuthPolicy }): Promise<{
   server: ReturnType<typeof createServer>
   platform: ServerPlatform
   port: number
   hookUrl: string
+  /** The WS auth token (null when auth explicitly disabled). */
+  authToken: string | null
   close: () => Promise<void>
 }> {
+  // Audit B1: every WS connection must present the boot token. Fail-closed:
+  // no policy passed in → a fresh token is generated (the entrypoint prints it
+  // once); explicit empty token = disclosed mode (logged by the caller).
+  const policy = opts?.auth ?? createAuthPolicy()
   const clients = new Set<WebSocket>()
   const platform = new ServerPlatform((channel, payload) => {
     const frame = JSON.stringify({ t: 'evt', channel, payload })
@@ -79,7 +96,11 @@ export async function createApp(): Promise<{
     let body = readFileSync(filePath)
     if (path === '/' && shimSource) {
       const html = body.toString('utf8')
-      const shimTag = '<script src="/termsprawl-shim.js"></script>'
+      // Audit B1: bootstrap the shim with the WS auth token. The page is served
+      // by the same process that owns the token, so injecting it into THIS page
+      // is the trust boundary; the shim stores it in localStorage for reconnects.
+      const tokenBootstrap = `<script>window.__TERMPRAWL_WS_TOKEN=${JSON.stringify(policy.disabled ? '' : policy.token)}</script>`
+      const shimTag = `<script>${tokenBootstrap}</script><script src="/termsprawl-shim.js"></script>`
       const injected = html.includes('<head>') ? html.replace('<head>', `<head>${shimTag}`) : `${shimTag}${html}`
       body = Buffer.from(injected, 'utf8')
     }
@@ -95,7 +116,25 @@ export async function createApp(): Promise<{
     serveStatic(url, res)
   })
 
-  const wss = new WebSocketServer({ server, path: '/ws' })
+  const wss = new WebSocketServer({ noServer: true })
+  // Audit B1: token gate BEFORE any connection is accepted. The header wins
+  // (shim sends it); ?token= is the fallback for browser WS limitations.
+  server.on('upgrade', (req, socket, head) => {
+    // Audit B1: only /ws upgrades, and only with the token.
+    const url = (req.url ?? '/').split('?')[0]
+    if (url !== '/ws') {
+      socket.write('HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n')
+      socket.destroy()
+      return
+    }
+    const auth = authorizeUpgrade(policy, req.headers.authorization, tokenFromUrl(req.url))
+    if (!auth) {
+      socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n')
+      socket.destroy()
+      return
+    }
+    wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req))
+  })
   wss.on('connection', (socket: WebSocket) => {
     clients.add(socket)
     socket.on('message', (raw: unknown) => {
@@ -130,6 +169,7 @@ export async function createApp(): Promise<{
     platform,
     port: PORT,
     hookUrl: agents.hookUrl,
+    authToken: policy.disabled ? null : policy.token,
     close: async () => {
       agents.stop()
       for (const client of [...clients]) client.close()
@@ -142,8 +182,16 @@ export async function createApp(): Promise<{
 // Start only when run directly (the test imports createApp without booting a
 // listener). Run via `TERMSPRAWL_SERVER_ENTRY=1 node out/server/index.js`.
 if (process.env.TERMSPRAWL_SERVER_ENTRY === '1') {
-  const app = await createApp()
-  const { server, port, platform } = app
+  // Audit B1: auth token. TERMSPRAWL_SERVER_TOKEN='' explicitly disables auth
+  // (disclosed mode — logged loudly); absent → a fresh token is generated and
+  // printed once; a 48-hex value is honored as-is (for scripted restarts).
+  const envToken = process.env.TERMSPRAWL_SERVER_TOKEN
+  const policy = createAuthPolicy(envToken)
+  if (policy.disabled) {
+    console.warn('[server] !!! AUTH DISABLED (TERMSPRAWL_SERVER_TOKEN="") — any local process can drive this instance. Loopback bind only.')
+  }
+  const app = await createApp({ auth: policy })
+  const { server, port, platform, authToken } = app
   const dispatch = createDispatcher(buildHandlers(platform))
 
   /** Invoke an RPC and return the response. */
@@ -166,6 +214,9 @@ if (process.env.TERMSPRAWL_SERVER_ENTRY === '1') {
   const currentProjectNodes = new Map<string, unknown[]>()
 
   // ---- Port fallback: try PORT, PORT+1, ... PORT+10 ----
+  // Audit B1: bind the LOOPBACK by default. TERMSPRAWL_SERVER_HOST=0.0.0.0
+  // opts into LAN exposure (with TERMSPRAWL_SERVER_TOKEN set deliberately).
+  const HOST = process.env.TERMSPRAWL_SERVER_HOST ?? '127.0.0.1'
   function listenWithFallback(portNum: number, maxAttempts = 10): Promise<number> {
     return new Promise((resolve, reject) => {
       function tryPort(p: number, attempt: number) {
@@ -181,14 +232,17 @@ if (process.env.TERMSPRAWL_SERVER_ENTRY === '1') {
             reject(err)
           }
         })
-        server.listen(p, () => resolve(p))
+        server.listen(p, HOST, () => resolve(p))
       }
       tryPort(portNum, 0)
     })
   }
 
   const actualPort = await listenWithFallback(PORT)
-  console.log(`termsprawl Server Edition listening on http://localhost:${actualPort}`)
+  console.log(`termsprawl Server Edition listening on http://${process.env.TERMSPRAWL_SERVER_HOST ?? '127.0.0.1'}:${actualPort}`)
+  if (authToken) {
+    console.log(`ws auth token (browser asks for it once, then it's stored in localStorage):\n  ${authToken}`)
+  }
   console.log(`data dir: ${platform.userDataPath}`)
   console.log(`agent hooks: ${app.hookUrl}`)
 

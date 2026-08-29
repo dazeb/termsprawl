@@ -7,7 +7,19 @@
 (function () {
   'use strict'
   var proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
-  var url = proto + '//' + location.host + '/ws'
+  // Audit B1: the WS upgrade must carry the boot token (header when possible,
+  // ?token= fallback). The token is bootstrapped into the served page by the
+  // server itself and persisted so reconnects still authenticate.
+  var TOKEN = (function () {
+    try {
+      if (window.__TERMPRAWL_WS_TOKEN) {
+        localStorage.setItem('termsprawl-ws-token', window.__TERMPRAWL_WS_TOKEN)
+        return window.__TERMPRAWL_WS_TOKEN
+      }
+      return localStorage.getItem('termsprawl-ws-token') || ''
+    } catch (e) { return window.__TERMPRAWL_WS_TOKEN || '' }
+  })()
+  var url = proto + '//' + location.host + '/ws' + (TOKEN ? '?token=' + encodeURIComponent(TOKEN) : '')
   var ws = null
   var seq = 0
   var pending = new Map()
@@ -15,6 +27,10 @@
 
   function ensure() {
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return
+    // Browser WebSocket cannot set Authorization headers; the token rides on
+    // the upgrade URL (?token=) — see server-auth.ts. Browsers do NOT leak
+    // query strings for ws:// to servers' logs the way http proxies can, and
+    // this is loopback by default.
     ws = new WebSocket(url)
     ws.addEventListener('message', function (ev) {
       var msg
