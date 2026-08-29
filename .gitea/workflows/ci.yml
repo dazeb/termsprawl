@@ -95,8 +95,11 @@ jobs:
           echo "gitea release ${TAG} published"
 
       - name: publish github release
-        # Requires a GitHub PAT with repo scope as the GH_TOKEN secret.
-        # Without it, the step is skipped (Gitea release still happens).
+        # GitHub Releases still feed the desktop app's auto-updater
+        # (latest-linux.yml). GitHub *Actions* are permanently disabled on the
+        # account — that's about the CI runner, not this publish step, which
+        # runs on Gitea's runner with a PAT secret and is how releases land on
+        # GitHub at all. Skipped when the GH_TOKEN secret is absent.
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           TAG: ${{ github.ref_name }}
