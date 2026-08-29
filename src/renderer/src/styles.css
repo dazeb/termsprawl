@@ -14,6 +14,15 @@
   --z-toast: 1000; /* context menu, update toast */
   --z-banner: 2000; /* error/announcement banners */
   --z-popover: 4000; /* help popovers — top of everything */
+
+  /* Semantic surfaces (audit F1 — light-theme sweep). Every solid dark
+   * background goes through one of these so the light palette can re-skin
+   * the whole app. Shadows stay dark in both themes (normal practice). */
+  --surface: #101010; /* modals, menus, toasts, help pops, node bodies */
+  --surface-raised: #1a1a1a; /* hover elevation on surfaces */
+  --scrim: rgba(0, 0, 0, 0.6); /* modal backdrops */
+  --bubble: rgba(255, 255, 255, 0.04); /* chat assistant bubbles */
+  --bubble-border: rgba(255, 255, 255, 0.07);
 }
 
 /* Light theme — applied by swapping the variable palette when the root
@@ -25,6 +34,11 @@ html[data-theme='light'] {
   --muted: #767672;
   --panel: #ffffff;
   --border: #dcdcd8;
+  --surface: #ffffff;
+  --surface-raised: #efefec;
+  --scrim: rgba(0, 0, 0, 0.32);
+  --bubble: rgba(0, 0, 0, 0.04);
+  --bubble-border: rgba(0, 0, 0, 0.1);
 }
 
 * {
@@ -98,7 +112,7 @@ body {
   max-width: min(560px, calc(100vw - 24px));
   padding: 10px 12px;
   border: 1px solid #c6f13566;
-  background: #10110d;
+  background: var(--surface);
   color: #d7ddb9;
   font: 12px/1.4 'Geist Mono', monospace;
   box-shadow: 0 8px 30px #000a;
@@ -304,7 +318,7 @@ body {
 }
 
 .project-settings-field input[type='text'] {
-  background: #0a0a0a;
+  background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 5px;
   color: var(--fg);
@@ -503,7 +517,7 @@ body {
 }
 
 .cog-menu-item:hover:not(:disabled) {
-  background: #1a1a1a;
+  background: var(--surface-raised);
   color: var(--accent);
 }
 
@@ -520,7 +534,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--scrim);
   backdrop-filter: blur(3px);
   -webkit-backdrop-filter: blur(3px);
 }
@@ -530,7 +544,7 @@ body {
   max-height: min(560px, calc(100vh - 96px));
   display: flex;
   flex-direction: column;
-  background: #101010;
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
@@ -969,7 +983,7 @@ html[data-theme='light'] .settings-nav-item:hover {
 .account-label-input {
   flex: 1;
   min-width: 0;
-  background: #10110d;
+  background: var(--surface);
   border: 1px solid var(--border);
   color: var(--fg);
   font: 11px/1.4 'Geist Mono', monospace;
@@ -991,7 +1005,7 @@ html[data-theme='light'] .settings-nav-item:hover {
   white-space: nowrap;
 }
 .account-permission {
-  background: #10110d;
+  background: var(--surface);
   border: 1px solid var(--border);
   color: var(--muted);
   font: 10px/1 'Geist Mono', monospace;
@@ -1178,7 +1192,7 @@ html[data-theme='light'] .settings-nav-item:hover {
 .source-control-msg {
   flex: 1;
   min-width: 0;
-  background: #10110d;
+  background: var(--surface);
   border: 1px solid var(--border);
   color: var(--fg);
   font: 11px/1.4 'Geist Mono', monospace;
@@ -1232,7 +1246,7 @@ html[data-theme='light'] .settings-nav-item:hover {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--bubble);
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 3px 6px;
@@ -1337,7 +1351,7 @@ html[data-theme='light'] .settings-nav-item:hover {
   max-width: min(520px, calc(100vw - 24px));
   padding: 10px 12px;
   border: 1px solid #c6f13566;
-  background: #10110d;
+  background: var(--surface);
   color: #d7ddb9;
   font: 12px/1.4 'Geist Mono', monospace;
   box-shadow: 0 8px 30px #000a;
@@ -1374,7 +1388,7 @@ html[data-theme='light'] .settings-nav-item:hover {
   gap: 10px;
   max-width: 80vw;
   padding: 8px 12px;
-  background: #101010;
+  background: var(--surface);
   border: 1px solid #c6f13555;
   border-radius: 8px;
   color: #cbd5c0;
@@ -1514,7 +1528,7 @@ html[data-theme='light'] .settings-nav-item:hover {
 .terminal-node {
   display: flex;
   flex-direction: column;
-  background: #101010;
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
@@ -1656,7 +1670,7 @@ html[data-theme='light'] .settings-nav-item:hover {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: #101010;
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
@@ -2392,7 +2406,7 @@ html[data-theme='light'] .settings-nav-item:hover {
 }
 
 .editor-preview pre {
-  background: rgba(0, 0, 0, 0.35);
+  background: var(--bubble);
   padding: 10px 12px;
   border-radius: 6px;
   overflow: auto;
@@ -2408,7 +2422,7 @@ html[data-theme='light'] .settings-nav-item:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--bubble);
   overflow: hidden;
 }
 
@@ -2674,7 +2688,7 @@ html[data-theme='light'] .settings-nav-item:hover {
   position: fixed;
   z-index: var(--z-popover);
   padding: 8px 10px;
-  background: #10110d;
+  background: var(--surface);
   border: 1px solid #c6f13555;
   color: #d7ddb9;
   font: 11px/1.45 'Geist Mono', 'JetBrains Mono', monospace;
@@ -2692,7 +2706,7 @@ html[data-theme='light'] .settings-nav-item:hover {
   border: 1px solid var(--border);
   border-radius: 10px;
   overflow: hidden;
-  background: rgba(16, 18, 20, 0.92);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
 }
 
@@ -2759,9 +2773,9 @@ html[data-theme='light'] .settings-nav-item:hover {
 
 .chat-msg.chat-assistant {
   align-self: flex-start;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  color: #e8e8e6;
+  background: var(--bubble);
+  border: 1px solid var(--bubble-border);
+  color: var(--fg);
 }
 
 .chat-msg.chat-system,
@@ -2781,7 +2795,7 @@ html[data-theme='light'] .settings-nav-item:hover {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
   padding: 5px 7px;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--bubble);
 }
 
 .chat-tool-name {
@@ -2962,7 +2976,7 @@ html[data-theme='light'] .settings-nav-item:hover {
   gap: 6px;
   padding: 8px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bubble);
 }
 
 .chat-node-input textarea {
