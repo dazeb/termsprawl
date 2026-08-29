@@ -11,7 +11,7 @@ import { ChatError } from './types'
 import type { ChatEvent, ChatMessage } from './types'
 import { streamOpenAI } from './openai'
 import { streamAnthropic } from './anthropic'
-import { runChatLoop, type ChatDriver } from './tools'
+import { runChatLoop, type ChatDriver, type ChatToolDef } from './tools'
 
 export interface ChatProviderConfig {
   /** provider id/name from settings.apiProviders */
@@ -36,6 +36,9 @@ export interface ChatRuntimeDeps {
   resolveProvider(req: ChatSendRequest): ChatProviderConfig | null
   /** Push an event to the renderer (platform.broadcast in main). */
   broadcast(nodeId: string, event: ChatEvent): void
+  /** Tool set for a send (audit B3). Return [] for no tools. Injectable so
+   * tests can drive the loop without touching the filesystem. */
+  toolsFor?(req: ChatSendRequest): ChatToolDef[]
   /** Driver factory — injectable for tests (defaults to the real adapters). */
   driverFor?(cfg: ChatProviderConfig): ChatDriver
   log?(msg: string): void
@@ -66,6 +69,7 @@ export function driverFor(cfg: ChatProviderConfig): ChatDriver {
           apiKey: cfg.apiKey,
           model: opts.model,
           messages: opts.messages,
+          tools: opts.tools,
           signal: opts.signal
         })
     }
@@ -77,6 +81,7 @@ export function driverFor(cfg: ChatProviderConfig): ChatDriver {
         apiKey: cfg.apiKey,
         model: opts.model,
         messages: opts.messages,
+        tools: opts.tools,
         signal: opts.signal
       })
   }
@@ -113,7 +118,8 @@ export function createChatRuntime(deps: ChatRuntimeDeps): ChatRuntime {
       const started = Date.now()
       try {
         const driver = deps.driverFor ? deps.driverFor(cfg) : driverFor(cfg)
-        const result = await runChatLoop(driver, req.model ?? cfg.model ?? '', [...req.messages], [], {
+        const tools = deps.toolsFor ? deps.toolsFor(req) : []
+        const result = await runChatLoop(driver, req.model ?? cfg.model ?? '', [...req.messages], tools, {
           onEvent: (e) => deps.broadcast(req.nodeId, e),
           requestApproval: (call) =>
             new Promise<'approve' | 'deny'>((resolve) => {

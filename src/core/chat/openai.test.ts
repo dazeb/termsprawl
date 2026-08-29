@@ -62,6 +62,39 @@ describe('toOpenAiMessages', () => {
     expect(out[0]).toEqual({ role: 'user', content: 'run it' })
     expect(out[1]).toEqual({ role: 'tool', tool_call_id: 'call_9', content: 'result text' })
   })
+
+  it('replays assistant toolCalls as the tool_calls field (audit B3)', () => {
+    const out = toOpenAiMessages([
+      {
+        id: 'm1',
+        role: 'assistant',
+        content: '',
+        ts: 1,
+        toolCalls: [{ id: 'call_1', name: 'read_file', argsJson: '{"path":"/p"}', status: 'done' }]
+      },
+      { id: 'm2', role: 'tool', content: 'body', ts: 2, toolCalls: [{ id: 'call_1', name: 'read_file', argsJson: '{}', status: 'done' }] }
+    ])
+    expect(out[0]).toEqual({
+      role: 'assistant',
+      content: '',
+      tool_calls: [
+        { id: 'call_1', type: 'function', function: { name: 'read_file', arguments: '{"path":"/p"}' } }
+      ]
+    })
+    expect(out[1]).toEqual({ role: 'tool', tool_call_id: 'call_1', content: 'body' })
+  })
+
+  it('drops note messages from the wire (audit B4)', () => {
+    const out = toOpenAiMessages([
+      { id: 'm1', role: 'user', content: 'q', ts: 1 },
+      { id: 'm2', role: 'note', content: '1,234 tokens so far', ts: 2 },
+      { id: 'm3', role: 'assistant', content: 'a', ts: 3 }
+    ])
+    expect(out).toEqual([
+      { role: 'user', content: 'q' },
+      { role: 'assistant', content: 'a' }
+    ])
+  })
 })
 
 describe('streamOpenAI', () => {

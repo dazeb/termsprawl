@@ -58,6 +58,16 @@ export function markStopped(conv: Conversation, messageId: string): ChatMessage 
   return msg
 }
 
+/** Append a local-only 'note' message (slash-command output such as /cost).
+ * Notes are UI annotations: they persist with the transcript but are NEVER
+ * sent to providers — the wire mappers skip the role (audit B4: a system-role
+ * note silently vanished from Anthropic's context). */
+export function appendNote(conv: Conversation, content: string): ChatMessage {
+  const msg: ChatMessage = { id: crypto.randomUUID(), role: 'note', content, ts: Date.now() }
+  conv.messages.push(msg)
+  return msg
+}
+
 function ensureMessage(conv: Conversation, messageId: string): ChatMessage {
   const existing = conv.messages.find((m) => m.id === messageId)
   if (existing) return existing
@@ -165,5 +175,5 @@ export function deserializeConversation(s: string): Conversation {
 }
 
 function isValidRole(v: unknown): v is ChatRole {
-  return v === 'user' || v === 'assistant' || v === 'system' || v === 'tool'
+  return v === 'user' || v === 'assistant' || v === 'system' || v === 'tool' || v === 'note'
 }

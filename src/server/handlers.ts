@@ -24,6 +24,7 @@ import {
 } from '../core/git-service'
 import { generateCommitMessage } from '../core/commit-message'
 import { createChatRuntime, type ChatSendRequest } from '../core/chat/runtime'
+import { projectChatTools } from '../core/chat/project-tools'
 import { resolveGitScope, resolveFileScope, resolvePtyScope } from '../core/project-scope'
 import type { RpcHandler } from './rpc'
 import type { CorePlatform } from '../core/platform'
@@ -127,6 +128,14 @@ export function buildHandlers(platform: CorePlatform): Record<string, RpcHandler
       }
     },
     broadcast: (nodeId: string, event: unknown) => platform.broadcast(`chat:event:${nodeId}`, event),
+    // Audit B3: same project-scoped read-only tool set as desktop. Anchored
+    // to the first open local project (the Server Edition's active project).
+    toolsFor: (req: ChatSendRequest) => {
+      const cwd = workspaceStore
+        .snapshot()
+        .index.projects.find((p) => !p.closed && p.cwd)?.cwd
+      return cwd ? projectChatTools(workspaceStore, { cwd }) : []
+    },
     log: (msg: string) => console.log(`[chat] ${msg}`)
   })
 

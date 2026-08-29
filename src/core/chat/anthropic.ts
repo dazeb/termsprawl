@@ -8,14 +8,18 @@
 
 import { ChatError, type ChatEvent, type ChatMessage, type ChatToolCall } from './types'
 import { readSse } from './sse'
+import type { ChatToolDef } from './tools'
 
 export interface StreamAnthropicOptions {
   baseUrl?: string
+  /** x-api-key (sensitive). */
   apiKey: string
   model: string
   messages: ChatMessage[]
   system?: string
   maxTokens?: number
+  /** ChatToolDefs mapped to Anthropic tool blocks. */
+  tools?: ChatToolDef[]
   signal?: AbortSignal
   fetchFn?: typeof fetch
 }
@@ -25,19 +29,57 @@ const DEFAULT_MAX_TOKENS = 4096
 
 /** Split internal messages into Anthropic's shape: a leading system message
  * (or the explicit system option) becomes the top-level system string; only
- * user/assistant messages go in the messages array. */
+ * user/assistant messages go in the messages array. An assistant message that
+ * requested tools replays a tool_use content block (audit B3 — tool results
+ * must pair with their initiating tool_use, and roles must alternate, so
+ * consecutive tool results merge into one user turn). 'note' messages are
+ * local-only annotations and never go over the wire (audit B4). */
 export function toAnthropicBody(messages: ChatMessage[], system?: string): {
   system?: string
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>
+  messages: Array<{ role: 'user' | 'assistant'; content: unknown }>
 } {
   let sys = system
-  const rest: Array<{ role: 'user' | 'assistant'; content: string }> = []
+  const rest: Array<{ role: 'user' | 'assistant'; content: unknown }> = []
   for (const m of messages) {
+    if (m.role === 'note') continue
     if (m.role === 'system' && sys === undefined && rest.length === 0) {
       sys = m.content
       continue
     }
+    if (m.role === 'tool') {
+      // Anthropic returns tool results inside a USER turn, as tool_result
+      // blocks. Consecutive tool results merge into one user turn (the API
+      // requires strict user/assistant alternation).
+      const block = {
+        type: 'tool_result',
+        tool_use_id: m.toolCalls?.[0]?.id ?? m.id,
+        content: m.content
+      }
+      const last = rest[rest.length - 1]
+      if (last && last.role === 'user' && Array.isArray(last.content)) {
+        ;(last.content as Array<Record<string, unknown>>).push(block)
+      } else {
+        rest.push({ role: 'user', content: [block] })
+      }
+      continue
+    }
     if (m.role === 'user' || m.role === 'assistant') {
+      if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
+        // Replay what the assistant asked for: text (if any) + tool_use blocks.
+        const content: Array<Record<string, unknown>> = []
+        if (m.content) content.push({ type: 'text', text: m.content })
+        for (const c of m.toolCalls) {
+          let input: unknown = {}
+          try {
+            input = c.argsJson ? JSON.parse(c.argsJson) : {}
+          } catch {
+            input = {}
+          }
+          content.push({ type: 'tool_use', id: c.id, name: c.name, input })
+        }
+        rest.push({ role: 'assistant', content })
+        continue
+      }
       rest.push({ role: m.role, content: m.content })
     }
   }
@@ -78,6 +120,13 @@ export async function* streamAnthropic(opts: StreamAnthropicOptions): AsyncGener
     stream: true
   }
   if (system) body.system = system
+  if (opts.tools && opts.tools.length > 0) {
+    body.tools = opts.tools.map((t) => ({
+      name: t.name,
+      description: t.description,
+      input_schema: t.schema
+    }))
+  }
 
   let res: Response
   try {

@@ -19,5 +19,5 @@
       "@renderer/*": ["src/renderer/src/*"]
     }
   },
-  "include": ["src/renderer/src/**/*", "src/shared/**/*", "src/core/chat/types.ts", "src/core/chat/conversation.ts"]
+  "include": ["src/renderer/src/**/*", "src/shared/**/*", "src/core/chat/types.ts", "src/core/chat/conversation.ts", "src/core/chat/cost.ts"]
 }

@@ -38,6 +38,9 @@ export type ChatEvent =
   | { kind: 'thinking'; text: string }
   | { kind: 'usage'; inputTokens: number; outputTokens: number; model?: string }
   | { kind: 'toolCall'; call: ChatToolCall }
+  /** Emitted when a tool call EXECUTES (approved + run), with its outcome —
+   * the stream itself never carries results. */
+  | { kind: 'toolResult'; call: ChatToolCall }
   | { kind: 'done'; reason: 'end_turn' | 'stopped' | 'error' | 'max_iterations' }
 
 export class ChatError extends Error {

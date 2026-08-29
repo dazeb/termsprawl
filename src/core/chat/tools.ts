@@ -23,7 +23,7 @@ export interface ChatDriver {
   stream(opts: {
     model: string
     messages: ChatMessage[]
-    tools?: unknown[]
+    tools?: ChatToolDef[]
     signal?: AbortSignal
   }): AsyncIterable<ChatEvent>
 }
@@ -165,6 +165,16 @@ export async function runChatLoop(
         isError = true
       }
       appendToolResult(working, call, result, isError)
+      // The stream never carries tool outcomes — push them to the renderer
+      // explicitly so approval cards resolve and transcripts stay coherent.
+      try {
+        hooks.onEvent({
+          kind: 'toolResult',
+          call: { ...call, result, isError, status: isError ? 'error' : 'done' }
+        })
+      } catch {
+        // a broken consumer must never kill the loop
+      }
     }
   }
 

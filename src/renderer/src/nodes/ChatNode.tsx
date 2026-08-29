@@ -5,7 +5,8 @@ import { nodeTitle } from '../state/workspace'
 import { useCanvas } from '../canvas/Canvas'
 import type { ChatNodeData } from '../state/workspace'
 import { HelpBadge } from '../components/HelpBadge'
-import type { ChatEvent } from '../../../core/chat/types'
+import type { ChatEvent, ChatToolCall } from '../../../core/chat/types'
+import { conversationCost, type ModelPrice } from '../../../core/chat/cost'
 
 type ChatMsg = ChatNodeData['messages'][number]
 
@@ -24,6 +25,18 @@ export function ChatNode({ id, data, selected }: NodeProps<ChatNodeData>): React
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const streamingMsgId = useRef<string | null>(null)
   const systemRef = useRef(data.system)
+  // Per-model price overrides for the cost chip (audit B4) — settings are
+  // local-only and cheap to read once per node mount.
+  const [prices, setPrices] = useState<Record<string, ModelPrice>>({})
+  useEffect(() => {
+    let alive = true
+    void window.termsprawl.settings.get().then((s) => {
+      if (alive && s.chat?.priceOverrides) setPrices(s.chat.priceOverrides)
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
 
   /** Push the current local transcript into node data (persistence). */
   const commitMessages = (msgs: ChatMsg[], record = false): void => {
@@ -66,11 +79,26 @@ export function ChatNode({ id, data, selected }: NodeProps<ChatNodeData>): React
         } else if (ev.kind === 'toolCall') {
           ensureAssistant()
           const mid = streamingMsgId.current as string
-          next = next.map((m) =>
-            m.id === mid
-              ? { ...m, content: `${m.content}\n[tool: ${ev.call.name} → ${ev.call.result ?? ev.call.status}]` }
-              : m
-          )
+          next = next.map((m) => {
+            if (m.id !== mid) return m
+            // Dedupe re-broadcasts (the approval hook re-emits the same call).
+            const calls = m.toolCalls ?? []
+            if (calls.some((c) => c.id === ev.call.id)) return m
+            return { ...m, toolCalls: [...calls, { ...ev.call, status: 'running' }] }
+          })
+        } else if (ev.kind === 'toolResult') {
+          // The loop executed the tool (approved + run). Resolve the card.
+          next = next.map((m) => {
+            if (!m.toolCalls?.some((c) => c.id === ev.call.id)) return m
+            return {
+              ...m,
+              toolCalls: m.toolCalls.map((c) =>
+                c.id === ev.call.id
+                  ? { ...c, result: ev.call.result, isError: ev.call.isError, status: ev.call.status }
+                  : c
+              )
+            }
+          })
         } else if (ev.kind === 'done') {
           const stopped = ev.reason === 'stopped'
           const mid = streamingMsgId.current
@@ -124,11 +152,21 @@ export function ChatNode({ id, data, selected }: NodeProps<ChatNodeData>): React
         return
       }
       if (w === 'cost') {
+        // Local-only note role (audit B4): persists in the transcript but is
+        // never sent to providers (system notes vanished from Anthropic).
+        const msgs = messages.map((m) => ({ ...m, toolCalls: undefined }))
+        const c = conversationCost(msgs, data.model ?? '', prices)
         const total = messages.reduce(
           (acc, m) => acc + (m.usage ? m.usage.inputTokens + m.usage.outputTokens : 0),
           0
         )
-        const note: ChatMsg = { id: crypto.randomUUID(), role: 'system', content: `${total} tokens so far`, ts: Date.now() }
+        const usd = c.estimated ? 'n/a (no price for this model)' : `$${c.usd.toFixed(4)}`
+        const note: ChatMsg = {
+          id: crypto.randomUUID(),
+          role: 'note',
+          content: `${total} tokens so far — ${usd}`,
+          ts: Date.now()
+        }
         const next = [...messages, note]
         setMessages(next)
         commitMessages(next)
@@ -169,6 +207,23 @@ export function ChatNode({ id, data, selected }: NodeProps<ChatNodeData>): React
     (acc, m) => acc + (m.usage ? m.usage.inputTokens + m.usage.outputTokens : 0),
     0
   )
+  // Cost chip (audit B4): computed from assistant usage samples + price table
+  // (settings overrides first). Estimated (no price known) shows ~.
+  const cost = conversationCost(
+    messages.map((m) => ({ ...m, toolCalls: undefined })),
+    data.model ?? '',
+    prices
+  )
+  const costLabel = cost.estimated
+    ? totalTokens > 0
+      ? `~$? (${totalTokens} tok)`
+      : null
+    : `$${cost.usd.toFixed(4)}`
+
+  /** Approve/deny a pending tool call (audit B3 permission cards). */
+  const decide = (callId: string, decision: 'approve' | 'deny'): void => {
+    void window.termsprawl.chat.approve(id, callId, decision)
+  }
 
   return (
     <div className="chat-node">
@@ -179,6 +234,11 @@ export function ChatNode({ id, data, selected }: NodeProps<ChatNodeData>): React
         {totalTokens > 0 && (
           <span className="chat-node-chip" title="tokens in+out so far">
             {totalTokens} tok
+          </span>
+        )}
+        {costLabel && (
+          <span className="chat-node-chip" title="estimated cost of this conversation">
+            {costLabel}
           </span>
         )}
         <HelpBadge
@@ -210,6 +270,40 @@ export function ChatNode({ id, data, selected }: NodeProps<ChatNodeData>): React
               </details>
             )}
             <div className="chat-content">{m.content || (m.stopped ? '(stopped)' : '…')}</div>
+            {m.toolCalls?.map((c) => (
+              <div key={c.id} className={`chat-tool ${c.status === 'error' ? 'chat-tool-error' : ''}`}>
+                <span className="chat-tool-name">
+                  {c.status === 'running' ? '◌' : c.isError ? '✗' : '✓'} {c.name}
+                </span>
+                {c.status === 'running' ? (
+                  <div className="chat-tool-approve">
+                    <span className="chat-tool-args">{c.argsJson}</span>
+                    <button
+                      className="chat-approve"
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        decide(c.id, 'approve')
+                      }}
+                    >
+                      approve
+                    </button>
+                    <button
+                      className="chat-deny"
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        decide(c.id, 'deny')
+                      }}
+                    >
+                      deny
+                    </button>
+                  </div>
+                ) : (
+                  c.result && <pre className="chat-tool-result">{c.result}</pre>
+                )}
+              </div>
+            ))}
             {m.usage && (
               <span className="chat-usage">
                 {m.usage.inputTokens}→{m.usage.outputTokens} tok

@@ -8,13 +8,16 @@
 
 import { ChatError, type ChatEvent, type ChatMessage, type ChatToolCall } from './types'
 import { readSse } from './sse'
+import type { ChatToolDef } from './tools'
 
 export interface StreamOpenAIOptions {
   baseUrl: string
+  /** Bearer token (sensitive). */
   apiKey: string
   model: string
   messages: ChatMessage[]
-  tools?: unknown[]
+  /** ChatToolDefs passed straight through as the OpenAI tools array. */
+  tools?: ChatToolDef[]
   signal?: AbortSignal
   fetchFn?: typeof fetch
 }
@@ -29,15 +32,33 @@ export function openAiEndpoint(baseUrl: string): string {
 }
 
 /** Map internal messages to the OpenAI wire shape. Tool results become
- * role:'tool' messages carrying the originating tool_call id. */
+ * role:'tool' messages carrying the originating tool_call id; an assistant
+ * message that requested tools REPLAYS its tool_calls field (audit B3 — the
+ * API rejects a tool result whose initiating tool_calls went missing).
+ * 'note' messages are local-only annotations and never go over the wire
+ * (audit B4). */
 export function toOpenAiMessages(messages: ChatMessage[]): unknown[] {
-  return messages.map((m) => {
+  const out: unknown[] = []
+  for (const m of messages) {
+    if (m.role === 'note') continue
     if (m.role === 'tool') {
       const call = m.toolCalls?.[0]
-      return { role: 'tool', tool_call_id: call?.id ?? m.id, content: m.content }
+      out.push({ role: 'tool', tool_call_id: call?.id ?? m.id, content: m.content })
+      continue
     }
-    return { role: m.role, content: m.content }
-  })
+    const base: Record<string, unknown> = { role: m.role, content: m.content }
+    if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
+      base.tool_calls = m.toolCalls.map((c) => ({
+        id: c.id,
+        type: 'function',
+        function: { name: c.name, arguments: c.argsJson }
+      }))
+      // OpenAI forbids null content on tool-call messages.
+      if (!base.content) base.content = ''
+    }
+    out.push(base)
+  }
+  return out
 }
 
 interface ToolAcc {
@@ -64,7 +85,12 @@ export async function* streamOpenAI(opts: StreamOpenAIOptions): AsyncGenerator<C
     stream: true,
     max_tokens: DEFAULT_MAX_TOKENS
   }
-  if (opts.tools && opts.tools.length > 0) wireBody.tools = opts.tools
+  if (opts.tools && opts.tools.length > 0) {
+    wireBody.tools = opts.tools.map((t) => ({
+      type: 'function',
+      function: { name: t.name, description: t.description, parameters: t.schema }
+    }))
+  }
 
   let res: Response
   try {

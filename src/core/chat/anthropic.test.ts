@@ -43,7 +43,7 @@ describe('toAnthropicBody', () => {
       { role: 'assistant', content: 'hello' }
     ])
   })
-  it('prefers the explicit system option; drops tool messages', () => {
+  it('prefers the explicit system option; tool results become user tool_result turns (audit B3)', () => {
     const { system, messages } = toAnthropicBody(
       [
         { id: 't1', role: 'tool', content: 'res', ts: 1 },
@@ -52,7 +52,56 @@ describe('toAnthropicBody', () => {
       'explicit'
     )
     expect(system).toBe('explicit')
-    expect(messages).toEqual([{ role: 'user', content: 'q' }])
+    expect(messages).toEqual([
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', content: 'res' }] },
+      { role: 'user', content: 'q' }
+    ])
+  })
+
+  it('merges consecutive tool results into ONE user turn (alternation rule)', () => {
+    const { messages } = toAnthropicBody([
+      { id: 'a1', role: 'assistant', content: '', ts: 1, toolCalls: [
+        { id: 'c1', name: 'read_file', argsJson: '{}', status: 'done' },
+        { id: 'c2', name: 'list_dir', argsJson: '{}', status: 'done' }
+      ] },
+      { id: 't1', role: 'tool', content: 'res1', ts: 2, toolCalls: [{ id: 'c1', name: 'read_file', argsJson: '{}', status: 'done' }] },
+      { id: 't2', role: 'tool', content: 'res2', ts: 3, toolCalls: [{ id: 'c2', name: 'list_dir', argsJson: '{}', status: 'done' }] }
+    ])
+    expect(messages).toHaveLength(2)
+    expect(messages[0].role).toBe('assistant')
+    expect(messages[1].role).toBe('user')
+    expect(messages[1].content).toEqual([
+      { type: 'tool_result', tool_use_id: 'c1', content: 'res1' },
+      { type: 'tool_result', tool_use_id: 'c2', content: 'res2' }
+    ])
+  })
+
+  it('replays assistant toolCalls as tool_use blocks with text first (audit B3)', () => {
+    const { messages } = toAnthropicBody([
+      { id: 'a1', role: 'assistant', content: 'let me look', ts: 1, toolCalls: [
+        { id: 'c1', name: 'read_file', argsJson: '{"path":"/p"}', status: 'done' }
+      ] },
+      { id: 't1', role: 'tool', content: 'file body', ts: 2, toolCalls: [{ id: 'c1', name: 'read_file', argsJson: '{}', status: 'done' }] }
+    ])
+    expect(messages[0]).toEqual({
+      role: 'assistant',
+      content: [
+        { type: 'text', text: 'let me look' },
+        { type: 'tool_use', id: 'c1', name: 'read_file', input: { path: '/p' } }
+      ]
+    })
+  })
+
+  it('drops note messages from the wire (audit B4)', () => {
+    const { messages } = toAnthropicBody([
+      { id: 'u1', role: 'user', content: 'q', ts: 1 },
+      { id: 'n1', role: 'note', content: '1,234 tokens so far', ts: 2 },
+      { id: 'a1', role: 'assistant', content: 'a', ts: 3 }
+    ])
+    expect(messages).toEqual([
+      { role: 'user', content: 'q' },
+      { role: 'assistant', content: 'a' }
+    ])
   })
 })
 

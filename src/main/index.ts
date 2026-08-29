@@ -28,6 +28,7 @@ import { PtyManager } from '../core/pty-manager'
 import { shouldNotify, type AgentStatus } from '../shared/agent-status'
 import { createTelegramBot, type TelegramBot } from './telegram/bot'
 import { createChatRuntime, type ChatRuntime } from '../core/chat/runtime'
+import { projectChatTools } from '../core/chat/project-tools'
 import { createRelayRuntime, type RelayRuntime } from './relay'
 import { WorkspaceStore } from '../core/workspace-store'
 import type { ProjectMeta } from '../core/workspace-files'
@@ -287,6 +288,15 @@ const chatRuntime: ChatRuntime = createChatRuntime({
     }
   },
   broadcast: (nodeId, event) => platform.broadcast(`chat:event:${nodeId}`, event),
+  // Audit B3: project-scoped read-only tools. The chat is anchored to the
+  // active project's cwd (resolved from the workspace index); tools refuse
+  // anything outside it via resolveFileScope.
+  toolsFor: (req) => {
+    const cwd = workspaceStore
+      .snapshot()
+      .index.projects.find((p) => !p.closed && p.cwd)?.cwd
+    return cwd ? projectChatTools(workspaceStore, { cwd }) : []
+  },
   log: (msg) => console.log(`[chat] ${msg}`)
 })
 
