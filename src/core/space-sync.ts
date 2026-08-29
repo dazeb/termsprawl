@@ -143,6 +143,10 @@ export function createPushScheduler(
     dirty = false
     inFlight = runPush().finally(() => {
       inFlight = null
+      // Chain the coalesced follow-up: marks that arrived mid-flight must
+      // produce exactly ONE more push once this one lands (the documented
+      // invariant), not wait for the caller's next pump trigger.
+      if (dirty) void pump()
     })
     return inFlight
   }
