@@ -24,6 +24,12 @@ jobs:
         # the relay workspace explicitly so that coincidence can't break CI.
         run: pnpm --dir relay install --frozen-lockfile
 
+      # The renderer vite build peaks ~2 GB of JS heap; Node's default limit
+      # (~2 GB on the runner) aborts it mid-build (exit 134, "heap out of
+      # memory"). Raise the ceiling for all steps on the 8 GB runner CT.
+      - name: raise node heap limit
+        run: echo "NODE_OPTIONS=--max-old-space-size=4096" >> "$GITHUB_ENV"
+
       - name: typecheck
         run: pnpm run typecheck
 
@@ -46,6 +52,11 @@ jobs:
 
       - name: install
         run: pnpm install --frozen-lockfile
+
+      # Same heap raise for the release job (dist runs electron-builder after
+      # the vite build).
+      - name: raise node heap limit
+        run: echo "NODE_OPTIONS=--max-old-space-size=4096" >> "$GITHUB_ENV"
 
       - name: dist
         # --publish never: electron-builder would otherwise auto-publish to
