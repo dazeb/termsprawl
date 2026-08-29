@@ -38,22 +38,35 @@ export function useSafeResize<T extends HTMLElement>(
 
     const observer = new ResizeObserver((entries) => {
       try {
-        for (const entry of entries) {
-          const { width, height } = entry.contentRect
-          if (Math.abs(width - lastSize.current.w) < 1 && Math.abs(height - lastSize.current.h) < 1) {
-            return
-          }
-          lastSize.current = { w: width, h: height }
-          if (frame.current !== null) cancelAnimationFrame(frame.current)
-          frame.current = requestAnimationFrame(() => {
-            frame.current = null
-            try {
-              onResizeRef.current()
-            } catch {
-              // Never let layout work crash the renderer.
-            }
-          })
+        // Two fixes over the naive loop (found while auditing the
+        // "undelivered notifications" report):
+        //  - judge only the LAST entry of the batch: ResizeObserver coalesces
+        //    same-frame changes into one delivery, and the last entry always
+        //    carries the newest size.
+        //  - the >=1px guard compares against the last PROCESSED size. This
+        //    kills subpixel feedback loops without ever dropping a real
+        //    resize (the old `return`-inside-for could bail out of the whole
+        //    entries list on a subpixel-only entry and permanently desync
+        //    from the real size on drag resizes).
+        const last = entries[entries.length - 1]
+        if (!last) return
+        const { width, height } = last.contentRect
+        if (
+          Math.abs(width - lastSize.current.w) < 1 &&
+          Math.abs(height - lastSize.current.h) < 1
+        ) {
+          return
         }
+        lastSize.current = { w: width, h: height }
+        if (frame.current !== null) cancelAnimationFrame(frame.current)
+        frame.current = requestAnimationFrame(() => {
+          frame.current = null
+          try {
+            onResizeRef.current()
+          } catch {
+            // Never let layout work crash the renderer.
+          }
+        })
       } catch {
         // An RO callback must never throw — that can blank the page.
       }
