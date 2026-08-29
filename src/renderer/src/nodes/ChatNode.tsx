@@ -25,6 +25,8 @@ export function ChatNode({ id, data, selected }: NodeProps<ChatNodeData>): React
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const streamingMsgId = useRef<string | null>(null)
   const systemRef = useRef(data.system)
+  /** Text of the last non-slash send, for the error retry button (audit F4). */
+  const lastSendRef = useRef<string | null>(null)
   // Per-model price overrides for the cost chip (audit B4) — settings are
   // local-only and cheap to read once per node mount.
   const [prices, setPrices] = useState<Record<string, ModelPrice>>({})
@@ -118,16 +120,34 @@ export function ChatNode({ id, data, selected }: NodeProps<ChatNodeData>): React
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
-  // Keep the transcript pinned to the bottom.
+  // Scroll-follow (audit F4): pin to the bottom ONLY while the user is
+  // already there. Scrolling up to read history is no longer yanked back on
+  // the next token; any scroll back to the bottom re-arms following.
+  const followRef = useRef(true)
   useEffect(() => {
     const el = scrollRef.current
-    if (el) el.scrollTop = el.scrollHeight
+    if (!el) return
+    const onScroll = (): void => {
+      followRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [])
+  useEffect(() => {
+    const el = scrollRef.current
+    if (el && followRef.current) el.scrollTop = el.scrollHeight
   })
 
   const send = (): void => {
-    const text = input.trim()
+    sendText(input.trim())
+  }
+
+  /** Core send path (audit F4): takes the text explicitly so retry can call
+   * it without waiting for React state to round-trip through the textarea. */
+  const sendText = (text: string): void => {
     if (!text || busy) return
     setError(null)
+    lastSendRef.current = text
 
     // Slash commands are local-only.
     if (text.startsWith('/')) {
@@ -203,6 +223,24 @@ export function ChatNode({ id, data, selected }: NodeProps<ChatNodeData>): React
     void window.termsprawl.chat.stop(id)
   }
 
+  // Error retry (audit F4): a failed send re-sends the user's last message —
+  // it was left stranded in the transcript with no way to resend before.
+  const retry = (): void => {
+    const text = lastSendRef.current
+    if (!text || busy) return
+    // Drop the stranded user message + any partial assistant reply, then resend.
+    const dropped = [...messages]
+    while (dropped.length > 0) {
+      const last = dropped[dropped.length - 1]
+      if (last.role === 'assistant' || last.role === 'user') dropped.pop()
+      else break
+    }
+    setMessages(dropped)
+    commitMessages(dropped)
+    setError(null)
+    sendText(text)
+  }
+
   const totalTokens = messages.reduce(
     (acc, m) => acc + (m.usage ? m.usage.inputTokens + m.usage.outputTokens : 0),
     0
@@ -223,6 +261,24 @@ export function ChatNode({ id, data, selected }: NodeProps<ChatNodeData>): React
   /** Approve/deny a pending tool call (audit B3 permission cards). */
   const decide = (callId: string, decision: 'approve' | 'deny'): void => {
     void window.termsprawl.chat.approve(id, callId, decision)
+  }
+
+  // Slash autocomplete (audit F4 — the plan promised "minimal autocomplete").
+  const SLASH_COMMANDS: Array<{ cmd: string; desc: string }> = [
+    { cmd: 'clear', desc: 'clear the transcript' },
+    { cmd: 'model <id>', desc: 'switch model' },
+    { cmd: 'system <text>', desc: 'set the system preamble' },
+    { cmd: 'cost', desc: 'tokens + estimated cost so far' }
+  ]
+  const slashQuery = /^\/(\S*)$/.exec(input)
+  const slashMatches = slashQuery
+    ? SLASH_COMMANDS.filter((s) => s.cmd.startsWith(slashQuery[1].toLowerCase()))
+    : []
+  /** Complete the query to the first match (kept as a command word for
+   * parameterized commands like /model). */
+  const applySlash = (cmd: string): void => {
+    const word = cmd.split(' ')[0]
+    setInput(`/${word} `)
   }
 
   return (
@@ -322,10 +378,36 @@ export function ChatNode({ id, data, selected }: NodeProps<ChatNodeData>): React
             <div className="chat-content">▌</div>
           </div>
         )}
-        {error && <div className="chat-error">{error}</div>}
+        {error && (
+          <div className="chat-error">
+            <span>{error}</span>
+            <button className="chat-retry" onClick={retry} disabled={busy} title="Resend the last message">
+              retry
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="chat-node-input nodrag">
+        {slashMatches.length > 0 && (
+          <div className="chat-slash-menu" role="listbox" aria-label="slash commands">
+            {slashMatches.map((s) => (
+              <button
+                key={s.cmd}
+                role="option"
+                aria-selected={s.cmd === slashMatches[0].cmd}
+                className="chat-slash-item"
+                onMouseDown={(e) => {
+                  e.preventDefault() // keep textarea focus
+                  applySlash(s.cmd)
+                }}
+              >
+                <span className="chat-slash-cmd">/{s.cmd}</span>
+                <span className="chat-slash-desc">{s.desc}</span>
+              </button>
+            ))}
+          </div>
+        )}
         <textarea
           className="nowheel"
           rows={2}
@@ -334,6 +416,16 @@ export function ChatNode({ id, data, selected }: NodeProps<ChatNodeData>): React
           spellCheck={false}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
+            if (e.key === 'Escape' && slashMatches.length > 0) {
+              e.preventDefault()
+              setInput(input.replace(/\/\S*$/, ''))
+              return
+            }
+            if (e.key === 'Tab' && slashMatches.length > 0) {
+              e.preventDefault()
+              applySlash(slashMatches[0].cmd)
+              return
+            }
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault()
               send()
