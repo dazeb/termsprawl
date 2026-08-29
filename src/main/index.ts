@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Notification, protocol, net, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Notification, protocol, net, shell, screen } from 'electron'
 import { execFileSync, spawn } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -38,6 +38,7 @@ import { closeTerminalNode } from '../core/terminal-close'
 import { loadAppSettings, saveAppSettings } from '../core/app-settings'
 import { createUpdateBridge } from './updates'
 import { createCloudRuntime } from './cloud'
+import { clampWindowBounds, desiredUiZoom, FALLBACK_WORK_AREA } from './window-metrics'
 import type { CloudBackup, CloudDevicePoll, CloudDeviceStart, CloudUser } from '../shared/types'
 import { HookServer } from '../core/hook-server'
 import { claudeSettingsPath, installClaudeHooks } from './agents/hook-installer'
@@ -900,9 +901,14 @@ function registerBrowserIpc(): void {
 }
 
 function createWindow(): void {
+  // Size the window to the actual display (fixes controls/undo bar being cut
+  // off on 1280x720 screens where the old 1440x900 default overflowed).
+  const primary = screen.getPrimaryDisplay?.()
+  const workArea = primary?.workArea ?? FALLBACK_WORK_AREA
+  const { width, height } = clampWindowBounds({ width: 1440, height: 900 }, workArea)
   const win = new BrowserWindow({
-    width: 1440,
-    height: 900,
+    width,
+    height,
     minWidth: 800,
     minHeight: 600,
     title: 'termsprawl',
@@ -936,6 +942,15 @@ function createWindow(): void {
     void win.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
     void win.loadFile(join(__dirname, '../renderer/index.html'))
+  }
+
+  // Slight UI zoom-out on short displays so bottom-anchored chrome (React Flow
+  // zoom controls, undo/redo bar) stays fully visible. No-op at 1.0.
+  const uiZoom = desiredUiZoom(workArea)
+  if (uiZoom !== 1) {
+    win.webContents.on('did-finish-load', () => {
+      win.webContents.setZoomFactor(uiZoom)
+    })
   }
 }
 
