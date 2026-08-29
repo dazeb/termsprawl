@@ -336,6 +336,16 @@ const relayRuntime: RelayRuntime = createRelayRuntime({
 function registerRelayIpc(): void {
   ipcMain.handle(IPC.relayStatus, () => ({ state: relayRuntime.state(), error: relayRuntime.lastError() }))
   ipcMain.handle(IPC.relayConnect, () => relayRuntime.connect())
+  ipcMain.handle(IPC.relayDisconnect, () => {
+    relayRuntime.disconnect()
+  })
+  // Decrypted frames only leave the runtime while the renderer listens.
+  ipcMain.on(IPC.relayFrameSubscribe, () => {
+    relayRuntime.setFrameListener((frame) => platform.broadcast('relay:frame', frame))
+  })
+  ipcMain.on(IPC.relayFrameUnsubscribe, () => {
+    relayRuntime.setFrameListener(null)
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -1080,4 +1090,6 @@ app.on('before-quit', () => {
   telegramBot?.stop()
   void agentServer?.close()
   void cdpFacade?.close()
+  // Audit B7: a paired relay socket must not outlive the app.
+  relayRuntime.disconnect()
 })

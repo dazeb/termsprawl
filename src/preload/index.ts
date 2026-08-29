@@ -254,6 +254,35 @@ const api = {
         ipcRenderer.removeListener(channel, listener)
       }
     }
+  },
+
+  // Relay seam (Phase 11 Task 11.2, surfaced by audit B7): dial/disconnect the
+  // E2E-encrypted relay and follow its connection state. Frames from the peer
+  // arrive via onFrame (only while paired).
+  relay: {
+    status: (): Promise<{ state: string; error: string | null }> =>
+      ipcRenderer.invoke(IPC.relayStatus),
+    connect: (): Promise<{ ok: boolean; error?: string; pairing?: { peerLogin: string | null; selfId: string } }> =>
+      ipcRenderer.invoke(IPC.relayConnect),
+    disconnect: (): Promise<void> => ipcRenderer.invoke(IPC.relayDisconnect),
+    onStatus: (cb: (status: { state: string; error: string | null }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, status: { state: string; error: string | null }): void => cb(status)
+      ipcRenderer.on(IPC.relayStatus, listener)
+      return () => {
+        ipcRenderer.removeListener(IPC.relayStatus, listener)
+      }
+    },
+    onFrame: (cb: (frame: { from: string; text: string }) => void): (() => void) => {
+      // Frames are push-gated: subscribing tells main to attach its frame
+      // listener (audit B7 — no listener, no decrypted frames flowing).
+      ipcRenderer.send(IPC.relayFrameSubscribe)
+      const listener = (_event: Electron.IpcRendererEvent, frame: { from: string; text: string }): void => cb(frame)
+      ipcRenderer.on('relay:frame', listener)
+      return () => {
+        ipcRenderer.removeListener('relay:frame', listener)
+        ipcRenderer.send(IPC.relayFrameUnsubscribe)
+      }
+    }
   }
 }
 

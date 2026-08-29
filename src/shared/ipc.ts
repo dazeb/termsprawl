@@ -104,7 +104,11 @@ export const IPC = {
   // Relay seam (Phase 11 Task 11.2). Minimal surface: the app can dial the
   // relay and report status; pairing UI + terminal frames are follow-ups.
   relayConnect: 'relay:connect',
-  relayStatus: 'relay:status'
+  relayDisconnect: 'relay:disconnect',
+  relayStatus: 'relay:status',
+  // Frames flow only while the renderer holds an onFrame subscriber (audit B7).
+  relayFrameSubscribe: 'relay:frame:subscribe',
+  relayFrameUnsubscribe: 'relay:frame:unsubscribe'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

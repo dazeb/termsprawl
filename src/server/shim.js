@@ -226,6 +226,15 @@
       approve: function (nodeId, callId, decision) { return invoke('chat:approve', [nodeId, callId, decision]) },
       onEvent: function (nodeId, cb) { return on('chat:event:' + nodeId, cb) }
     },
+    // Relay seam (audit B7): the server routes relay:connect/disconnect/status
+    // through the same RPC surface; frames stream on the relay:frame channel.
+    relay: {
+      status: function () { return invoke('relay:status') },
+      connect: function () { return invoke('relay:connect') },
+      disconnect: function () { return invoke('relay:disconnect') },
+      onStatus: function (cb) { return on('relay:status', cb) },
+      onFrame: function (cb) { return on('relay:frame', cb) }
+    },
 
     git: {
       snapshot: function (target) { return invoke('git:snapshot', [target]) },

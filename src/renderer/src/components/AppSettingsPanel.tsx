@@ -518,6 +518,11 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
         render: (c) => <TelegramSection ctx={c} />
       },
       {
+        id: 'relay',
+        title: 'Relay',
+        render: (c) => <RelaySection ctx={c} />
+      },
+      {
         id: 'chat',
         title: 'Chat models',
         render: (c) => <ChatSection ctx={c} />
@@ -870,6 +875,148 @@ function TelegramSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
             })
           }
         />
+      </div>
+    </div>
+  )
+}
+
+/** Relay (Phase 11 Task 11.2, surfaced by audit B7): dial target + role +
+ * invite for the E2E-encrypted relay. Connect/disconnect live here too — the
+ * runtime is idle unless explicitly dialed. The URL is non-secret config
+ * (same class as apiProviders); invite codes are pair-once secrets stored on
+ * this machine only. */
+function RelaySection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
+  const { settings, update } = ctx
+  const relay = settings.relay ?? { role: 'host' as const }
+  const [draft, setDraft] = useState<{ url: string; invite: string }>({
+    url: relay.url ?? '',
+    invite: relay.invite ?? ''
+  })
+  const [conn, setConn] = useState<{ state: string; error: string | null }>({
+    state: 'disconnected',
+    error: null
+  })
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    let alive = true
+    void window.termsprawl.relay.status().then((s) => {
+      if (alive) setConn(s)
+    })
+    const off = window.termsprawl.relay.onStatus((s) => {
+      if (alive) setConn(s)
+    })
+    return () => {
+      alive = false
+      off()
+    }
+  }, [])
+
+  const saveRelay = (patch: { url?: string; role?: 'host' | 'client'; invite?: string }): void => {
+    void update({
+      relay: {
+        url: patch.url !== undefined ? patch.url : (relay.url ?? ''),
+        role: patch.role ?? (relay.role === 'client' ? 'client' : 'host'),
+        invite: patch.invite !== undefined ? patch.invite : relay.invite
+      }
+    })
+  }
+
+  const connect = async (): Promise<void> => {
+    setBusy(true)
+    try {
+      const res = await window.termsprawl.relay.connect()
+      if (!res.ok) setConn({ state: 'error', error: res.error ?? 'connect failed' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="settings-section">
+      <p className="app-settings-hint">
+        Pair two termsprawl instances through the E2E-encrypted relay: the host dials in
+        with role host, the peer joins with an invite code (role client). Traffic is
+        end-to-end encrypted — the relay only routes ciphertext. Nothing dials until you
+        press connect.
+      </p>
+
+      <div className="settings-pref-row">
+        <div className="settings-pref-copy">
+          <span className="settings-pref-label">Relay URL</span>
+          <span className="settings-pref-sub">wss:// address of the relay service</span>
+        </div>
+        <input
+          className="settings-text-input"
+          placeholder="wss://relay.example.com"
+          spellCheck={false}
+          value={draft.url}
+          onChange={(e) => setDraft((d) => ({ ...d, url: e.target.value }))}
+          onBlur={() => {
+            if (draft.url.trim() !== (relay.url ?? '')) void saveRelay({ url: draft.url.trim() })
+          }}
+        />
+      </div>
+
+      <div className="settings-pref-row">
+        <div className="settings-pref-copy">
+          <span className="settings-pref-label">Role</span>
+          <span className="settings-pref-sub">host exposes this machine; client connects out to a host</span>
+        </div>
+        <select
+          className="settings-select"
+          value={relay.role === 'client' ? 'client' : 'host'}
+          onChange={(e) => void saveRelay({ role: e.target.value as 'host' | 'client' })}
+        >
+          <option value="host">host</option>
+          <option value="client">client</option>
+        </select>
+      </div>
+
+      <div className="settings-pref-row">
+        <div className="settings-pref-copy">
+          <span className="settings-pref-label">Invite code</span>
+          <span className="settings-pref-sub">
+            {relay.invite ? `an invite is set (${relay.invite.slice(-4)})` : 'client role: paste the invite from the host'}
+          </span>
+        </div>
+        <input
+          type="password"
+          className="settings-text-input"
+          placeholder={relay.invite ? '••••••••' : 'invite code'}
+          spellCheck={false}
+          value={draft.invite}
+          onChange={(e) => setDraft((d) => ({ ...d, invite: e.target.value }))}
+          onBlur={() => {
+            if (draft.invite.trim() !== (relay.invite ?? '')) void saveRelay({ invite: draft.invite.trim() })
+          }}
+        />
+      </div>
+
+      <div className="settings-pref-row">
+        <div className="settings-pref-copy">
+          <span className="settings-pref-label">Connection</span>
+          <span className="settings-pref-sub">
+            {conn.state}
+            {conn.error ? ` — ${conn.error}` : ''}
+          </span>
+        </div>
+        {conn.state === 'paired' || conn.state === 'connecting' ? (
+          <button
+            className="account-login"
+            disabled={busy}
+            onClick={() => {
+              void window.termsprawl.relay.disconnect()
+              setConn({ state: 'disconnected', error: null })
+            }}
+          >
+            disconnect
+          </button>
+        ) : (
+          <button className="account-login" disabled={busy || !relay.url} onClick={() => void connect()}>
+            connect
+          </button>
+        )}
       </div>
     </div>
   )

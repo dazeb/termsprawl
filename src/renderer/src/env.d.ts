@@ -142,6 +142,13 @@ declare global {
         approve(nodeId: string, callId: string, decision: 'approve' | 'deny'): Promise<void>
         onEvent(nodeId: string, cb: (event: ChatEvent) => void): () => void
       }
+      relay: {
+        status(): Promise<{ state: string; error: string | null }>
+        connect(): Promise<{ ok: boolean; error?: string; pairing?: { peerLogin: string | null; selfId: string } }>
+        disconnect(): Promise<void>
+        onStatus(cb: (status: { state: string; error: string | null }) => void): () => void
+        onFrame(cb: (frame: { from: string; text: string }) => void): () => void
+      }
     }
   }
 }

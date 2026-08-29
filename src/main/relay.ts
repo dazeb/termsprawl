@@ -25,6 +25,10 @@ export interface RelayRuntime {
   lastError(): string | null
   connect(): Promise<{ ok: boolean; error?: string; pairing?: { peerLogin: string | null; selfId: string } }>
   disconnect(): void
+  /** Frame subscription (audit B7): relay:frame previously broadcast decrypted
+   * plaintext on every frame with no listener — a dead channel still pushing
+   * data. Frames now flow only while a subscriber is attached. */
+  setFrameListener(listener: ((frame: { from: string; text: string }) => void) | null): void
 }
 
 // The real socket factory lives here (not in core) so core stays dependency-free.
@@ -51,6 +55,7 @@ export function createRelayRuntime(deps: RelayRuntimeDeps): RelayRuntime {
   let error: string | null = null
   let client: RelayClient | null = null
   let pairing: RelayPairing | null = null
+  let frameListener: ((frame: { from: string; text: string }) => void) | null = null
 
   const setState = (s: RelayState): void => {
     state = s
@@ -77,9 +82,10 @@ export function createRelayRuntime(deps: RelayRuntimeDeps): RelayRuntime {
           log: (m) => deps.log?.(m)
         })
         client.onFrame((_p, from, text) => {
-          // terminal frames over the tunnel are a follow-up; surface frames
-          // on a channel so the future UI (or an agent) can subscribe
-          deps.broadcast('relay:frame', { from, text: text.slice(0, 2000) })
+          // terminal frames over the tunnel are a follow-up; surface frames on
+          // a channel ONLY while someone is listening (audit B7 — a dead
+          // channel pushing decrypted plaintext every frame is just waste).
+          frameListener?.({ from, text: text.slice(0, 2000) })
         })
         pairing = await client.connect()
         setState('paired')
@@ -101,6 +107,10 @@ export function createRelayRuntime(deps: RelayRuntimeDeps): RelayRuntime {
       client = null
       pairing = null
       setState('disconnected')
+    },
+
+    setFrameListener(listener: ((frame: { from: string; text: string }) => void) | null): void {
+      frameListener = listener
     }
   }
 }
