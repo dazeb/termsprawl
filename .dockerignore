@@ -1,0 +1,60 @@
+# .dockerignore for Dockerfile.space (ts-space image)
+#
+# The build context is the repo root; the image needs exactly four things
+# COPY'd out of it:
+#   package.json / pnpm-lock.yaml / .npmrc / pnpm-workspace.yaml → builder install
+#   out/               → prebuilt main+renderer+server bundles. These are built
+#                        BEFORE `docker build` runs (scripts/build-space-image.sh)
+#                        and COPY'd from context — so out/ must NOT be ignored.
+#   src/server/shim.js → read at RUNTIME from resolve('src/server/shim.js')
+#                        relative to CWD (SHIM_PATH in src/server/index.ts).
+#                        It is not bundled into out/, so the path must survive
+#                        into the image as source.
+#
+# Everything else is excluded, and for real reasons (not tidiness):
+#   node_modules/ — the host copy is electron-rebuilt (Electron ABI); node-pty
+#     would fail under plain node with a NODE_MODULE_VERSION mismatch. The
+#     builder stage installs its own prod node_modules.
+#   src/ — all of TypeScript source; only shim.js is re-included (dockerignore
+#     cannot re-include a child of an excluded DIRECTORY, hence the
+#     src/* → !src/server → src/server/* → !src/server/shim.js dance).
+#   dist/ release/ build/ — electron-builder artifacts/icon, not used in the image.
+#   relay/ — a separate package (own package.json + pnpm-lock.yaml), never part
+#     of the app image; copying it would break the single-importer lockfile
+#     assumption too.
+#   .git/, .hermes/, .worktrees/, docs/, scripts/, tests — big and/or irrelevant.
+# A tiny context also keeps `docker build` fast (no 28 MB out/ duplicates, no
+# node_modules upload).
+
+node_modules/
+**/node_modules/
+.git/
+.gitignore
+.gitattributes
+
+# electron-builder outputs + packaging assets (icon is only for the desktop app)
+dist/
+release/
+build/*
+
+# TS source: excluded wholesale, then shim.js is re-included through its chain
+src/*
+!src/server
+src/server/*
+!src/server/shim.js
+
+# separate relay package (own lockfile) — not part of the app image
+relay/
+
+# repo docs/tooling/tests/plan junk
+docs/
+scripts/
+.hermes/
+.worktrees/
+__pycache__/
+**/__pycache__/
+*.log
+.env
+.env.*
+README.md
+AGENTS.md

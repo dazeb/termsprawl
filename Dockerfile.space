@@ -1,0 +1,96 @@
+# termsprawl Space image — one user's hosted canvas = one container running the
+# Server Edition (plain node:http + ws, real PTYs via node-pty + tmux).
+#
+# Build the app FIRST (scripts/build-space-image.sh does both steps):
+#   pnpm run build && pnpm run build:server   → out/ (main + renderer + server)
+# then: docker build -f Dockerfile.space -t ts-space:latest .
+#
+# Runtime contract (src/server/index.ts):
+#   TERMSPRAWL_SERVER_ENTRY=1 node out/server/index.js
+#   PORT                    listen port (default 3110; +1..+10 fallback on EADDRINUSE)
+#   TERMSPRAWL_SERVER_HOST  bind address — MUST be 0.0.0.0 in a container.
+#                           Default is the loopback 127.0.0.1, which would make
+#                           a published port unreachable from the host.
+#   TERMSPRAWL_DATA         data dir (default ~/.config/termsprawl) → /data here
+#   TERMSPRAWL_SERVER_TOKEN 48-hex WS auth token ('' = auth disabled, loopback only)
+#
+# Why node_modules is rebuilt here: out/server/index.js imports `ws` and
+# `node-pty` from node_modules at runtime (externalized by
+# vite.config.server.ts). node-pty is a NATIVE module — the host node_modules
+# were electron-rebuilt (Electron ABI) and will NOT load under plain node
+# (NODE_MODULE_VERSION mismatch). The builder stage installs PROD deps only and
+# compiles node-pty against this image's own node 24, while --ignore-scripts
+# skips the root postinstall (`electron-rebuild -f -w node-pty`), which would
+# rebuild it back to the Electron ABI.
+#
+# Why src/server/shim.js ships as a source file: the server reads it at RUNTIME
+# from resolve('src/server/shim.js') relative to CWD (SHIM_PATH in
+# src/server/index.ts). It is not bundled into out/, so the image must keep
+# that exact relative path.
+
+# ---- builder: prod node_modules with node-pty compiled for plain node ----
+FROM node:24-slim AS builder
+
+# node-pty builds via node-gyp → python3, make, g++. git is installed for
+# safety (VCS-based deps would need it) — pnpm-lock.yaml has none today.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends python3 make g++ git \
+ && rm -rf /var/lib/apt/lists/*
+
+# pnpm 11 via corepack, pinned to the version that wrote pnpm-lock.yaml.
+RUN corepack enable pnpm \
+ && corepack prepare pnpm@11.22.0 --activate
+
+WORKDIR /app
+
+# Install manifest first for layer caching. pnpm-workspace.yaml carries the
+# allowBuilds list (node-pty: true) and declares NO packages — relay/ is NOT a
+# workspace member (it has its own pnpm-lock.yaml), so the single-importer
+# pnpm-lock.yaml resolves on its own.
+COPY package.json pnpm-lock.yaml .npmrc pnpm-workspace.yaml ./
+
+# --prod: renderer build deps (vite, electron, typescript…) are not needed at
+# runtime — the bundles are prebuilt into out/. --ignore-scripts skips the ROOT
+# postinstall (electron-rebuild → wrong ABI); node-pty is then compiled
+# deliberately in the next step, against plain node.
+RUN pnpm install --prod --frozen-lockfile --ignore-scripts \
+ && pnpm rebuild node-pty
+
+# ---- runtime ----
+FROM node:24-slim
+
+# tmux: session continuity for terminal nodes (cold-start scrollback replay).
+# git: the server exposes the git surface to the renderer.
+# procps: ps/top inside user terminals.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends tmux git procps \
+ && rm -rf /var/lib/apt/lists/*
+
+# non-root user; fixed uid so host-mounted /data can be chowned predictably.
+# node:24-slim already ships user `node` at uid/gid 1000 — rename it to `space`
+# instead of useradd (uid 1000 is taken; useradd would fail with "not unique").
+RUN usermod -l space -d /home/space -m node \
+ && groupmod -n space node
+
+WORKDIR /app
+
+COPY --from=builder --chown=space:space /app/node_modules ./node_modules
+COPY --chown=space:space out/ ./out/
+# runtime-resolved relative to CWD — must stay at src/server/shim.js
+COPY --chown=space:space src/server/shim.js ./src/server/shim.js
+
+ENV NODE_ENV=production \
+    TERMSPRAWL_SERVER_ENTRY=1 \
+    TERMSPRAWL_DATA=/data
+
+# user data (projects, workspace, settings) survives via a volume mount
+RUN mkdir -p /data && chown space:space /data
+VOLUME /data
+
+# TERMSPRAWL_SERVER_HOST is deliberately NOT defaulted to 0.0.0.0 here: the
+# server's loopback default is a security feature. Exposing a space to the
+# network is the operator's explicit decision:
+#   docker run -e TERMSPRAWL_SERVER_HOST=0.0.0.0 …
+EXPOSE 3110
+USER space
+CMD ["node", "out/server/index.js"]
