@@ -29,6 +29,7 @@ import { shouldNotify, type AgentStatus } from '../shared/agent-status'
 import { createTelegramBot, type TelegramBot } from './telegram/bot'
 import { createChatRuntime, type ChatRuntime } from '../core/chat/runtime'
 import { projectChatTools } from '../core/chat/project-tools'
+import { resolveFileScope } from '../core/project-scope'
 import { createRelayRuntime, type RelayRuntime } from './relay'
 import { WorkspaceStore } from '../core/workspace-store'
 import type { ProjectMeta } from '../core/workspace-files'
@@ -784,7 +785,15 @@ function registerGitIpc(): void {
 function registerFileProtocol(): void {
   protocol.handle(FILE_PROTOCOL, (request) => {
     const filePath = fromFilePreviewUrl(request.url)
-    if (!filePath || classifyFile(filePath) !== 'image') {
+    // Audit B11: this protocol previously served ANY image on disk — a
+    // renderer-compromise read primitive. Confining to known project folders
+    // matches the desktop threat model (file-service/project-scope behave the
+    // same way); the Server Edition never registers this protocol at all.
+    if (
+      !filePath ||
+      classifyFile(filePath) !== 'image' ||
+      !resolveFileScope(workspaceStore, filePath).ok
+    ) {
       return new Response('forbidden', { status: 403, statusText: 'Forbidden' })
     }
     return net.fetch(pathToFileURL(filePath).href)
@@ -1054,7 +1063,9 @@ void app.whenReady().then(async () => {
   // nodes can show RUNNING / NEEDS YOU badges.
   await hookServer.start()
   try {
-    installClaudeHooks(claudeSettingsPath(homedir()), hookServer.url)
+  // Install our hooks with the per-boot shared secret (audit B8). The server
+  // rejects POSTs whose ?key= mismatches — defense-in-depth on loopback.
+  installClaudeHooks(claudeSettingsPath(homedir()), hookServer.url, hookServer.secret)
   } catch (err) {
     console.error('[hooks] install failed:', err)
   }

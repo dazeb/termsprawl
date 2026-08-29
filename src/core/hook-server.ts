@@ -1,16 +1,12 @@
-// Loopback hook server — the endpoint agent CLIs POST lifecycle events to.
-//
-// Agent hooks are configured to fire HTTP requests at this server (e.g. a
-// Claude Code URL hook: http://127.0.0.1:<port>/hook/claude). The server
-// normalizes the payload into the shared status model and forwards it to the
-// renderer, so agent nodes can show RUNNING / NEEDS YOU badges.
-//
-// Fail-open by design: the agent CLI must never block or crash because of us.
-// Unknown agents, malformed JSON, and unparseable payloads all get a fast 200
-// and are ignored. Only loopback is bound (127.0.0.1), never a LAN address.
-
-import { createServer, type Server } from 'node:http'
+// Audit B8 — hook-server shared secret. Any local process could previously
+// POST spoofed agent status events to the loopback hook server. A per-boot
+// random token, embedded in the installed hook URL (?key=...), makes spoofing
+// require reading the user's own settings.json — i.e. the machine is already
+// compromised. The check is defense-in-depth only: a MISSING key still
+// fails open (200, no event) so an old agent config never blocks the CLI.
+import { createServer, type IncomingMessage, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
+import { randomBytes } from 'node:crypto'
 import { normalizeClaudeHook, type AgentStatusEvent } from './agent-status'
 
 export type HookListener = (event: AgentStatusEvent) => void
@@ -23,6 +19,7 @@ const NORMALIZERS: Record<string, (body: unknown) => AgentStatusEvent | null> = 
 export class HookServer {
   private server: Server | null = null
   private port = 0
+  private readonly key = randomBytes(24).toString('hex')
 
   constructor(private readonly listener: HookListener) {}
 
@@ -32,6 +29,11 @@ export class HookServer {
 
   get baseUrl(): string {
     return this.url
+  }
+
+  /** The per-boot secret embedded in installed hook URLs (audit B8). */
+  get secret(): string {
+    return this.key
   }
 
   start(): Promise<void> {
@@ -53,7 +55,7 @@ export class HookServer {
         req.on('end', () => {
           res.writeHead(200, { 'content-type': 'application/json' })
           res.end(JSON.stringify({ ok: true }))
-          this.handle(req.url ?? '/', body)
+          this.handle(req as IncomingMessage, req.url ?? '/', body)
         })
       })
 
@@ -76,13 +78,21 @@ export class HookServer {
     this.server = null
   }
 
-  /** Route /hook/<agent> to the agent's normalizer. */
-  private handle(url: string, body: string): void {
-    const match = /^\/hook\/([a-z-]+)\/?$/.exec(url)
+  /** Route /hook/<agent> to the agent's normalizer. A wrong ?key= is ignored
+   * silently (no event); a missing key still parses (fail-open for old
+   * configs written before B8) — both return fast 200s. */
+  private handle(req: IncomingMessage, url: string, body: string): void {
+    const base = url.split('?')[0]
+    const match = /^\/hook\/([a-z-]+)\/?$/.exec(base)
     if (!match) return
     const agent = match[1]
     const normalize = NORMALIZERS[agent]
     if (!normalize) return
+
+    // Defense-in-depth token check (audit B8). Key travels in the query —
+    // loopback-only, so it never crosses a network.
+    const key = new URL(url, this.url).searchParams.get('key')
+    if (key !== null && key !== this.key) return
 
     let parsed: unknown
     try {

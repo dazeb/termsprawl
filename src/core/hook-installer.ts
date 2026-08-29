@@ -28,11 +28,14 @@ const EVENTS = ['PreToolUse', 'PostToolUse', 'Notification', 'Stop', 'UserPrompt
 
 /** Hook config fragment for one server base URL (e.g. http://127.0.0.1:PORT/).
  * Every event POSTs to /hook/claude — the payload's hook_event_name tells the
- * server which lifecycle event fired. */
-export function buildClaudeHookConfig(baseUrl: string): ClaudeHooksConfig {
+ * server which lifecycle event fired. `secretKey` (audit B8) rides in the
+ * query so the loopback server can reject spoofed POSTs from other local
+ * processes; omit it only in tests. */
+export function buildClaudeHookConfig(baseUrl: string, secretKey?: string): ClaudeHooksConfig {
+  const suffix = secretKey ? `?key=${encodeURIComponent(secretKey)}` : ''
   const entry: ClaudeHookEntry = {
     matcher: '*',
-    hooks: [{ type: 'url', url: `${baseUrl}hook/claude` }]
+    hooks: [{ type: 'url', url: `${baseUrl}hook/claude${suffix}` }]
   }
   return {
     PreToolUse: [entry],
@@ -56,10 +59,11 @@ function readSettings(path: string): SettingsFile {
   }
 }
 
-/** Merge our URL hooks into settings.json at `path` (creates it if needed). */
-export function installClaudeHooks(settingsPath: string, baseUrl: string): void {
+/** Merge our URL hooks into settings.json at `path` (creates it if needed).
+ * `secretKey` (audit B8) is embedded in the hook URL query. */
+export function installClaudeHooks(settingsPath: string, baseUrl: string, secretKey?: string): void {
   const settings = readSettings(settingsPath)
-  const ours = buildClaudeHookConfig(baseUrl) as unknown as Record<string, unknown>
+  const ours = buildClaudeHookConfig(baseUrl, secretKey) as unknown as Record<string, unknown>
 
   settings.hooks = { ...(settings.hooks ?? {}) }
   for (const event of EVENTS) {

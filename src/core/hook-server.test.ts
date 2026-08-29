@@ -93,4 +93,39 @@ describe('HookServer', () => {
     expect(res.status).toBe(405)
     expect(events).toEqual([])
   })
+
+  it('drops events with a WRONG key but still returns 200 (audit B8)', async () => {
+    const { server, events } = await makeServer()
+    const res = await fetch(`${server.url}hook/claude?key=wrong-secret`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ hook_event_name: 'Stop', session_id: 'spoof' })
+    })
+    expect(res.status).toBe(200)
+    await new Promise((r) => setTimeout(r, 100))
+    expect(events).toEqual([])
+  })
+
+  it('accepts events carrying the server secret key (audit B8)', async () => {
+    const { server, events } = await makeServer()
+    const res = await fetch(`${server.url}hook/claude?key=${server.secret}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ hook_event_name: 'Stop', session_id: 'real' })
+    })
+    expect(res.status).toBe(200)
+    await waitFor(() => events.length > 0)
+    expect(events[0].sessionId).toBe('real')
+  })
+
+  it('fail-opens on a MISSING key (pre-B8 configs keep working, audit B8)', async () => {
+    const { server, events } = await makeServer()
+    await fetch(`${server.url}hook/claude`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ hook_event_name: 'Stop', session_id: 'legacy' })
+    })
+    await waitFor(() => events.length > 0)
+    expect(events[0].sessionId).toBe('legacy')
+  })
 })
