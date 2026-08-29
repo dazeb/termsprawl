@@ -17,6 +17,7 @@ import { ServerPlatform } from './platform'
 import { buildHandlers } from './handlers'
 import { createDispatcher, type RpcDispatcher, type RpcResponse } from './rpc'
 import { startAgentBridge } from './agent-bridge'
+import { createSpacePusher, restoreFromCloud } from './space-sync-wiring'
 import { createAuthPolicy, authorizeUpgrade, type AuthPolicy } from './server-auth'
 
 const PORT = Number(process.env.PORT ?? process.argv[2] ?? 3110)
@@ -213,6 +214,28 @@ if (process.env.TERMSPRAWL_SERVER_ENTRY === '1') {
   // workspace:snapshot and save on any change.
   const currentProjectNodes = new Map<string, unknown[]>()
 
+  // ---- Space sync (online canvas spaces) ----
+  // Active only when the space env is present (TS_CLOUD_API + TS_SPACE_BOOT_TOKEN);
+  // otherwise this is a plain offline Server Edition. Restore pulls the latest
+  // snapshot (rev-guarded) BEFORE the welcome project check; pushes ride the
+  // 30s auto-save timer's dirty detection; shutdown forces a final flush.
+  let spacePusher: ReturnType<typeof createSpacePusher> | null = null
+  if (process.env.TS_CLOUD_API && process.env.TS_SPACE_BOOT_TOKEN) {
+    const syncDeps = {
+      cfg: {
+        apiBase: process.env.TS_CLOUD_API,
+        bootToken: process.env.TS_SPACE_BOOT_TOKEN,
+        fetchFn: fetch,
+      },
+      userDataPath: platform.userDataPath,
+      call: async (method: string, args: unknown[]) => (await callResult(method, args)) ?? {},
+      log: (...parts: unknown[]) => console.log('[space-sync]', ...parts),
+    }
+    await restoreFromCloud(syncDeps)
+    spacePusher = createSpacePusher(syncDeps)
+    console.log('[space-sync] active (cloud:', process.env.TS_CLOUD_API + ')')
+  }
+
   // ---- Port fallback: try PORT, PORT+1, ... PORT+10 ----
   // Audit B1: bind the LOOPBACK by default. TERMSPRAWL_SERVER_HOST=0.0.0.0
   // opts into LAN exposure (with TERMSPRAWL_SERVER_TOKEN set deliberately).
@@ -268,6 +291,7 @@ if (process.env.TERMSPRAWL_SERVER_ENTRY === '1') {
         if (key !== JSON.stringify(prev)) {
           currentProjectNodes.set(projectId, nodes)
           await call('workspace:save-nodes', [projectId, nodes])
+          spacePusher?.markDirty() // canvas changed → coalesced snapshot push
         }
       }
     } catch {
@@ -278,6 +302,14 @@ if (process.env.TERMSPRAWL_SERVER_ENTRY === '1') {
   // ---- Shutdown safety ----
   async function shutdown() {
     console.log('[server] shutting down...')
+    // Final space snapshot first (best-effort, never blocks exit long).
+    if (spacePusher) {
+      try {
+        await Promise.race([spacePusher.flush(), new Promise((r) => setTimeout(r, 5000))])
+      } catch {
+        // best-effort — the periodic push will catch up next boot
+      }
+    }
     // Flush dirty state: save all projects
     try {
       const s = await callResult('workspace:snapshot', [])
