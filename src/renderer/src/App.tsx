@@ -7,6 +7,7 @@ import { AnnouncementBanner } from './components/AnnouncementBanner'
 import { AppSettingsPanel } from './components/AppSettingsPanel'
 import { CogMenu } from './components/CogMenu'
 import { HelpBadge } from './components/HelpBadge'
+import { isResizeObserverNoise } from './ro-noise'
 import { useProjects } from './state/projects'
 import { applyTheme } from './state/theme'
 import { useBrowserHome } from './state/browser-home'
@@ -43,12 +44,20 @@ export function App(): React.JSX.Element {
 
   // Visible error surface: any uncaught renderer error shows as a banner so
   // failures are never silent (used for diagnosing machine-specific issues).
+  // The benign ResizeObserver loop report (see ro-noise.ts) is filtered HERE —
+  // preventDefault in main.tsx stops the DevTools console report but does NOT
+  // stop other 'error' listeners, so this handler must ignore it too or the
+  // banner re-appears on every node resize.
   useEffect(() => {
     const onError = (e: ErrorEvent): void => {
+      if (isResizeObserverNoise(e.message)) return
       setError(e.message || String(e.error ?? 'unknown error'))
     }
     const onRejection = (e: PromiseRejectionEvent): void => {
-      setError(String(e.reason ?? 'unhandled promise rejection'))
+      const reason = e.reason
+      const message = reason instanceof Error ? reason.message : String(reason ?? 'unhandled promise rejection')
+      if (isResizeObserverNoise(message)) return
+      setError(message)
     }
     window.addEventListener('error', onError)
     window.addEventListener('unhandledrejection', onRejection)
