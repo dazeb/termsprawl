@@ -148,8 +148,9 @@ each other:
   tokens needed). Push there for any released/notable state.
 - **gitea** = `ssh://gitea@192.168.8.175:22/dazeb/termsprawl.git` — self-hosted
   Gitea (CT 100 on the Proxmox host, PVE 192.168.8.195). **CI runs here only**
-  (Gitea Actions; the user is banned from GitHub Actions). Push every branch
-  push here so CI sees it (`git push gitea main`).
+  (Gitea Actions; the GitHub account is permanently Actions-disabled — never
+  add `.github/workflows`, never suggest GitHub Actions, don't re-open PRs
+  about it). Push every branch push here so CI sees it (`git push gitea main`).
 - **origin** = `hermes-box:/srv/git/termsprawl.git` — bare repo on hermes-box
   (SSH alias in `~/.ssh/config`; key `~/.ssh/hermes-box_ed25519`). Working
   remote for the parallel-agent loop (fast, no auth churn). Both remotes get
@@ -173,10 +174,10 @@ each other:
 
 ## CI & release ritual
 
-**CI runs on self-hosted Gitea only** (`.gitea/workflows/ci.yml`). The user is
-banned from GitHub Actions — never add `.github/workflows` or suggest GitHub
-Actions. Pipeline (runner CT 109 `actrunner` at 192.168.8.221, `gitea-runner`
-v3.2.0, host executor, label `ubuntu-latest`):
+**CI runs on self-hosted Gitea only** (`.gitea/workflows/ci.yml`). The GitHub
+account is permanently Actions-disabled — never add `.github/workflows` or
+suggest GitHub Actions. Pipeline (runner CT 109 `actrunner` at
+192.168.8.221, `gitea-runner` v3.2.0, host executor, label `ubuntu-latest`):
 
 - push to `main` → `verify`: checkout, install, typecheck, test, build
 - `v*` tag → `verify` + `release`: builds once, publishes the AppImage,
