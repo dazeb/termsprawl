@@ -125,6 +125,9 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
   const loadingRef = useRef(false)
   const latestNodesRef = useRef(nodes)
   latestNodesRef.current = nodes
+  /** Live mirror of activeProjectId for unload handlers (audit F8). */
+  const activeProjectIdRef = useRef<string | null>(activeProjectId)
+  activeProjectIdRef.current = activeProjectId
 
   // Mirror the invert setting so the capture-phase wheel listener below always
   // reads the latest value without re-binding on every toggle.
@@ -630,6 +633,26 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
     }, 600)
     return () => clearTimeout(timer)
   }, [nodes, activeProjectId, saveNodes])
+
+  // Quit/tab-close flush (audit F8): the 600ms debounce above loses layout
+  // changes made in the final 600ms before the renderer unloads. The main
+  // process persists again on before-quit via its own store, but the renderer
+  // is the live source of truth — push the latest nodes synchronously here.
+  useEffect(() => {
+    const flush = (): void => {
+      if (loadingRef.current || !activeProjectIdRef.current) return
+      void saveProjectNodes(activeProjectIdRef.current, serializeNodes(latestNodesRef.current))
+    }
+    window.addEventListener('beforeunload', flush)
+    window.addEventListener('pagehide', flush)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') flush()
+    })
+    return () => {
+      window.removeEventListener('beforeunload', flush)
+      window.removeEventListener('pagehide', flush)
+    }
+  }, [saveProjectNodes])
 
   // A project switch cancels the debounce above. Flush the outgoing canvas
   // explicitly so rapid edits are not replaced by its older cached snapshot.
