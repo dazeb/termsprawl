@@ -2941,6 +2941,19 @@ html[data-theme='light'] .settings-nav-item:hover {
   z-index: var(--z-toast);
 }
 
+/* Monaco lazy-chunk placeholder (audit F7): shown for the split second while
+ * the editor/diff chunk loads. */
+.monaco-node-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 11px 'Geist Mono', 'JetBrains Mono', monospace;
+  color: var(--muted);
+  background: var(--surface);
+}
+
 .chat-slash-item {
   display: flex;
   align-items: baseline;

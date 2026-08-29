@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -10,13 +10,11 @@ import ReactFlow, {
   useReactFlow
 } from 'reactflow'
 import 'reactflow/dist/style.css'
-import type { Connection, Edge, EdgeChange, Node, NodeChange } from 'reactflow'
+import type { Connection, Edge, EdgeChange, Node, NodeChange, NodeProps } from 'reactflow'
 import { TerminalNode } from '../nodes/TerminalNode'
 import { FileTree } from '../components/FileTree'
 import { StickyNode } from '../nodes/StickyNode'
 import { GroupNode } from '../nodes/GroupNode'
-import { DiffNode } from '../nodes/DiffNode'
-import { EditorNode } from '../nodes/EditorNode'
 import { BrowserNode } from '../nodes/BrowserNode'
 import { ChatNode } from '../nodes/ChatNode'
 import {
@@ -48,15 +46,35 @@ import { useCanvasRequests } from '../state/canvas-requests'
 import { useBrowserHome } from '../state/browser-home'
 import type { SprawlNodeData, TerminalNodeData } from '../state/workspace'
 
+// Monaco-backed nodes load on first use (audit F7): the editor + diff bundles
+// (~10 MB of Monaco + workers) no longer sit in the boot-critical chunk. The
+// wrappers cast through unknown because React Flow's ComponentType contract
+// wants the exact node props type; the lazy wrapper re-exposes the same props.
+const DiffNodeLazy = lazy(async () => ({ default: (await import('../nodes/DiffNode')).DiffNode })) as unknown as React.ComponentType<NodeProps<SprawlNodeData>>
+const EditorNodeLazy = lazy(async () => ({ default: (await import('../nodes/EditorNode')).EditorNode })) as unknown as React.ComponentType<NodeProps<SprawlNodeData>>
+const MonacoFallback = (
+  <div className="monaco-node-fallback">loading editor…</div>
+)
+
 const nodeTypes = {
   terminal: TerminalNode,
   sticky: StickyNode,
   group: GroupNode,
-  diff: DiffNode,
-  editor: EditorNode,
+  // Monaco nodes render through Suspense (audit F7) — lazy chunks load on
+  // the first editor/diff node, not at boot.
+  diff: (props: NodeProps<SprawlNodeData>) => (
+    <Suspense fallback={MonacoFallback}>
+      <DiffNodeLazy {...props} />
+    </Suspense>
+  ),
+  editor: (props: NodeProps<SprawlNodeData>) => (
+    <Suspense fallback={MonacoFallback}>
+      <EditorNodeLazy {...props} />
+    </Suspense>
+  ),
   browser: BrowserNode,
   chat: ChatNode
-}
+} as const
 
 // Canvas context: lets custom nodes update their own data and record undo
 // snapshots without polluting serialized node data with callbacks.
