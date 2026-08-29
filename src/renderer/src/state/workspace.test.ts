@@ -8,6 +8,7 @@ import {
   createBrowserNode,
   DEFAULT_BROWSER_URL,
   createDiffNode,
+  createChatNode,
   createDrukNode,
   createEditorNode,
   createGroup,
@@ -215,6 +216,43 @@ describe('sticky nodes', () => {
     expect(nodeTitle(node.data)).toBe('sticky note')
     node.data.text = 'TODO\n- ship phase 6'
     expect(nodeTitle(node.data)).toBe('TODO')
+  })
+
+  it('caps persisted chat history at the conversation byte budget (audit B5)', () => {
+    const node = createChatNode('test-model')
+    for (let i = 1; i <= 30; i++) {
+      node.data.messages.push({
+        id: `m${i}`,
+        role: 'user',
+        content: `question ${i} ${'y'.repeat(4000)}`,
+        ts: i
+      })
+      node.data.messages.push({
+        id: `a${i}`,
+        role: 'assistant',
+        content: `answer ${i} ${'z'.repeat(4000)}`,
+        ts: i
+      })
+    }
+    const live = node.data.messages.length
+    const blob = JSON.stringify(serializeNodes([node]))
+    // Serialized node data must respect the same 200 KB budget the chat core
+    // uses — a long-running chat can't bloat project.json unboundedly.
+    expect(blob.length).toBeLessThanOrEqual(220 * 1024)
+    // The live node keeps its full transcript; only the persisted copy is capped.
+    expect(node.data.messages).toHaveLength(live)
+  })
+
+  it('round-trips chat node data (streaming flag excluded from drift)', () => {
+    const node = createChatNode('test-model')
+    node.data.messages.push({ id: 'm1', role: 'user', content: 'hi', ts: 1 })
+    node.data.messages.push({ id: 'a1', role: 'assistant', content: 'hello', ts: 2 })
+    node.data.cost = { usd: 0.0123, estimated: true }
+    const restored = deserializeNodes(serializeNodes([node]))[0]
+    if (restored.data.kind !== 'chat') throw new Error('expected chat node')
+    expect(restored.data.model).toBe('test-model')
+    expect(restored.data.messages.map((m) => m.content)).toEqual(['hi', 'hello'])
+    expect(restored.data.cost).toEqual({ usd: 0.0123, estimated: true })
   })
 })
 

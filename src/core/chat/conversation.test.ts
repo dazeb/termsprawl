@@ -6,6 +6,7 @@ import {
   appendDelta,
   appendMessage,
   appendThinking,
+  capConversationMessages,
   createConversation,
   deserializeConversation,
   detectSlashCommand,
@@ -148,6 +149,23 @@ describe('serialization', () => {
     const contents = back.messages.map((m) => m.content)
     expect(contents.some((c) => c.startsWith('u1'))).toBe(false)
     expect(serializeConversation(conv, 1400).length).toBeLessThanOrEqual(1400)
+  })
+
+  it('capConversationMessages leaves messages untouched under the cap', () => {
+    const conv = sampleConversation()
+    expect(capConversationMessages(conv.messages)).toBe(conv.messages)
+  })
+
+  it('capConversationMessages drops oldest pairs without a leading system message', () => {
+    const conv = createConversation()
+    for (let i = 1; i <= 6; i++) {
+      appendMessage(conv, 'user', `u${i}${'x'.repeat(200)}`)
+      appendMessage(conv, 'assistant', `a${i}${'x'.repeat(200)}`)
+    }
+    const capped = capConversationMessages(conv.messages, 1400)
+    expect(JSON.stringify({ v: 1, messages: capped }).length).toBeLessThanOrEqual(1400)
+    expect(capped[capped.length - 1].content).toContain('a6')
+    expect(capped.some((m) => m.content.startsWith('u1'))).toBe(false)
   })
 
   it('throws TypeError on garbage input', () => {

@@ -6,7 +6,7 @@
 // Clean-room: written fresh for termsprawl; nothing copied from the fork or
 // any other project.
 
-export type ChatRole = 'user' | 'assistant' | 'system' | 'tool'
+export type ChatRole = 'user' | 'assistant' | 'system' | 'tool' | 'note'
 
 export interface ChatToolCall {
   id: string

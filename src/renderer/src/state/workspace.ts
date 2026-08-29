@@ -3,8 +3,9 @@
 // no state, only the shapes.
 
 import type { Node } from 'reactflow'
-import type { ProjectRemote, SerializedNode } from '@shared/types'
+import type { ChatNodeData, ProjectRemote, SerializedNode } from '@shared/types'
 import { agentConfig, agentIds, agentTitle, agentCommand, type AgentId } from '@shared/agents/config'
+import { capConversationMessages } from '../../../core/chat/conversation'
 
 export const NODE_TYPES = ['terminal', 'sticky', 'group', 'diff', 'editor', 'browser', 'chat'] as const
 export type NodeKind = (typeof NODE_TYPES)[number]
@@ -80,27 +81,9 @@ export interface BrowserNodeData {
   activeTabId?: string
 }
 
-/** Chat node persisted data — mirrors shared ChatNodeData (re-declared here to
- * keep workspace.ts free of core imports in its type surface). */
-export interface ChatNodeData {
-  kind: 'chat'
-  provider?: string
-  model?: string
-  system?: string
-  messages: Array<{
-    id: string
-    role: 'user' | 'assistant' | 'system' | 'tool'
-    content: string
-    thinking?: string
-    stopped?: boolean
-    usage?: { inputTokens: number; outputTokens: number }
-    model?: string
-    ts: number
-  }>
-  cost?: { usd: number; estimated: boolean }
-  /** While a reply is streaming (cache only — never persisted mid-flight). */
-  streaming?: boolean
-}
+/** Chat node persisted data lives in @shared/types (single declaration — the
+ * former workspace-local copy drifted from the core chat model). */
+export type { ChatNodeData } from '@shared/types'
 
 export type SprawlNodeData =
   | TerminalNodeData
@@ -511,16 +494,26 @@ export function ungroup(groupId: string, nodes: Node<SprawlNodeData>[]): Node<Sp
 
 /** Serialize live React Flow nodes to the persisted shape. */
 export function serializeNodes(nodes: Node<SprawlNodeData>[]): SerializedNode[] {
-  return nodes.map((n) => ({
-    id: n.id,
-    type: n.type ?? 'terminal',
-    position: { x: n.position.x, y: n.position.y },
-    parentId: n.parentId,
-    width: n.width ?? undefined,
-    height: n.height ?? undefined,
-    style: n.style ? ({ ...n.style } as Record<string, unknown>) : undefined,
-    data: { ...n.data }
-  }))
+  return nodes.map((n) => {
+    // Chat history rides in node data; apply the conversation byte cap on the
+    // way to disk (audit B5) so a long-running chat can't bloat project.json
+    // and break the git-shareable-projects promise. The live node keeps its
+    // full transcript — only the persisted copy is capped.
+    const data =
+      n.data.kind === 'chat' && n.data.messages.length > 0
+        ? { ...n.data, messages: capConversationMessages(n.data.messages) }
+        : n.data
+    return {
+      id: n.id,
+      type: n.type ?? 'terminal',
+      position: { x: n.position.x, y: n.position.y },
+      parentId: n.parentId,
+      width: n.width ?? undefined,
+      height: n.height ?? undefined,
+      style: n.style ? ({ ...n.style } as Record<string, unknown>) : undefined,
+      data: { ...data }
+    }
+  })
 }
 
 /** Rehydrate persisted nodes into React Flow nodes. */

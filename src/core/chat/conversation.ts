@@ -98,19 +98,31 @@ export function detectSlashCommand(text: string): SlashCommand | null {
 /** Serialize as { v: 1, messages }. If the JSON exceeds maxBytes, drop oldest
  * user+assistant PAIRS until it fits (a leading system message is kept). */
 export function serializeConversation(conv: Conversation, maxBytes = 200 * 1024): string {
-  let messages = conv.messages
+  const messages = capConversationMessages(conv.messages, maxBytes)
+  return JSON.stringify({ v: 1, messages })
+}
+
+/** Byte-capped history window: drop oldest user+assistant PAIRS until the
+ * serialized message array fits maxBytes (a leading system message survives).
+ * Pure helper so node-data persistence can apply the same cap without going
+ * through serializeConversation (audit B5 — project.json must stay small). */
+export function capConversationMessages(
+  messages: ChatMessage[],
+  maxBytes = 200 * 1024
+): ChatMessage[] {
   let out = JSON.stringify({ v: 1, messages })
-  if (out.length <= maxBytes) return out
+  if (out.length <= maxBytes) return messages
   let start = messages.length > 0 && messages[0].role === 'system' ? 1 : 0
-  while (out.length > maxBytes && start + 1 < messages.length) {
-    if (messages[start].role === 'user' && messages[start + 1].role === 'assistant') {
-      messages = messages.slice(0, start).concat(messages.slice(start + 2))
+  let capped = messages
+  while (out.length > maxBytes && start + 1 < capped.length) {
+    if (capped[start].role === 'user' && capped[start + 1].role === 'assistant') {
+      capped = capped.slice(0, start).concat(capped.slice(start + 2))
     } else {
       start += 1
     }
-    out = JSON.stringify({ v: 1, messages })
+    out = JSON.stringify({ v: 1, messages: capped })
   }
-  return out
+  return capped
 }
 
 /** Parse a serialized conversation. Tolerates unknown fields on messages;

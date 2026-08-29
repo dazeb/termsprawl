@@ -284,7 +284,8 @@ export interface ChatSettings {
 
 /** A chat node's persisted state (Phase 11 Task 11.4). History rides in node
  * data, so it survives restarts via the project file (serialized with the
- * conversation's byte cap). */
+ * conversation's byte cap). Kept in sync with core/chat/types ChatMessage —
+ * structural, because shared/ must not import core/. */
 export interface ChatNodeData {
   kind: 'chat'
   provider?: string
@@ -293,9 +294,17 @@ export interface ChatNodeData {
   system?: string
   messages: Array<{
     id: string
-    role: 'user' | 'assistant' | 'system' | 'tool'
+    role: 'user' | 'assistant' | 'system' | 'tool' | 'note'
     content: string
     thinking?: string
+    toolCalls?: Array<{
+      id: string
+      name: string
+      argsJson: string
+      result?: string
+      isError?: boolean
+      status: 'running' | 'done' | 'error'
+    }>
     stopped?: boolean
     usage?: { inputTokens: number; outputTokens: number }
     model?: string
@@ -303,6 +312,8 @@ export interface ChatNodeData {
   }>
   /** Running total for the cost chip (usd + estimated flag). */
   cost?: { usd: number; estimated: boolean }
+  /** While a reply is streaming (cache only — never persisted mid-flight). */
+  streaming?: boolean
 }
 
 /** An A2A (agent-to-agent) peer the user may route tasks to. */
