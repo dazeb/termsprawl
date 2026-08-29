@@ -5,6 +5,15 @@
   --accent: #c6f135;
   --panel: #131313;
   --border: #262626;
+
+  /* z-index scale (audit F5) — five layers for GLOBAL chrome only. Everything
+   * inside the React Flow canvas keeps small local literals (they stack
+   * within the transformed container, independent of these). */
+  --z-canvas-chrome: 100; /* tab menus, project settings — above chrome, below overlays */
+  --z-overlay: 500; /* modal backdrops, confirm overlays */
+  --z-toast: 1000; /* context menu, update toast */
+  --z-banner: 2000; /* error/announcement banners */
+  --z-popover: 4000; /* help popovers — top of everything */
 }
 
 /* Light theme — applied by swapping the variable palette when the root
@@ -20,6 +29,23 @@ html[data-theme='light'] {
 
 * {
   box-sizing: border-box;
+}
+
+/* Global keyboard-focus ring (audit F3): one visible ring everywhere. Inputs
+ * previously relied on outline:none + a subtle border change — nearly
+ * invisible for keyboard users. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Reduced motion (audit F3): the infinite pulse animations stop for users
+ * who ask the OS for calmer motion. */
+@media (prefers-reduced-motion: reduce) {
+  .chat-streaming .chat-content,
+  .unread-dot {
+    animation: none;
+  }
 }
 
 html,
@@ -65,7 +91,7 @@ body {
   position: fixed;
   top: 46px;
   right: 12px;
-  z-index: 450;
+  z-index: var(--z-overlay);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -325,7 +351,7 @@ body {
 .confirm-overlay {
   position: fixed;
   inset: 0;
-  z-index: 500;
+  z-index: var(--z-overlay);
   display: grid;
   place-items: center;
   background: rgba(5, 5, 5, 0.55);
@@ -454,7 +480,7 @@ body {
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
-  z-index: 470;
+  z-index: var(--z-overlay);
   min-width: 180px;
   padding: 5px;
   background: var(--panel);
@@ -490,7 +516,7 @@ body {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 500;
+  z-index: var(--z-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -979,7 +1005,7 @@ html[data-theme='light'] .settings-nav-item:hover {
   position: absolute;
   top: 46px;
   right: 12px;
-  z-index: 460;
+  z-index: var(--z-overlay);
   width: 340px;
   max-height: calc(100vh - 70px);
   overflow-y: auto;
@@ -1304,7 +1330,7 @@ html[data-theme='light'] .settings-nav-item:hover {
   position: fixed;
   top: 46px;
   right: 12px;
-  z-index: 470;
+  z-index: var(--z-toast);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1446,7 +1472,7 @@ html[data-theme='light'] .settings-nav-item:hover {
   top: 44px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 2000;
+  z-index: var(--z-banner);
   max-width: 80vw;
   padding: 8px 16px;
   background: #3a1212;
@@ -2051,7 +2077,7 @@ html[data-theme='light'] .settings-nav-item:hover {
 
 .context-menu {
   position: fixed;
-  z-index: 1000;
+  z-index: var(--z-toast);
   min-width: 160px;
   padding: 4px;
   background: var(--panel);
@@ -2646,7 +2672,7 @@ html[data-theme='light'] .settings-nav-item:hover {
 
 .help-pop {
   position: fixed;
-  z-index: 4000;
+  z-index: var(--z-popover);
   padding: 8px 10px;
   background: #10110d;
   border: 1px solid #c6f13555;
@@ -2842,7 +2868,8 @@ html[data-theme='light'] .settings-nav-item:hover {
   display: block;
   margin-top: 3px;
   font-size: 9px;
-  color: rgba(232, 232, 230, 0.4);
+  /* 0.62 alpha ≈ 4.6:1 on the node background — WCAG AA (audit F3; 0.4 was 3.35:1). */
+  color: rgba(232, 232, 230, 0.62);
 }
 
 .chat-streaming .chat-content {

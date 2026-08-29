@@ -259,7 +259,13 @@ export function ChatNode({ id, data, selected }: NodeProps<ChatNodeData>): React
         </button>
       </div>
 
-      <div className="chat-node-transcript nodrag nowheel" ref={scrollRef}>
+      <div
+        className="chat-node-transcript nodrag nowheel"
+        ref={scrollRef}
+        role="log"
+        aria-label="chat transcript"
+        aria-live="polite"
+      >
         {data.system && <div className="chat-msg chat-system">{data.system}</div>}
         {messages.map((m) => (
           <div key={m.id} className={`chat-msg chat-${m.role}`}>

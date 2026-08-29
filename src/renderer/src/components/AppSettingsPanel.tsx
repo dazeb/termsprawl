@@ -40,14 +40,6 @@ const ENTER_BEHAVIORS: { value: EnterBehavior; label: string }[] = [
   { value: 'prompt', label: 'Prompt' }
 ]
 
-const LANGUAGES: { value: string; label: string }[] = [
-  { value: 'en', label: 'English' },
-  { value: 'de', label: 'Deutsch' },
-  { value: 'es', label: 'Español' },
-  { value: 'fr', label: 'Français' },
-  { value: 'ja', label: '日本語' }
-]
-
 const THEMES: { value: ThemeChoice; label: string }[] = [
   { value: 'light', label: 'Light' },
   { value: 'dark', label: 'Dark' },
@@ -329,6 +321,7 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
               <select
                 className="settings-select"
                 value={c.settings.agentPreset ?? 'standard'}
+                aria-label="Agent preset"
                 onChange={(e) => void c.update({ agentPreset: e.target.value })}
               >
                 {PRESET_MODES.map((m) => (
@@ -345,6 +338,7 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
               <select
                 className="settings-select"
                 value={c.settings.defaultPermission ?? 'workspaceWrite'}
+                aria-label="Default permission mode"
                 onChange={(e) => void c.update({ defaultPermission: e.target.value })}
               >
                 {PERMISSION_MODES.map((m) => (
@@ -356,15 +350,16 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
             <div className="settings-pref-row">
               <div className="settings-pref-copy">
                 <span className="settings-pref-label">Language</span>
+                <span className="settings-pref-sub">English only for now — more languages coming</span>
               </div>
               <select
                 className="settings-select"
-                value={c.settings.language ?? 'en'}
-                onChange={(e) => void c.update({ language: e.target.value })}
+                value="en"
+                disabled
+                aria-label="Language (English only for now)"
+                title="More languages coming"
               >
-                {LANGUAGES.map((l) => (
-                  <option key={l.value} value={l.value}>{l.label}</option>
-                ))}
+                <option value="en">English</option>
               </select>
             </div>
 
@@ -393,6 +388,7 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
               <select
                 className="settings-select"
                 value={c.settings.enterBehavior ?? 'queue'}
+                aria-label="Enter behavior while busy"
                 onChange={(e) => void c.update({ enterBehavior: e.target.value })}
               >
                 {ENTER_BEHAVIORS.map((b) => (
@@ -966,6 +962,7 @@ function RelaySection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
         <select
           className="settings-select"
           value={relay.role === 'client' ? 'client' : 'host'}
+          aria-label="Relay role"
           onChange={(e) => void saveRelay({ role: e.target.value as 'host' | 'client' })}
         >
           <option value="host">host</option>
