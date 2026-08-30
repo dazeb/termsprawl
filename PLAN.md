@@ -1065,4 +1065,13 @@ and can push a project back up. One writer at a time; no merge logic.*
   HTTPS token hop → 200 page → WS save → snapshot in
   `data/spaces/content/`). Note: the router listens on `SPACE_ROUTER_PORT`
   (the shared env file's PORT=8787 must not hijack it) — `7aca255`.
-- Release to main + version bump: pending user go.
+- ✅ Pre-release review findings fixed (app `16ef828`, web `b23cb43` +
+  `921d2ea`): openSpace http(s) scheme guard, snapshot id remap on D1 pull
+  (load-bearing ids), bounded body reads + drain-for-413 on the cloud,
+  DELETE /me removes the space snapshot, unique tmp names, secret-fallback
+  warning, SpaceCard URLSearchParams, shim space stubs.
+- ✅ RELEASED **v0.14.0** (2026-08-30): branch merged to main,
+  `scripts/release.sh 0.14.0` green, GitHub release verified by read-back
+  (AppImage + .deb + latest-linux.yml), termsprawl.com live at 0.14.0,
+  `ts-space:latest` rebuilt on the box from final main. Web-dev handoff:
+  termsprawl-web `docs/CANVAS-SPACES-NEXT-STEPS.md`.
