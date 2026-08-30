@@ -8,6 +8,8 @@ import type {
   CloudBackupDetail,
   CloudDevicePoll,
   CloudDeviceStart,
+  CloudSpace,
+  CloudSpaceAccess,
   CloudSyncStatus,
   CloudUser,
 } from '../shared/types'
@@ -95,6 +97,22 @@ export class CloudClient {
     return this.request<CloudBackupDetail>(`/api/v1/backups/${id}`)
   }
 
+  /** The signed-in user's online canvas space, or null when none exists yet. */
+  async getSpace(): Promise<CloudSpace | null> {
+    const res = await this.request<{ space: CloudSpace | null }>('/api/v1/spaces/mine')
+    return res.space
+  }
+
+  /** Provision (or return) the user's space. Free plans get 403 upgrade_required. */
+  async provisionSpace(): Promise<CloudSpace> {
+    return this.request<CloudSpace>('/api/v1/spaces', { method: 'POST' })
+  }
+
+  /** Mint a short-lived (~5 min) access token for the browser hand-off. */
+  async spaceAccessToken(): Promise<CloudSpaceAccess> {
+    return this.request<CloudSpaceAccess>('/api/v1/spaces/access', { method: 'POST' })
+  }
+
   /** True when the supplied error means the user is not signed in (401). */
   static isUnauthorized(e: unknown): boolean {
     return isAuthError(e) && e.status === 401
@@ -127,5 +145,19 @@ export class CloudClient {
     }
     if (res.status === 204) return undefined as T
     return (await res.json()) as T
+  }
+}
+
+/** Build the URL the system browser opens: the space URL from the API response
+ * with the short-lived access token appended as `?t=<token>` — the param the
+ * space-router validates. Malformed URLs come back untouched (the openExternal
+ * handler drops non-http(s) anyway); the base never comes from us. */
+export function spaceOpenUrl(spaceUrl: string, token: string): string {
+  try {
+    const u = new URL(spaceUrl)
+    u.searchParams.set('t', token)
+    return u.toString()
+  } catch {
+    return spaceUrl
   }
 }

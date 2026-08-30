@@ -8,8 +8,8 @@
 // backupNow() — the honest end-to-end path, since the web never holds the
 // workspace content itself.
 import { shell } from 'electron'
-import { CloudClient, CloudError } from '../core/cloud'
-import type { CloudBackup, CloudDevicePoll, CloudDeviceStart, CloudUser, WorkspaceSnapshot } from '../shared/types'
+import { CloudClient, CloudError, spaceOpenUrl } from '../core/cloud'
+import type { CloudBackup, CloudDevicePoll, CloudDeviceStart, CloudSpace, CloudUser, WorkspaceSnapshot } from '../shared/types'
 
 export interface CloudRuntimeOptions {
   /** Cloud origin, e.g. https://termsprawl.com (the client appends /api/v1/...). */
@@ -28,6 +28,11 @@ export interface CloudRuntime {
   signOut: () => Promise<void>
   backupNow: () => Promise<CloudBackup>
   listBackups: (limit?: number) => Promise<CloudBackup[]>
+  /** The signed-in user's online canvas space (null when none provisioned). */
+  getSpace: () => Promise<CloudSpace | null>
+  /** Mint a short-lived space access token and open the canvas URL with it
+   * in the system browser (Pro-gated server-side; free users get 403). */
+  openSpace: () => Promise<void>
 }
 
 function sleep(ms: number): Promise<void> {
@@ -99,6 +104,16 @@ export function createCloudRuntime(opts: CloudRuntimeOptions): CloudRuntime {
     return client.listBackups(limit)
   }
 
+  async function getSpace(): Promise<CloudSpace | null> {
+    return client.getSpace()
+  }
+
+  async function openSpace(): Promise<void> {
+    // Token minted lazily, right before the open — it lives ~5 minutes.
+    const access = await client.spaceAccessToken()
+    void shell.openExternal(spaceOpenUrl(access.url, access.token))
+  }
+
   // Fulfil a "Back up now" requested from the web dashboard. The web raises
   // backup_requested_at via POST /api/v1/sync/now; the app (which owns the
   // workspace content) sees it here, runs a real backup, and the server clears
@@ -129,7 +144,7 @@ export function createCloudRuntime(opts: CloudRuntimeOptions): CloudRuntime {
     }
   }
 
-  return { getUser, deviceStart, devicePoll, signOut, backupNow, listBackups }
+  return { getUser, deviceStart, devicePoll, signOut, backupNow, listBackups, getSpace, openSpace }
 }
 
 export { CloudError }

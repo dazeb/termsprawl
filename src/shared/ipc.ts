@@ -81,6 +81,10 @@ export const IPC = {
   cloudSignOut: 'cloud:sign-out',
   cloudBackupNow: 'cloud:backup-now',
   cloudListBackups: 'cloud:list-backups',
+  // Online canvas spaces (Phase — online canvas spaces): status read + the
+  // Pro-gated open (main mints the access token and opens the system browser).
+  cloudSpaceStatus: 'cloud:space-status',
+  cloudSpaceOpen: 'cloud:space-open',
 
   // Embedded browser node (Phase — browser node). The debug endpoint lets an
   // external agent drive the embedded guests; register maps a node id to its

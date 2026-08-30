@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { AgentAccount, A2APeer, ApiProviderConfig, AppSettings, CloudBackup, CloudDeviceStart, CloudUser } from '@shared/types'
+import type { AgentAccount, A2APeer, ApiProviderConfig, AppSettings, CloudBackup, CloudDeviceStart, CloudSpace, CloudUser } from '@shared/types'
 import { AGENT_REGISTRY } from '@shared/agents/config'
 import { HelpBadge } from './HelpBadge'
 import { useCanvasRequests } from '../state/canvas-requests'
@@ -71,9 +71,13 @@ interface SectionCtx {
   cloudBusy: boolean
   device: CloudDeviceStart | null
   lastBackup: CloudBackup | null
+  space: CloudSpace | null
+  spaceBusy: boolean
+  spaceError: string | null
   cloudSignIn: () => Promise<void>
   cloudSignOut: () => Promise<void>
   cloudBackupNow: () => Promise<void>
+  cloudOpenSpace: () => Promise<void>
 }
 
 type TabId = 'general' | 'user' | 'agents' | 'connections' | 'updates'
@@ -161,6 +165,9 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
   const [cloudBusy, setCloudBusy] = useState(false)
   const [device, setDevice] = useState<CloudDeviceStart | null>(null)
   const [lastBackup, setLastBackup] = useState<CloudBackup | null>(null)
+  const [space, setSpace] = useState<CloudSpace | null>(null)
+  const [spaceBusy, setSpaceBusy] = useState(false)
+  const [spaceError, setSpaceError] = useState<string | null>(null)
   const [tab, setTab] = useState<TabId>('general')
   // Drafts for the A2A + API add forms.
   const [peerLabel, setPeerLabel] = useState('')
@@ -175,6 +182,7 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
     })
     void window.termsprawl.settings.permissionSupported().then(setPermissionSupported)
     void window.termsprawl.cloud.status().then(setCloudUser).catch(() => setCloudUser(null))
+    void window.termsprawl.cloud.spaceStatus().then(setSpace).catch(() => setSpace(null))
   }, [])
 
   useEffect(() => {
@@ -282,6 +290,21 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
     setLastBackup(await window.termsprawl.cloud.backupNow())
   }
 
+  // Online canvas spaces (Pro): main mints the short-lived access token and
+  // opens the returned URL — which carries the auth — in the system browser.
+  const cloudOpenSpace = async (): Promise<void> => {
+    if (spaceBusy) return
+    setSpaceBusy(true)
+    setSpaceError(null)
+    try {
+      await window.termsprawl.cloud.openSpace()
+    } catch (e) {
+      setSpaceError(e instanceof Error ? e.message : 'could not open your online canvas')
+    } finally {
+      setSpaceBusy(false)
+    }
+  }
+
   const ctx: SectionCtx = {
     settings,
     update,
@@ -299,9 +322,13 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
     cloudBusy,
     device,
     lastBackup,
+    space,
+    spaceBusy,
+    spaceError,
     cloudSignIn,
     cloudSignOut,
-    cloudBackupNow
+    cloudBackupNow,
+    cloudOpenSpace
   }
 
   // Sidebar tabs, grouped by termsprawl domain. Each tab hosts the sections
@@ -596,10 +623,25 @@ function themeIcon(theme: ThemeChoice): React.JSX.Element {
   )
 }
 
+/** Short display label for a space URL from the API ("canvas.termsprawl.com/dazeb"). */
+function spaceUrlLabel(space: CloudSpace): string {
+  try {
+    const u = new URL(space.url)
+    return `${u.host}${u.pathname.replace(/\/$/, '')}`
+  } catch {
+    return space.url
+  }
+}
+
 function UserSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
-  const { settings, update, cloudUser, cloudBusy, device, lastBackup, cloudSignIn, cloudSignOut, cloudBackupNow } = ctx
+  const { settings, update, cloudUser, cloudBusy, device, lastBackup, space, spaceBusy, spaceError, cloudSignIn, cloudSignOut, cloudBackupNow, cloudOpenSpace } = ctx
   const [draft, setDraft] = useState(settings.displayName ?? '')
   useEffect(() => setDraft(settings.displayName ?? ''), [settings.displayName])
+  // The upsell lands on the web dashboard's billing page — the same surface the
+  // Stripe checkout/portal flows live on.
+  const openBilling = (): void => {
+    void window.termsprawl.openExternal(`${(settings.cloudApiBase ?? 'https://termsprawl.com').replace(/\/$/, '')}/dashboard/billing`)
+  }
   return (
     <div className="settings-section">
       {device && (
@@ -617,6 +659,20 @@ function UserSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
             {lastBackup && <span className="account-id">backup {lastBackup.id.slice(0, 8)} · {lastBackup.size_bytes} bytes</span>}
             <button className="account-delete" onClick={() => void cloudSignOut()}>sign out</button>
           </div>
+          {cloudUser.plan === 'pro' ? (
+            <div className="account-row">
+              <button className="account-login" disabled={spaceBusy} onClick={() => void cloudOpenSpace()}>
+                {spaceBusy ? 'opening…' : 'open your online canvas'}
+              </button>
+              {space && <span className="account-id">{spaceUrlLabel(space)} · {space.status}</span>}
+              {spaceError && <span className="account-confirm-text">{spaceError}</span>}
+            </div>
+          ) : (
+            <div className="account-row">
+              <button className="account-login" onClick={openBilling}>upgrade to pro</button>
+              <span className="account-id">pro adds an online canvas space that syncs with this desktop</span>
+            </div>
+          )}
         </>
       ) : (
         <div className="account-row">

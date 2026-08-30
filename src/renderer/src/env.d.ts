@@ -25,6 +25,7 @@ import type {
   CloudBackup,
   CloudDevicePoll,
   CloudDeviceStart,
+  CloudSpace,
   CloudUser,
   BrowserCdpInfo,
   BrowserNavigateResult
@@ -123,6 +124,10 @@ declare global {
         signOut(): Promise<void>
         backupNow(): Promise<CloudBackup>
         listBackups(limit?: number): Promise<CloudBackup[]>
+        /** The user's online canvas space (null when signed out / none provisioned). */
+        spaceStatus(): Promise<CloudSpace | null>
+        /** Mint a short-lived access token and open the canvas URL in the system browser (Pro). */
+        openSpace(): Promise<void>
       }
       browser: {
         cdpInfo(): Promise<BrowserCdpInfo>

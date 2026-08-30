@@ -259,7 +259,9 @@
       devicePoll: notAvailable('cloud'),
       signOut: function () { return Promise.resolve() },
       backupNow: notAvailable('cloud'),
-      listBackups: function () { return Promise.resolve([]) }
+      listBackups: function () { return Promise.resolve([]) },
+      spaceStatus: function () { return Promise.resolve(null) },
+      openSpace: notAvailable('cloud')
     }
   }
 })()

@@ -205,6 +205,24 @@ export interface CloudDevicePoll {
   slow_down?: boolean
 }
 
+/** One online canvas space (Phase — online canvas spaces). Shapes mirror the
+ * spaces API: GET /api/v1/spaces/mine → { space: CloudSpace | null },
+ * POST /api/v1/spaces → { login, url, status }. The URL always comes from the
+ * API response — it is never assembled client-side. */
+export interface CloudSpace {
+  login: string
+  status: 'provisioning' | 'running' | 'stopped' | 'error'
+  url: string
+  lastActiveAt: string
+}
+
+/** POST /api/v1/spaces/access — a 5-minute JWT + the space URL for the
+ * browser hand-off (the space-router validates `?t=<token>`). */
+export interface CloudSpaceAccess {
+  token: string
+  url: string
+}
+
 export interface AppSettings {
   autoDownloadUpdates: boolean
   /** Managed agent accounts (7.6). v1: Claude only. Null active = default ~/.claude. */

@@ -39,7 +39,7 @@ import { loadAppSettings, saveAppSettings } from '../core/app-settings'
 import { createUpdateBridge } from './updates'
 import { createCloudRuntime } from './cloud'
 import { clampWindowBounds, desiredUiZoom, FALLBACK_WORK_AREA } from './window-metrics'
-import type { CloudBackup, CloudDevicePoll, CloudDeviceStart, CloudUser } from '../shared/types'
+import type { CloudBackup, CloudDevicePoll, CloudDeviceStart, CloudSpace, CloudUser } from '../shared/types'
 import { HookServer } from '../core/hook-server'
 import { claudeSettingsPath, installClaudeHooks } from './agents/hook-installer'
 import { SessionNameTracker } from '../core/session-name'
@@ -874,6 +874,10 @@ function registerCloudIpc(): void {
   ipcMain.handle(IPC.cloudSignOut, (): Promise<void> => cloud.signOut())
   ipcMain.handle(IPC.cloudBackupNow, (): Promise<CloudBackup> => cloud.backupNow())
   ipcMain.handle(IPC.cloudListBackups, (_event, limit?: number): Promise<CloudBackup[]> => cloud.listBackups(limit))
+  // Online canvas spaces: the open handler mints the short-lived access token
+  // and opens the returned URL (which carries auth) in the system browser.
+  ipcMain.handle(IPC.cloudSpaceStatus, (): Promise<CloudSpace | null> => cloud.getSpace())
+  ipcMain.handle(IPC.cloudSpaceOpen, (): Promise<void> => cloud.openSpace())
 }
 
 function registerBrowserIpc(): void {

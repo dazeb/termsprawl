@@ -28,6 +28,7 @@ import type {
   CloudBackup,
   CloudDevicePoll,
   CloudDeviceStart,
+  CloudSpace,
   CloudUser,
   BrowserCdpInfo,
   BrowserNavigateResult,
@@ -212,7 +213,11 @@ const api = {
     signOut: (): Promise<void> => ipcRenderer.invoke(IPC.cloudSignOut),
     backupNow: (): Promise<CloudBackup> => ipcRenderer.invoke(IPC.cloudBackupNow),
     listBackups: (limit?: number): Promise<CloudBackup[]> =>
-      ipcRenderer.invoke(IPC.cloudListBackups, limit)
+      ipcRenderer.invoke(IPC.cloudListBackups, limit),
+    /** The user's online canvas space (null when signed out / none provisioned). */
+    spaceStatus: (): Promise<CloudSpace | null> => ipcRenderer.invoke(IPC.cloudSpaceStatus),
+    /** Mint a short-lived space access token and open the canvas URL with it in the system browser. */
+    openSpace: (): Promise<void> => ipcRenderer.invoke(IPC.cloudSpaceOpen)
   },
 
   browser: {
