@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { join } from 'node:path'
 import { loadProjectFile } from '../core/workspace-files'
 import { pullLatest, pushSnapshot, type PushResult, type SpaceSnapshotPayload, type SpaceSyncConfig } from '../core/space-sync'
+import { IPC } from '../shared/ipc'
 import type { SerializedNode } from '../shared/types'
 
 const SCROLLBACK_DIR = 'terminal-scrollback'
@@ -113,11 +114,14 @@ export async function restoreFromCloud(
     // (missing revs count as older — a rev-less snapshot never clobbers).
     if (typeof incoming !== 'number' || incoming <= (localRevs[project.id] ?? -1)) continue
     if (!blob.index.projects.some((p) => p.id === project.id)) continue
-    // The project may not exist locally yet — adopt it, then save nodes.
-    const exists = await deps.call('workspace:projects', [])
+    // The project may not exist locally yet — import it WITH the snapshot's
+    // id (project:add would mint a new id and saveNodes below would target a
+    // project that doesn't exist). Existing id → skip the import; saveNodes
+    // applies the snapshot onto the known project.
+    const exists = await deps.call('workspace:snapshot', [])
     const known = (exists as { index?: { projects?: Array<{ id: string }> } } | undefined)?.index?.projects
     if (Array.isArray(known) && !known.some((p) => p.id === project.id)) {
-      await deps.call('project:add', [project.name ?? project.id, project.cwd ?? null, undefined])
+      await deps.call(IPC.projectImport, [project.id, project.name ?? project.id, project.cwd ?? null])
     }
     await deps.call('workspace:save-nodes', [project.id, nodes])
     applied++

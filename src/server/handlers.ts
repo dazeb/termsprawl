@@ -167,6 +167,12 @@ export function buildHandlers(platform: CorePlatform): Record<string, RpcHandler
       }
       return workspaceStore.addProject(String(name), (cwd as string | null) ?? null, remote as ProjectRemote | undefined)
     },
+    // Snapshot restore: import a project WITH its original id so revs and
+    // node files stay comparable across machines. Duplicate id → error.
+    [IPC.projectImport]: (args) => {
+      const [id, name, cwd] = args
+      return workspaceStore.addProject(String(name ?? id), (cwd as string | null) ?? null, undefined, { id: String(id) })
+    },
     [IPC.projectClose]: (args) => workspaceStore.closeProject(String(args[0])),
     [IPC.projectArchive]: (args) => workspaceStore.archiveProject(String(args[0])),
     [IPC.projectReopen]: (args) => workspaceStore.reopenProject(String(args[0])),

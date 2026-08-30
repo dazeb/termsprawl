@@ -46,8 +46,15 @@ export class WorkspaceStore {
     return { index: this.index, projects }
   }
 
-  addProject(name: string, cwd: string | null, remote?: ProjectRemote): ProjectMeta {
-    const id = `p-${Date.now().toString(36)}`
+  addProject(name: string, cwd: string | null, remote?: ProjectRemote, opts?: { id?: string }): ProjectMeta {
+    // An explicit id (snapshot restore) keeps project ids stable across
+    // machines — revs and node files stay comparable; ids are otherwise
+    // time-derived. Ids are validated before anything touches disk.
+    const id = opts?.id ?? `p-${Date.now().toString(36)}`
+    if (!isSafeProjectId(id)) throw new Error(`Invalid project id: ${id}`)
+    if (this.index.projects.some((p) => p.id === id)) {
+      throw new Error(`Project already exists: ${id}`)
+    }
     const project: ProjectMeta = {
       id,
       name,

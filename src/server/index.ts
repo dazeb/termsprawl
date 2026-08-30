@@ -61,13 +61,26 @@ function trackDirty(dispatch: RpcDispatcher): { dispatch: RpcDispatcher; markDir
   }
 }
 
-export async function createApp(opts?: { auth?: AuthPolicy }): Promise<{
+/** RPC methods that change the persisted canvas — the space-sync push hook
+ * marks dirty on any of these arriving over WS (the renderer's saves are the
+ * real change signal; the 30s poll is only a safety net). */
+const MUTATING_METHODS = new Set([
+  'workspace:save-nodes', 'project:add', 'project:import', 'project:delete',
+  'project:rename', 'project:close', 'project:archive', 'project:reopen',
+  'project:update-settings', 'terminal:close'
+])
+
+export async function createApp(opts?: { auth?: AuthPolicy; onRequest?: (method: string) => void }): Promise<{
   server: ReturnType<typeof createServer>
   platform: ServerPlatform
   port: number
   hookUrl: string
   /** The WS auth token (null when auth explicitly disabled). */
   authToken: string | null
+  /** The app's ONE dispatcher — the entrypoint must reuse it (not build its
+   * own) so WS traffic and boot-time calls share the same handler/store
+   * instances (revs maps would desync otherwise). */
+  dispatch: RpcDispatcher
   close: () => Promise<void>
 }> {
   // Audit B1: every WS connection must present the boot token. Fail-closed:
@@ -148,6 +161,8 @@ export async function createApp(opts?: { auth?: AuthPolicy }): Promise<{
       }
       if (!msg || typeof msg !== 'object') return
       if (msg.t === 'res' || !msg.method) return
+      // Space-sync hook: any mutating RPC over WS means the canvas changed.
+      if (opts?.onRequest && MUTATING_METHODS.has(msg.method)) opts.onRequest(msg.method)
       if (msg.t === 'send') {
         void dispatch({ id: 0, method: msg.method, args: msg.args ?? [] })
         return
@@ -171,6 +186,7 @@ export async function createApp(opts?: { auth?: AuthPolicy }): Promise<{
     port: PORT,
     hookUrl: agents.hookUrl,
     authToken: policy.disabled ? null : policy.token,
+    dispatch,
     close: async () => {
       agents.stop()
       for (const client of [...clients]) client.close()
@@ -191,9 +207,17 @@ if (process.env.TERMSPRAWL_SERVER_ENTRY === '1') {
   if (policy.disabled) {
     console.warn('[server] !!! AUTH DISABLED (TERMSPRAWL_SERVER_TOKEN="") — any local process can drive this instance. Loopback bind only.')
   }
-  const app = await createApp({ auth: policy })
-  const { server, port, platform, authToken } = app
-  const dispatch = createDispatcher(buildHandlers(platform))
+  const app = await createApp({
+    auth: policy,
+    // Space-sync dirty hook: mutating WS RPCs mark the pusher (the renderer's
+    // saves are the real change signal; the 30s poll is only a safety net).
+    onRequest: (method) => {
+      if (spacePusher && MUTATING_METHODS.has(method)) spacePusher.markDirty()
+    },
+  })
+  const { server, port, platform, authToken, dispatch } = app
+  // The app's ONE dispatcher (shared with WS traffic — separate instances
+  // would desync the workspace store's revs map between boot calls and WS).
 
   /** Invoke an RPC and return the response. */
   function call(method: string, args: unknown[]): Promise<RpcResponse | null> {
