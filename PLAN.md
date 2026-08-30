@@ -1042,13 +1042,27 @@ and can push a project back up. One writer at a time; no merge logic.*
 
 ### Task 15.4: Desktop sync loop
 
-- D1 "Open online snapshot" (new local project, collision-safe naming,
-  scrollback restore) + D2 "Sync this project online" — in flight.
+- ✅ D1 "Open online snapshot" (new local project, collision-safe naming,
+  scrollback persisted for the cold-start replay) + D2 "Sync this project
+  online" (pushes nodes + scrollbacks + revs) — `643ed91`.
 
 ### Task 15.5: Ops & launch
 
 - ✅ DNS `canvas.termsprawl.com` → box (DNS-only) + runbook
   `docs/SPACES-OPS.md` (capacity, idle-stop, tokens, kill switch) —
   `a65f6e0`.
-- Caddy `canvas` vhost + on-box deploy of router + image + e2e script
-  (`scripts/space-e2e.sh`) — pending; release to follow.
+- ✅ `scripts/space-e2e.sh` verified END-TO-END (seed cloud → boot-restore →
+  WS drive → push → restart persistence → post-restart push) — `09c51f9`;
+  the run exposed two real bugs, fixed in `7de4a54`: restore used
+  project:add for unknown projects (mismatched ids → restore silently
+  no-opped; new `project:import` keeps snapshot ids) and WS saves never
+  marked the sync pusher dirty (the entrypoint now shares createApp's
+  dispatcher + an onRequest mutation hook).
+- ✅ On-box deploy LIVE (2026-08-30): space image `ts-space:latest` built on
+  the box; cloud API (content store) + `space-router.service` (:3030) +
+  Caddy `canvas.termsprawl.com` vhost; SPACE_JWT_SECRET provisioned;
+  production smoke PASS (provision → container on 3101 → access token →
+  HTTPS token hop → 200 page → WS save → snapshot in
+  `data/spaces/content/`). Note: the router listens on `SPACE_ROUTER_PORT`
+  (the shared env file's PORT=8787 must not hijack it) — `7aca255`.
+- Release to main + version bump: pending user go.
