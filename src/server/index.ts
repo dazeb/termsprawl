@@ -98,6 +98,11 @@ export async function createApp(opts?: { auth?: AuthPolicy; onRequest?: (method:
   const agents = await startAgentBridge(platform)
 
   const shimSource = existsSync(SHIM_PATH) ? readFileSync(SHIM_PATH, 'utf8') : ''
+  // CSP-safe token bootstrap: the page's Content-Security-Policy allows only
+  // `script-src 'self'`, so inline bootstrap scripts can never execute (and
+  // must not be injected). The token is served as a real same-origin script
+  // instead; the shim (also same-origin) reads the global it defines.
+  const bootJs = `window.__TERMPRAWL_WS_TOKEN=${JSON.stringify(policy.disabled ? '' : policy.token)};\n`
 
   function serveStatic(path: string, res: ServerResponse): void {
     // Only index.html is served at '/'; everything else is a real asset path.
@@ -110,11 +115,10 @@ export async function createApp(opts?: { auth?: AuthPolicy; onRequest?: (method:
     let body = readFileSync(filePath)
     if (path === '/' && shimSource) {
       const html = body.toString('utf8')
-      // Audit B1: bootstrap the shim with the WS auth token. The page is served
-      // by the same process that owns the token, so injecting it into THIS page
-      // is the trust boundary; the shim stores it in localStorage for reconnects.
-      const tokenBootstrap = `<script>window.__TERMPRAWL_WS_TOKEN=${JSON.stringify(policy.disabled ? '' : policy.token)}</script>`
-      const shimTag = `<script>${tokenBootstrap}</script><script src="/termsprawl-shim.js"></script>`
+      // Audit B1: bootstrap the shim with the WS auth token. The token rides
+      // in /termsprawl-boot.js (served below, same origin — CSP-clean). The
+      // shim stores it in localStorage for reconnects.
+      const shimTag = `<script src="/termsprawl-boot.js"></script><script src="/termsprawl-shim.js"></script>`
       const injected = html.includes('<head>') ? html.replace('<head>', `<head>${shimTag}`) : `${shimTag}${html}`
       body = Buffer.from(injected, 'utf8')
     }
@@ -125,6 +129,13 @@ export async function createApp(opts?: { auth?: AuthPolicy; onRequest?: (method:
     const url = (req.url ?? '/').split('?')[0]
     if (url === '/termsprawl-shim.js') {
       res.writeHead(200, { 'Content-Type': 'text/javascript' }).end(shimSource)
+      return
+    }
+    if (url === '/termsprawl-boot.js') {
+      res.writeHead(200, {
+        'Content-Type': 'text/javascript',
+        'Cache-Control': 'no-store',
+      }).end(bootJs)
       return
     }
     serveStatic(url, res)

@@ -10,7 +10,10 @@
   // Audit B1: the WS upgrade must carry the boot token (header when possible,
   // ?token= fallback). The token is bootstrapped into the served page by the
   // server itself and persisted so reconnects still authenticate.
-  var TOKEN = (function () {
+  // The token can change between reconnects (space resume mints a fresh boot
+  // token), so read it fresh on every connect: prefer the global the boot
+  // script just refreshed, fall back to the persisted copy.
+  function getToken() {
     try {
       if (window.__TERMPRAWL_WS_TOKEN) {
         localStorage.setItem('termsprawl-ws-token', window.__TERMPRAWL_WS_TOKEN)
@@ -18,20 +21,49 @@
       }
       return localStorage.getItem('termsprawl-ws-token') || ''
     } catch (e) { return window.__TERMPRAWL_WS_TOKEN || '' }
-  })()
-  var url = proto + '//' + location.host + '/ws' + (TOKEN ? '?token=' + encodeURIComponent(TOKEN) : '')
+  }
+  function wsUrl() {
+    var t = getToken()
+    return proto + '//' + location.host + '/ws' + (t ? '?token=' + encodeURIComponent(t) : '')
+  }
   var ws = null
   var seq = 0
+  var retries = 0
   var pending = new Map()
   var listeners = new Map()
 
+  // Re-pull the boot token (same-origin, CSP-clean) so a stale token in
+  // localStorage heals on the next reconnect instead of 401-looping.
+  function refreshBootToken(done) {
+    try {
+      var xhr = new XMLHttpRequest()
+      xhr.open('GET', '/termsprawl-boot.js', true)
+      xhr.addEventListener('load', function () {
+        try {
+          // eslint-disable-next-line no-new-func
+          var m = /__TERMPRAWL_WS_TOKEN\s*=\s*("([^"]*)"|'([^']*)')/.exec(xhr.responseText || '')
+          var tok = m ? (m[2] || m[3] || '') : ''
+          if (tok) {
+            window.__TERMPRAWL_WS_TOKEN = tok
+            localStorage.setItem('termsprawl-ws-token', tok)
+          }
+        } catch (e) {}
+        done()
+      })
+      xhr.addEventListener('error', function () { done() })
+      xhr.send()
+    } catch (e) { done() }
+  }
+
   function ensure() {
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return
+    var url = wsUrl()
     // Browser WebSocket cannot set Authorization headers; the token rides on
     // the upgrade URL (?token=) — see server-auth.ts. Browsers do NOT leak
     // query strings for ws:// to servers' logs the way http proxies can, and
     // this is loopback by default.
     ws = new WebSocket(url)
+    ws.addEventListener('open', function () { retries = 0 })
     ws.addEventListener('message', function (ev) {
       var msg
       try { msg = JSON.parse(ev.data) } catch (e) { return }
@@ -47,10 +79,19 @@
         if (arr) for (var i = 0; i < arr.length; i++) arr[i](msg.payload)
       }
     })
-    ws.addEventListener('close', function () {
+    ws.addEventListener('close', function (ev) {
       pending.forEach(function (p) { p.reject(new Error('disconnected')) })
       pending.clear()
-      setTimeout(ensure, 500)
+      // Auth changed server-side (space resume / restart mints a new boot
+      // token) or the cached page went stale: re-read /termsprawl-boot.js and
+      // reconnect with the fresh token. A clean 1000 close means intentional
+      // shutdown — don't spin. First failure retries quickly, then backs off.
+      if (ev && ev.code === 1000) return
+      if (typeof refreshBootToken === 'function') {
+        refreshBootToken(function () { setTimeout(ensure, retries++ === 0 ? 500 : 2000) })
+      } else {
+        setTimeout(ensure, retries++ === 0 ? 500 : 2000)
+      }
     })
   }
 
