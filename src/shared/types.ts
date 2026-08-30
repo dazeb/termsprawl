@@ -223,6 +223,37 @@ export interface CloudSpaceAccess {
   url: string
 }
 
+/** cloud:space-pull result (D1 "Open online snapshot"): main pulls the space
+ * content, imports the current project as a NEW local project (never
+ * overwriting an existing one), and persists the snapshot's scrollbacks so
+ * restored terminals replay history on their first cold start. The imported
+ * project's raw persisted nodes ride along so the renderer can hydrate them
+ * through its own deserializeNodes path. */
+export interface CloudSpacePullResult {
+  /** The freshly created local project the snapshot landed in. */
+  project: ProjectMeta
+  /** The imported project's persisted nodes (serialized shape). */
+  nodes: SerializedNode[]
+  /** How many scrollback entries were persisted into the store. */
+  scrollbacksImported: number
+  /** True when the space simply has no snapshot yet (404 no_content). */
+  empty: false
+}
+
+/** cloud:space-pull when there is nothing online yet. */
+export interface CloudSpacePullEmpty {
+  empty: true
+}
+
+/** cloud:space-push result (D2 "Sync this project online"). */
+export interface CloudSpacePushResult {
+  ok: true
+  /** Byte size the server reported for the stored snapshot. */
+  bytes: number
+  /** True when there was no space yet and main provisioned one first. */
+  provisioned: boolean
+}
+
 export interface AppSettings {
   autoDownloadUpdates: boolean
   /** Managed agent accounts (7.6). v1: Claude only. Null active = default ~/.claude. */

@@ -10,6 +10,7 @@
 import { shell } from 'electron'
 import { CloudClient, CloudError, spaceOpenUrl } from '../core/cloud'
 import type { CloudBackup, CloudDevicePoll, CloudDeviceStart, CloudSpace, CloudUser, WorkspaceSnapshot } from '../shared/types'
+import type { SpaceSnapshotPayload } from '../core/space-sync'
 
 export interface CloudRuntimeOptions {
   /** Cloud origin, e.g. https://termsprawl.com (the client appends /api/v1/...). */
@@ -30,6 +31,12 @@ export interface CloudRuntime {
   listBackups: (limit?: number) => Promise<CloudBackup[]>
   /** The signed-in user's online canvas space (null when none provisioned). */
   getSpace: () => Promise<CloudSpace | null>
+  /** Provision (or return) the user's space — free plans surface 403. */
+  provisionSpace: () => Promise<CloudSpace>
+  /** Pull the latest space snapshot (null when the space has none yet). */
+  pullSpace: () => Promise<SpaceSnapshotPayload | null>
+  /** Push a snapshot payload to the user's space; resolves { ok, bytes }. */
+  pushSpace: (payload: SpaceSnapshotPayload) => Promise<{ ok: true; bytes: number }>
   /** Mint a short-lived space access token and open the canvas URL with it
    * in the system browser (Pro-gated server-side; free users get 403). */
   openSpace: () => Promise<void>
@@ -108,6 +115,18 @@ export function createCloudRuntime(opts: CloudRuntimeOptions): CloudRuntime {
     return client.getSpace()
   }
 
+  function provisionSpace(): Promise<CloudSpace> {
+    return client.provisionSpace()
+  }
+
+  async function pullSpace(): Promise<SpaceSnapshotPayload | null> {
+    return client.pullSpaceContent()
+  }
+
+  async function pushSpace(payload: SpaceSnapshotPayload): Promise<{ ok: true; bytes: number }> {
+    return client.pushSpaceContent(payload)
+  }
+
   async function openSpace(): Promise<void> {
     // Token minted lazily, right before the open — it lives ~5 minutes.
     const access = await client.spaceAccessToken()
@@ -144,7 +163,7 @@ export function createCloudRuntime(opts: CloudRuntimeOptions): CloudRuntime {
     }
   }
 
-  return { getUser, deviceStart, devicePoll, signOut, backupNow, listBackups, getSpace, openSpace }
+  return { getUser, deviceStart, devicePoll, signOut, backupNow, listBackups, getSpace, provisionSpace, pullSpace, pushSpace, openSpace }
 }
 
 export { CloudError }

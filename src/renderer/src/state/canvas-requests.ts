@@ -10,6 +10,7 @@ import { create } from 'zustand'
 export type CanvasSpawnRequest =
   | { kind: 'agentLogin'; command: string }
   | { kind: 'browser'; url: string }
+  | { kind: 'switchProject'; projectId: string }
 
 interface CanvasRequestsState {
   request: CanvasSpawnRequest | null

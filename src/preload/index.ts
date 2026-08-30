@@ -29,6 +29,9 @@ import type {
   CloudDevicePoll,
   CloudDeviceStart,
   CloudSpace,
+  CloudSpacePullEmpty,
+  CloudSpacePullResult,
+  CloudSpacePushResult,
   CloudUser,
   BrowserCdpInfo,
   BrowserNavigateResult,
@@ -217,7 +220,14 @@ const api = {
     /** The user's online canvas space (null when signed out / none provisioned). */
     spaceStatus: (): Promise<CloudSpace | null> => ipcRenderer.invoke(IPC.cloudSpaceStatus),
     /** Mint a short-lived space access token and open the canvas URL with it in the system browser. */
-    openSpace: (): Promise<void> => ipcRenderer.invoke(IPC.cloudSpaceOpen)
+    openSpace: (): Promise<void> => ipcRenderer.invoke(IPC.cloudSpaceOpen),
+    /** Pull the space snapshot and import it as a NEW local project (main
+     * handles collision-safe naming + scrollback persistence). */
+    pullSpace: (): Promise<CloudSpacePullResult | CloudSpacePullEmpty> =>
+      ipcRenderer.invoke(IPC.cloudSpacePull),
+    /** Push the given project's nodes + scrollbacks to the space. */
+    pushSpace: (projectId: string): Promise<CloudSpacePushResult> =>
+      ipcRenderer.invoke(IPC.cloudSpacePush, projectId)
   },
 
   browser: {

@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, Notification, protocol, net, shell, screen } from 'electron'
 import { execFileSync, spawn } from 'node:child_process'
-import { appendFileSync } from 'node:fs'
+import { appendFileSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, join, posix } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -33,13 +33,16 @@ import { resolveFileScope } from '../core/project-scope'
 import { createRelayRuntime, type RelayRuntime } from './relay'
 import { WorkspaceStore } from '../core/workspace-store'
 import type { ProjectMeta } from '../core/workspace-files'
+import { loadProjectFile } from '../core/workspace-files'
+import { buildProjectPushPayload, snapshotCurrentProject, uniqueOnlineSnapshotName, type SnapshotWorkspace } from '../core/space-snapshots'
 import { deleteProjectAndDestroyTerminals } from '../core/project-deletion'
 import { closeTerminalNode } from '../core/terminal-close'
 import { loadAppSettings, saveAppSettings } from '../core/app-settings'
 import { createUpdateBridge } from './updates'
 import { createCloudRuntime } from './cloud'
+import { CloudError } from '../core/cloud'
 import { clampWindowBounds, desiredUiZoom, FALLBACK_WORK_AREA } from './window-metrics'
-import type { CloudBackup, CloudDevicePoll, CloudDeviceStart, CloudSpace, CloudUser } from '../shared/types'
+import type { CloudBackup, CloudDevicePoll, CloudDeviceStart, CloudSpace, CloudSpacePullEmpty, CloudSpacePullResult, CloudSpacePushResult, CloudUser } from '../shared/types'
 import { HookServer } from '../core/hook-server'
 import { claudeSettingsPath, installClaudeHooks } from './agents/hook-installer'
 import { SessionNameTracker } from '../core/session-name'
@@ -878,6 +881,89 @@ function registerCloudIpc(): void {
   // and opens the returned URL (which carries auth) in the system browser.
   ipcMain.handle(IPC.cloudSpaceStatus, (): Promise<CloudSpace | null> => cloud.getSpace())
   ipcMain.handle(IPC.cloudSpaceOpen, (): Promise<void> => cloud.openSpace())
+  // D1 — "Open online snapshot": pull the space content and import the
+  // current project as a NEW local project (collision-safe name), persisting
+  // the snapshot's scrollbacks so restored terminals replay their history.
+  ipcMain.handle(IPC.cloudSpacePull, (): Promise<CloudSpacePullResult | CloudSpacePullEmpty> =>
+    pullAndImportSpaceSnapshot()
+  )
+  // D2 — "Sync this project online": build the active-project payload (nodes
+  // + rev + folder project file + terminal scrollbacks) and push it. Without
+  // a space yet, one is provisioned first (403 upgrade_required still throws).
+  ipcMain.handle(IPC.cloudSpacePush, (_event, projectId: string): Promise<CloudSpacePushResult> =>
+    pushProjectToSpace(typeof projectId === 'string' ? projectId : '')
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Phase 15 (D1+D2) — desktop pull/push of space snapshots. Runs in main where
+// the core engines (workspace store, scrollback store, cloud client) live.
+// ---------------------------------------------------------------------------
+
+/** D1: pull the latest snapshot and import its current project as a NEW local
+ * project. Existing projects are NEVER touched; a name collision gets
+ * ' 2', ' 3', … appended. The snapshot's folder-project `files` entries are
+ * intentionally ignored for v1 (the workspace blob already carries the
+ * canvas) — the snapshot keeps them so future versions can adopt the folder
+ * in place. */
+async function pullAndImportSpaceSnapshot(): Promise<CloudSpacePullResult | CloudSpacePullEmpty> {
+  const content = await cloud.pullSpace()
+  if (!content) return { empty: true }
+  const current = snapshotCurrentProject(content.workspace as SnapshotWorkspace)
+  if (!current) throw new CloudError(0, 'malformed', 'The online snapshot has no project to open')
+  if (!Array.isArray(current.nodes)) throw new CloudError(0, 'malformed', 'The online snapshot has no readable canvas')
+
+  const snap = workspaceStore.snapshot()
+  const name = uniqueOnlineSnapshotName(
+    current.name,
+    snap.index.projects.map((p) => p.name)
+  )
+  // A pulled snapshot is an inline (cwd-less) project: its cwd belongs to the
+  // machine that pushed it. Remote metadata is likewise not adopted for v1.
+  const project = workspaceStore.addProject(name, null)
+  workspaceStore.saveNodes(project.id, current.nodes)
+  const scrollbacksImported = ptyManager.importScrollback(content.scrollbacks ?? {})
+  return { project, nodes: current.nodes, scrollbacksImported, empty: false }
+}
+
+/** D2: build the ACTIVE project's snapshot payload — the same serialization
+ * the app persists, the project's rev (boot restore applies only strictly
+ * newer snapshots), the folder-project file when present, and the terminal
+ * nodes' stored scrollbacks — then push it to the user's space. */
+async function pushProjectToSpace(projectId: string): Promise<CloudSpacePushResult> {
+  const snap = workspaceStore.snapshot()
+  const meta = snap.index.projects.find((p) => p.id === projectId)
+  if (!meta) throw new CloudError(0, 'no_project', 'No active project to sync')
+  const nodes = loadProjectFile(platform.userDataPath, meta)?.nodes ?? []
+  const rev = loadProjectFile(platform.userDataPath, meta)?.rev ?? 0
+
+  // Folder projects keep their file under <cwd>/.termsprawl/project.json —
+  // carry the raw contents so the space's boot restore can adopt them.
+  let projectFile: unknown
+  if (meta.cwd) {
+    const p = join(meta.cwd, '.termsprawl', 'project.json')
+    try {
+      projectFile = JSON.parse(readFileSync(p, 'utf8'))
+    } catch {
+      // unreadable/absent project file — the nodes blob still carries state
+    }
+  }
+
+  const terminalIds = nodes.filter((n) => n.type === 'terminal').map((n) => n.id)
+  const payload = buildProjectPushPayload(
+    { id: meta.id, name: meta.name, cwd: meta.cwd, nodes, rev, projectFile },
+    ptyManager.readScrollbacks(terminalIds)
+  )
+
+  // The push needs a provisioned space; get one when the user has none yet.
+  const existing = await cloud.getSpace()
+  let provisioned = false
+  if (!existing) {
+    await cloud.provisionSpace()
+    provisioned = true
+  }
+  const result = await cloud.pushSpace(payload)
+  return { ...result, provisioned }
 }
 
 function registerBrowserIpc(): void {

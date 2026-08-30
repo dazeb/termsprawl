@@ -3,6 +3,7 @@ import type { AgentAccount, A2APeer, ApiProviderConfig, AppSettings, CloudBackup
 import { AGENT_REGISTRY } from '@shared/agents/config'
 import { HelpBadge } from './HelpBadge'
 import { useCanvasRequests } from '../state/canvas-requests'
+import { useProjects } from '../state/projects'
 import { applyTheme } from '../state/theme'
 
 interface AppSettingsPanelProps {
@@ -74,10 +75,18 @@ interface SectionCtx {
   space: CloudSpace | null
   spaceBusy: boolean
   spaceError: string | null
+  /** Status line for the last space sync action (pulled project / pushed bytes / nothing online). */
+  spaceNote: string | null
+  /** False while the panel has not yet learned whether the user has a space. */
+  spaceLoaded: boolean
   cloudSignIn: () => Promise<void>
   cloudSignOut: () => Promise<void>
   cloudBackupNow: () => Promise<void>
   cloudOpenSpace: () => Promise<void>
+  /** D1 — pull the online snapshot into a NEW local project and open it. */
+  cloudOpenSnapshot: () => Promise<void>
+  /** D2 — push the active project's nodes + scrollbacks to the space. */
+  cloudSyncProject: () => Promise<void>
 }
 
 type TabId = 'general' | 'user' | 'agents' | 'connections' | 'updates'
@@ -168,6 +177,8 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
   const [space, setSpace] = useState<CloudSpace | null>(null)
   const [spaceBusy, setSpaceBusy] = useState(false)
   const [spaceError, setSpaceError] = useState<string | null>(null)
+  const [spaceNote, setSpaceNote] = useState<string | null>(null)
+  const [spaceLoaded, setSpaceLoaded] = useState(false)
   const [tab, setTab] = useState<TabId>('general')
   // Drafts for the A2A + API add forms.
   const [peerLabel, setPeerLabel] = useState('')
@@ -182,7 +193,11 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
     })
     void window.termsprawl.settings.permissionSupported().then(setPermissionSupported)
     void window.termsprawl.cloud.status().then(setCloudUser).catch(() => setCloudUser(null))
-    void window.termsprawl.cloud.spaceStatus().then(setSpace).catch(() => setSpace(null))
+    void window.termsprawl.cloud
+      .spaceStatus()
+      .then(setSpace)
+      .catch(() => setSpace(null))
+      .finally(() => setSpaceLoaded(true))
   }, [])
 
   useEffect(() => {
@@ -305,6 +320,60 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
     }
   }
 
+  // D1 — "Open online snapshot": main pulls the space content and imports the
+  // current project as a NEW local project (collision-safe name, scrollbacks
+  // persisted for the cold-start replay). On success the canvas switches to
+  // the fresh project via the one-shot canvas request store; the panel closes
+  // so the user actually sees it.
+  const cloudOpenSnapshot = async (): Promise<void> => {
+    if (spaceBusy) return
+    setSpaceBusy(true)
+    setSpaceError(null)
+    setSpaceNote(null)
+    try {
+      const result = await window.termsprawl.cloud.pullSpace()
+      if (result.empty) {
+        setSpaceNote('No online snapshot yet — sync a project first')
+        return
+      }
+      // Cache the raw persisted nodes (the store's serialized shape — Canvas
+      // runs deserializeNodes on switch, the same path a boot load uses) and
+      // make the new project active.
+      useProjects.getState().adopt(result.project, result.nodes)
+      useCanvasRequests.getState().spawn({ kind: 'switchProject', projectId: result.project.id })
+      onClose()
+    } catch (e) {
+      setSpaceError(e instanceof Error ? e.message : 'could not open the online snapshot')
+    } finally {
+      setSpaceBusy(false)
+    }
+  }
+
+  // D2 — "Sync this project online": push the ACTIVE project's nodes +
+  // scrollbacks. Main provisions a space first when the user has none; free
+  // plans surface 403 upgrade_required here like every other cloud error.
+  const cloudSyncProject = async (): Promise<void> => {
+    if (spaceBusy) return
+    const activeId = useProjects.getState().activeProjectId
+    if (!activeId) {
+      setSpaceError('No active project to sync')
+      return
+    }
+    setSpaceBusy(true)
+    setSpaceError(null)
+    setSpaceNote(null)
+    try {
+      const result = await window.termsprawl.cloud.pushSpace(activeId)
+      setSpaceNote(
+        `Synced "${useProjects.getState().projects.find((p) => p.id === activeId)?.name ?? 'project'}" online${result.provisioned ? ' (space provisioned)' : ''}`
+      )
+    } catch (e) {
+      setSpaceError(e instanceof Error ? e.message : 'could not sync the project online')
+    } finally {
+      setSpaceBusy(false)
+    }
+  }
+
   const ctx: SectionCtx = {
     settings,
     update,
@@ -325,10 +394,14 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
     space,
     spaceBusy,
     spaceError,
+    spaceNote,
+    spaceLoaded,
     cloudSignIn,
     cloudSignOut,
     cloudBackupNow,
-    cloudOpenSpace
+    cloudOpenSpace,
+    cloudOpenSnapshot,
+    cloudSyncProject
   }
 
   // Sidebar tabs, grouped by termsprawl domain. Each tab hosts the sections
@@ -634,7 +707,11 @@ function spaceUrlLabel(space: CloudSpace): string {
 }
 
 function UserSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
-  const { settings, update, cloudUser, cloudBusy, device, lastBackup, space, spaceBusy, spaceError, cloudSignIn, cloudSignOut, cloudBackupNow, cloudOpenSpace } = ctx
+  const {
+    settings, update, cloudUser, cloudBusy, device, lastBackup,
+    space, spaceBusy, spaceError, spaceNote, spaceLoaded,
+    cloudSignIn, cloudSignOut, cloudBackupNow, cloudOpenSpace, cloudOpenSnapshot, cloudSyncProject
+  } = ctx
   const [draft, setDraft] = useState(settings.displayName ?? '')
   useEffect(() => setDraft(settings.displayName ?? ''), [settings.displayName])
   // The upsell lands on the web dashboard's billing page — the same surface the
@@ -660,13 +737,39 @@ function UserSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
             <button className="account-delete" onClick={() => void cloudSignOut()}>sign out</button>
           </div>
           {cloudUser.plan === 'pro' ? (
-            <div className="account-row">
-              <button className="account-login" disabled={spaceBusy} onClick={() => void cloudOpenSpace()}>
-                {spaceBusy ? 'opening…' : 'open your online canvas'}
-              </button>
-              {space && <span className="account-id">{spaceUrlLabel(space)} · {space.status}</span>}
-              {spaceError && <span className="account-confirm-text">{spaceError}</span>}
-            </div>
+            <>
+              <div className="account-row">
+                <button className="account-login" disabled={spaceBusy} onClick={() => void cloudOpenSpace()}>
+                  {spaceBusy ? 'opening…' : 'open your online canvas'}
+                </button>
+                {space && <span className="account-id">{spaceUrlLabel(space)} · {space.status}</span>}
+                {spaceError && <span className="account-confirm-text">{spaceError}</span>}
+                {spaceNote && <span className="account-id">{spaceNote}</span>}
+              </div>
+              <div className="account-row">
+                {/* D1 — pull the online snapshot into a NEW local project and
+                    switch to it. Disabled while busy; a space with nothing
+                    online yet shows the note instead of failing. */}
+                <button
+                  className="account-login"
+                  disabled={spaceBusy || !spaceLoaded}
+                  title={spaceLoaded ? undefined : 'checking your space…'}
+                  onClick={() => void cloudOpenSnapshot()}
+                >
+                  {spaceBusy ? 'working…' : 'open online snapshot'}
+                </button>
+                {/* D2 — push the active project's nodes + scrollbacks. Provisions
+                    the space first when the user has none. */}
+                <button
+                  className="account-login"
+                  disabled={spaceBusy || !spaceLoaded}
+                  title={spaceLoaded ? undefined : 'checking your space…'}
+                  onClick={() => void cloudSyncProject()}
+                >
+                  {spaceBusy ? 'working…' : 'sync this project online'}
+                </button>
+              </div>
+            </>
           ) : (
             <div className="account-row">
               <button className="account-login" onClick={openBilling}>upgrade to pro</button>

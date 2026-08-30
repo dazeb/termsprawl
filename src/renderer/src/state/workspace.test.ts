@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { Node } from 'reactflow'
 import {
+  buildProjectPushPayload,
+  snapshotCurrentProject,
+  uniqueOnlineSnapshotName,
+  type SnapshotWorkspace
+} from '../../../core/space-snapshots'
+import {
   activateBrowserTab,
   addBrowserTab,
   createAgentLoginNode,
@@ -590,5 +596,70 @@ describe('browser tabs + history (13.4)', () => {
     for (let i = 0; i < 15; i++) capped = pushBrowserHistory(capped, `https://s${i}.example`)
     expect(capped).toHaveLength(10)
     expect(capped![0]).toBe('https://s14.example')
+  })
+})
+
+// Phase 15 (D1+D2) — the desktop sync loop rides the same serialization the
+// app persists: a pulled snapshot's nodes hydrate through deserializeNodes,
+// and the push payload is built from serializeNodes output + the project rev.
+describe('online snapshot round-trip (space snapshots ↔ canvas nodes)', () => {
+  const onlineNodes = [
+    {
+      id: 'term-1',
+      type: 'terminal',
+      position: { x: 40, y: 60 },
+      width: 720,
+      height: 420,
+      style: { width: 720, height: 420 },
+      data: { kind: 'terminal', title: 'shell' }
+    },
+    {
+      id: 'sticky-1',
+      type: 'sticky',
+      position: { x: 800, y: 90 },
+      style: { width: 200, height: 130 },
+      data: { kind: 'sticky', text: 'from the space', color: 'amber', collapsed: false }
+    }
+  ] as unknown as import('@shared/types').SerializedNode[]
+
+  it('a pulled snapshot hydrates through deserializeNodes like a boot load', () => {
+    const workspace: SnapshotWorkspace = {
+      index: { projects: [{ id: 'p1', name: 'main', cwd: null }] },
+      projects: { p1: onlineNodes },
+      currentProjectId: 'p1'
+    }
+    const current = snapshotCurrentProject(workspace)
+    expect(current?.id).toBe('p1')
+    const restored = deserializeNodes(current?.nodes ?? [])
+    expect(restored.map((n) => n.id)).toEqual(['term-1', 'sticky-1'])
+    expect(restored[0].data.kind).toBe('terminal')
+    expect(restored[1].data).toMatchObject({ kind: 'sticky', text: 'from the space', color: 'amber' })
+  })
+
+  it('the imported project name never collides with an existing one', () => {
+    const now = new Date('2026-08-30T12:00:00Z')
+    const first = uniqueOnlineSnapshotName('main', [], now)
+    const second = uniqueOnlineSnapshotName('main', [first], now)
+    expect(second).toBe(`${first} 2`)
+    expect(second).not.toBe(first)
+  })
+
+  it('the push payload round-trips serializeNodes output with its rev', () => {
+    const live = deserializeNodes(onlineNodes)
+    const nodes = serializeNodes(live)
+    const payload = buildProjectPushPayload(
+      { id: 'p1', name: 'main', cwd: null, nodes, rev: 4 },
+      { 'term-1': 'history\n' }
+    )
+    expect(payload.workspace).toMatchObject({
+      currentProjectId: 'p1',
+      revs: { p1: 4 }
+    })
+    expect((payload.workspace as SnapshotWorkspace).projects.p1).toEqual(nodes)
+    expect(payload.scrollbacks).toEqual({ 'term-1': 'history\n' })
+    // And the payload's nodes rehydrate unchanged — what the space's boot
+    // restore saves is exactly what a desktop pull would render.
+    const again = deserializeNodes((payload.workspace as SnapshotWorkspace).projects.p1)
+    expect(again.map((n) => n.id)).toEqual(['term-1', 'sticky-1'])
   })
 })

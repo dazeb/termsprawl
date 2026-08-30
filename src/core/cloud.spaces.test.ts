@@ -101,6 +101,84 @@ describe('CloudClient spaces (online canvas)', () => {
     expect(thrown).toBeInstanceOf(CloudError)
     expect((thrown as CloudError).code).toBe('no_space')
   })
+
+  it('pullSpaceContent() GETs /spaces/pull with the session cookie and returns the snapshot', async () => {
+    const snapshot = {
+      workspace: { index: { projects: [{ id: 'p1', name: 'main', cwd: null }] }, projects: {} },
+      files: {},
+      scrollbacks: { 'term-1': 'session restored\n$ ls\n' },
+    }
+    let sentCookie: string | null = null
+    const fetchFn = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(url)).toBe(`${ORIGIN}/api/v1/spaces/pull`)
+      expect((init?.method ?? 'GET').toUpperCase()).toBe('GET')
+      sentCookie = (init?.headers as Record<string, string>)?.Cookie ?? null
+      return jsonResponse(snapshot, 200)
+    })
+    const client = new CloudClient({ apiBase: ORIGIN, fetchFn, keepCookie: () => {}, getCookie: () => 'ts_session=x' })
+    const pulled = await client.pullSpaceContent()
+    expect(sentCookie).toBe('ts_session=x')
+    expect(pulled).toEqual(snapshot)
+  })
+
+  it('pullSpaceContent() maps 404 no_content to null (nothing online yet)', async () => {
+    const fetchFn = vi.fn(async () =>
+      jsonResponse({ error: { code: 'no_content', message: 'No snapshot yet' } }, 404)
+    )
+    const client = new CloudClient({ apiBase: ORIGIN, fetchFn, keepCookie: () => {}, getCookie: () => 'ts_session=x' })
+    await expect(client.pullSpaceContent()).resolves.toBeNull()
+  })
+
+  it('pullSpaceContent() keeps other 404 codes as errors and surfaces 403 upgrade_required', async () => {
+    const otherCode = vi.fn(async () =>
+      jsonResponse({ error: { code: 'no_space', message: 'No space provisioned yet' } }, 404)
+    )
+    const otherClient = new CloudClient({ apiBase: ORIGIN, fetchFn: otherCode, keepCookie: () => {}, getCookie: () => 'ts_session=x' })
+    await expect(otherClient.pullSpaceContent()).rejects.toMatchObject({ code: 'no_space' })
+
+    const upgrade = vi.fn(async () =>
+      jsonResponse({ error: { code: 'upgrade_required', message: 'Upgrade to Pro' } }, 403)
+    )
+    const proClient = new CloudClient({ apiBase: ORIGIN, fetchFn: upgrade, keepCookie: () => {}, getCookie: () => 'ts_session=x' })
+    await expect(proClient.pullSpaceContent()).rejects.toMatchObject({ status: 403, code: 'upgrade_required' })
+  })
+
+  it('pushSpaceContent() POSTs the snapshot payload to /spaces/push and returns { ok, bytes }', async () => {
+    const payload = {
+      workspace: {
+        index: { projects: [{ id: 'p1', name: 'main', cwd: null }] },
+        projects: { p1: [] },
+        currentProjectId: 'p1',
+        revs: { p1: 3 },
+      },
+      files: {},
+      scrollbacks: { 'term-1': 'out\n' },
+    }
+    let sentBody: string | null = null
+    let sentCookie: string | null = null
+    const fetchFn = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(url)).toBe(`${ORIGIN}/api/v1/spaces/push`)
+      expect((init?.method ?? 'GET').toUpperCase()).toBe('POST')
+      sentCookie = (init?.headers as Record<string, string>)?.Cookie ?? null
+      sentBody = String(init?.body)
+      return jsonResponse({ ok: true, bytes: sentBody?.length ?? 0 }, 200)
+    })
+    const client = new CloudClient({ apiBase: ORIGIN, fetchFn, keepCookie: () => {}, getCookie: () => 'ts_session=x' })
+    const result = await client.pushSpaceContent(payload)
+    expect(sentCookie).toBe('ts_session=x')
+    expect(JSON.parse(sentBody ?? '{}')).toEqual(payload)
+    expect(result).toEqual({ ok: true, bytes: (sentBody ?? '').length })
+  })
+
+  it('pushSpaceContent() surfaces 403 upgrade_required as a CloudError', async () => {
+    const fetchFn = vi.fn(async () =>
+      jsonResponse({ error: { code: 'upgrade_required', message: 'Upgrade to Pro' } }, 403)
+    )
+    const client = new CloudClient({ apiBase: ORIGIN, fetchFn, keepCookie: () => {}, getCookie: () => 'ts_session=x' })
+    await expect(
+      client.pushSpaceContent({ workspace: {}, files: {}, scrollbacks: {} })
+    ).rejects.toMatchObject({ status: 403, code: 'upgrade_required' })
+  })
 })
 
 describe('spaceOpenUrl', () => {

@@ -26,6 +26,9 @@ import type {
   CloudDevicePoll,
   CloudDeviceStart,
   CloudSpace,
+  CloudSpacePullEmpty,
+  CloudSpacePullResult,
+  CloudSpacePushResult,
   CloudUser,
   BrowserCdpInfo,
   BrowserNavigateResult
@@ -128,6 +131,11 @@ declare global {
         spaceStatus(): Promise<CloudSpace | null>
         /** Mint a short-lived access token and open the canvas URL in the system browser (Pro). */
         openSpace(): Promise<void>
+        /** Pull the space snapshot and import it as a NEW local project (main
+         * handles collision-safe naming + scrollback persistence). */
+        pullSpace(): Promise<CloudSpacePullResult | CloudSpacePullEmpty>
+        /** Push the given project's nodes + scrollbacks to the space. */
+        pushSpace(projectId: string): Promise<CloudSpacePushResult>
       }
       browser: {
         cdpInfo(): Promise<BrowserCdpInfo>

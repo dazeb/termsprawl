@@ -259,6 +259,24 @@ export class PtyManager {
     return this.scrollback.read(id)
   }
 
+  /** Persist pulled snapshot scrollbacks (D1) into the same byte-capped store
+   * the cold-start replay reads. Ids are validated like every PTY-facing id;
+   * invalid entries are skipped instead of failing the whole import. */
+  importScrollback(scrollbacks: Record<string, string>): number {
+    let imported = 0
+    for (const id of Object.keys(scrollbacks ?? {})) {
+      if (!TERMINAL_ID_PATTERN.test(id)) continue
+      imported += this.scrollback.importSnapshot({ [id]: scrollbacks[id] })
+    }
+    return imported
+  }
+
+  /** Stored scrollback for MANY sessions (D2 push): only ids that have one. */
+  readScrollbacks(ids: readonly string[]): Record<string, string> {
+    const safe = ids.filter((id) => TERMINAL_ID_PATTERN.test(id))
+    return this.scrollback.readMany(safe)
+  }
+
   /**
    * Detach everything on quit — deliberately does NOT kill tmux sessions,
    * so terminals keep running and reattach on next launch.

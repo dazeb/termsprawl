@@ -18,6 +18,9 @@ export const IPC = {
   workspaceSnapshot: 'workspace:snapshot',
   workspaceSaveNodes: 'workspace:save-nodes',
   projectAdd: 'project:add',
+  /** Import a project with a caller-supplied id (snapshot restore keeps ids
+   * stable across machines); rejects when the id already exists. */
+  projectImport: 'project:import',
   projectClose: 'project:close',
   projectArchive: 'project:archive',
   projectReopen: 'project:reopen',
@@ -85,6 +88,10 @@ export const IPC = {
   // Pro-gated open (main mints the access token and opens the system browser).
   cloudSpaceStatus: 'cloud:space-status',
   cloudSpaceOpen: 'cloud:space-open',
+  // Desktop sync loop (D1+D2): pull the space snapshot and import it as a NEW
+  // local project; push the ACTIVE project's nodes + scrollbacks back up.
+  cloudSpacePull: 'cloud:space-pull',
+  cloudSpacePush: 'cloud:space-push',
 
   // Embedded browser node (Phase — browser node). The debug endpoint lets an
   // external agent drive the embedded guests; register maps a node id to its

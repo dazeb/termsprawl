@@ -549,6 +549,11 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
       const node = createBrowserNode(spawnRequest.url)
       appendOnTop(node)
       push()
+    } else if (spawnRequest.kind === 'switchProject') {
+      // An imported online snapshot: switch the canvas to the fresh project.
+      // The nodes were already saved to disk in main and cached in the
+      // projects store — the activeProjectId effect above hydrates them.
+      useProjects.getState().select(spawnRequest.projectId)
     }
     useCanvasRequests.getState().consume()
   }, [spawnRequest, cwd, appendOnTop, push])

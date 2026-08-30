@@ -85,6 +85,39 @@ export class ScrollbackStore {
     }
   }
 
+  /** Persist pulled snapshot entries (D1): node id → captured text. The
+   * terminal-scrollback layout is the one the cold-start replay reads, so a
+   * restored terminal shows its history (with the usual "session restored"
+   * separator) the first time its local PTY spawns fresh. Byte-capped like
+   * the snapshot path; unknown-shaped entries are skipped. Returns how many
+   * entries landed. */
+  importSnapshot(scrollbacks: Record<string, string>): number {
+    let imported = 0
+    for (const [nodeId, text] of Object.entries(scrollbacks ?? {})) {
+      if (typeof text !== 'string') continue
+      try {
+        mkdirSync(this.dir, { recursive: true })
+        const capped = text.length > MAX_BYTES ? text.slice(text.length - MAX_BYTES) : text
+        writeFileSync(this.fileFor(nodeId), capped, 'utf8')
+        imported += 1
+      } catch {
+        // best-effort: a store write failure never blocks the import
+      }
+    }
+    return imported
+  }
+
+  /** Read several sessions at once (D2 push): only ids that HAVE a stored
+   * snapshot come back — a terminal that never ran carries nothing. */
+  readMany(nodeIds: readonly string[]): Record<string, string> {
+    const out: Record<string, string> = {}
+    for (const id of nodeIds) {
+      const text = this.read(id)
+      if (text !== null) out[id] = text
+    }
+    return out
+  }
+
   /** Final snapshot for every live session (app quit). */
   stopAll(tmux: TmuxConfig): void {
     for (const nodeId of [...this.timers.keys()]) {

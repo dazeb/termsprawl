@@ -18,6 +18,9 @@ interface ProjectsState {
   select(id: string): void
   /** Create a project (folder, inline, or remote); returns its meta. */
   create(name: string, cwd: string | null, remote?: ProjectRemote): Promise<ProjectMeta>
+  /** Make an EXISTING project (created in main, e.g. an imported online
+   * snapshot) active locally: cache its nodes, list it, select it. */
+  adopt(meta: ProjectMeta, nodes: SerializedNode[]): void
   /** Persist the active project's nodes. */
   saveNodes(nodes: SerializedNode[]): Promise<void>
   /** Persist nodes for an explicit project, even after the active tab changes. */
@@ -98,6 +101,15 @@ export const useProjects = create<ProjectsState>((set, get) => ({
       activeProjectId: project.id
     }))
     return project
+  },
+
+  adopt(meta: ProjectMeta, nodes: SerializedNode[]) {
+    set((s) => ({
+      projects: [...s.projects.filter((p) => p.id !== meta.id), meta],
+      nodeCache: { ...s.nodeCache, [meta.id]: nodes },
+      tombstonedNodeIds: { ...s.tombstonedNodeIds, [meta.id]: [] },
+      activeProjectId: meta.id
+    }))
   },
 
   async saveNodes(nodes: SerializedNode[]) {

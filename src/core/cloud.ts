@@ -13,6 +13,7 @@ import type {
   CloudSyncStatus,
   CloudUser,
 } from '../shared/types'
+import type { SpaceSnapshotPayload } from './space-sync'
 
 export interface CloudClientConfig {
   /** The cloud origin, e.g. https://termsprawl.com (no trailing slash). The client appends /api/v1/... */
@@ -113,9 +114,36 @@ export class CloudClient {
     return this.request<CloudSpaceAccess>('/api/v1/spaces/access', { method: 'POST' })
   }
 
+  /** Pull the latest space snapshot (session cookie; Pro). Returns null when
+   * the space has no content yet (404 no_content) — not an error. */
+  async pullSpaceContent(): Promise<SpaceSnapshotPayload | null> {
+    return this.requestNullable<SpaceSnapshotPayload>('/api/v1/spaces/pull', 404, 'no_content')
+  }
+
+  /** Push a snapshot to the user's space (session cookie; Pro; must have a
+   * space). Resolves with the byte size the server reports. */
+  async pushSpaceContent(payload: SpaceSnapshotPayload): Promise<{ ok: true; bytes: number }> {
+    return this.request<{ ok: true; bytes: number }>('/api/v1/spaces/push', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  }
+
   /** True when the supplied error means the user is not signed in (401). */
   static isUnauthorized(e: unknown): boolean {
     return isAuthError(e) && e.status === 401
+  }
+
+  /** GET that maps one specific "empty" error (status + code) to null instead
+   * of throwing — the pull endpoint's 404 no_content means "nothing yet",
+   * which is a state, not a failure. Other errors still throw CloudError. */
+  private async requestNullable<T>(path: string, emptyStatus: number, emptyCode: string): Promise<T | null> {
+    try {
+      return await this.request<T>(path)
+    } catch (e) {
+      if (e instanceof CloudError && e.status === emptyStatus && e.code === emptyCode) return null
+      throw e
+    }
   }
 
   private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
