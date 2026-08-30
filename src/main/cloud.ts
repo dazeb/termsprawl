@@ -130,7 +130,13 @@ export function createCloudRuntime(opts: CloudRuntimeOptions): CloudRuntime {
   async function openSpace(): Promise<void> {
     // Token minted lazily, right before the open — it lives ~5 minutes.
     const access = await client.spaceAccessToken()
-    void shell.openExternal(spaceOpenUrl(access.url, access.token))
+    const url = spaceOpenUrl(access.url, access.token)
+    // Same scheme guard IPC.openExternal enforces — this path calls
+    // shell.openExternal DIRECTLY, so the IPC handler's check does not
+    // apply. A hostile/malformed API url (file://, custom scheme) must
+    // never reach the OS.
+    if (!/^https?:\/\//.test(url)) throw new CloudError(0, 'bad_space_url', `Refusing to open non-http(s) space url`)
+    void shell.openExternal(url)
   }
 
   // Fulfil a "Back up now" requested from the web dashboard. The web raises

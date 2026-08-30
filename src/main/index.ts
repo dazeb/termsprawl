@@ -921,9 +921,31 @@ async function pullAndImportSpaceSnapshot(): Promise<CloudSpacePullResult | Clou
   // A pulled snapshot is an inline (cwd-less) project: its cwd belongs to the
   // machine that pushed it. Remote metadata is likewise not adopted for v1.
   const project = workspaceStore.addProject(name, null)
-  workspaceStore.saveNodes(project.id, current.nodes)
-  const scrollbacksImported = ptyManager.importScrollback(content.scrollbacks ?? {})
-  return { project, nodes: current.nodes, scrollbacksImported, empty: false }
+  // Node ids are LOAD-BEARING (pty session id == tmux key == scrollback file
+  // == persisted id). Snapshot ids belong to the machine that pushed them:
+  // re-pulling the same snapshot — or pulling on a second machine — would
+  // otherwise create two projects with identical terminal ids fighting over
+  // one tmux session, and importSnapshot would clobber a live local
+  // terminal's stored scrollback on id collision. Remap every id (nodes and
+  // scrollback keys together) onto fresh ids scoped to the new project.
+  const idRemap = new Map<string, string>()
+  for (const node of current.nodes) {
+    const raw = (node as { id?: unknown } | null)?.id
+    if (typeof raw === 'string') idRemap.set(raw, `n-${project.id}-${idRemap.size + 1}`)
+  }
+  const remappedNodes = current.nodes.map((node) => {
+    const fresh = idRemap.get((node as { id?: string }).id ?? '')
+    if (!fresh) return node
+    return { ...(node as unknown as Record<string, unknown>), id: fresh } as typeof node
+  })
+  workspaceStore.saveNodes(project.id, remappedNodes)
+  const scopedScrollbacks: Record<string, string> = {}
+  for (const [id, text] of Object.entries(content.scrollbacks ?? {})) {
+    const fresh = idRemap.get(id)
+    if (fresh && typeof text === 'string') scopedScrollbacks[fresh] = text
+  }
+  const scrollbacksImported = ptyManager.importScrollback(scopedScrollbacks)
+  return { project, nodes: remappedNodes, scrollbacksImported, empty: false }
 }
 
 /** D2: build the ACTIVE project's snapshot payload — the same serialization

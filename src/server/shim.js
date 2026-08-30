@@ -261,6 +261,9 @@
       backupNow: notAvailable('cloud'),
       listBackups: function () { return Promise.resolve([]) },
       spaceStatus: function () { return Promise.resolve(null) },
+      spaceProvision: notAvailable('cloud'),
+      spacePull: notAvailable('cloud'),
+      spacePush: notAvailable('cloud'),
       openSpace: notAvailable('cloud')
     }
   }
