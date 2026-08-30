@@ -992,3 +992,63 @@ pnpm run dist        # AppImage + .deb
 - **O-4** Minimum supported tmux version?
 - **O-5** Electron vs Tauri: Electron chosen (node-pty + Monaco maturity);
   revisit only if a concrete constraint appears.
+
+---
+
+## Phase 15 — Online canvas spaces (deviation — user-directed 2026-08-29)
+
+*Hosted "canvas space" per Pro member at `canvas.termsprawl.com/<login>`: a
+Server Edition instance per user in a Docker container on hermes-box, synced
+with the desktop via backup-shaped snapshots. Full plan:
+`.hermes/plans/2026-08-29_210125-online-canvas-spaces.md`. Sync model = the
+pull-model, backup-shaped option (D1-B) the user chose: spaces push
+snapshots (workspace + project files + terminal scrollback) to the cloud
+store; desktop pulls them in as a NEW local project ("Open online snapshot")
+and can push a project back up. One writer at a time; no merge logic.*
+
+### Task 15.1: Cloud control plane (termsprawl-web)
+
+- ✅ A1 spaces store — one space per Pro user, atomic JSON store
+  (`47e9670`, proto-safety fix `b3e42d4`).
+- ✅ A2 short-lived space access tokens (HS256, 5 min) — `7043c7e`.
+- ✅ A3 docker space provisioning (`ts-space-<login>`, caps, port pool
+  3101–3199, reconcile) — `eb68ff9`.
+- ✅ A4 spaces API (pro-gated provision / access / status / delete) —
+  `6b4ba34`.
+- ✅ A5 space-router (`canvas.termsprawl.com/<login>` → container: JWT gate +
+  HttpOnly router cookie, wake-on-connect with retry page, raw-TCP WS
+  passthrough, deterministic shutdown) — `b1f5e36` (+ systemd unit).
+- ✅ Space-content store + routes (the sync endpoint the app's engine
+  already targets): `/api/v1/space/content` (bearer `space-sync` JWT from
+  the space) and `/api/v1/spaces/push|pull` (session, Pro) — plus the
+  space-manager minting signed long-lived sync tokens (stateless
+  verification; boot-token secret still never persisted).
+
+### Task 15.2: Space image & sync engine (app repo)
+
+- ✅ B1 `Dockerfile.space` + build script (node-pty recompiled for plain
+  node, non-root, /data volume) — `6735e47`.
+- ✅ B2 space-sync engine (TDD, Electron-free: push/pull, coalescing
+  scheduler with one chained follow-up) — `c63c698` + `b3aca6d`.
+- ✅ B3+B4 boot-restore + snapshot push + scrollback in Server Edition —
+  `68bd1f7`.
+
+### Task 15.3: Client surfaces
+
+- ✅ C1 desktop — cloud spaces methods + Settings "Open your online canvas"
+  (Pro-gated) — `5e72975`.
+- ✅ C2 dashboard — Spaces card (create/provisioning/open/resume/retry
+  states, mock-mode aware) — `a25a4a3`.
+
+### Task 15.4: Desktop sync loop
+
+- D1 "Open online snapshot" (new local project, collision-safe naming,
+  scrollback restore) + D2 "Sync this project online" — in flight.
+
+### Task 15.5: Ops & launch
+
+- ✅ DNS `canvas.termsprawl.com` → box (DNS-only) + runbook
+  `docs/SPACES-OPS.md` (capacity, idle-stop, tokens, kill switch) —
+  `a65f6e0`.
+- Caddy `canvas` vhost + on-box deploy of router + image + e2e script
+  (`scripts/space-e2e.sh`) — pending; release to follow.
