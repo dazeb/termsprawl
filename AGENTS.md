@@ -93,6 +93,20 @@ touch build config, re-verify with a packaged boot test.
 - **Node ids are stable and load-bearing**: the PTY session id, the tmux
   session key (`ts-<nodeId>`), and the persisted node id are all the same
   string. Change an id ⇒ the terminal respawns and loses its session.
+  Any code importing snapshots/bundles must therefore remap terminal ids on
+  collision (`applyBundlePlan`, `pullAndImportSpaceSnapshot`) — never reuse
+  foreign ids verbatim.
+- **Workspace bundle** (`src/core/workspace-bundle.ts`): the whole workspace
+  (all projects + terminal scrollback) as ONE json file —
+  `{ bundle: { format: 'termsprawl-workspace', version, savedAt }, workspace,
+  files, scrollbacks }`. The body is exactly the spaces-sync envelope
+  (`SpaceSnapshotPayload`), so file export, cloud push/pull
+  (`/api/v1/spaces/push|pull`), and the space boot path all speak one
+  format. Import rules: revs REQUIRED (restore paths skip rev-less projects),
+  project ids always fresh (`addProject` throws on duplicates — that is the
+  guard), terminal ids remapped on collision, cwd never adopted. Bump
+  `BUNDLE_VERSION` only with a migration story; import rejects newer
+  versions with a clear message.
 - **tmux owns session continuity.** Every terminal runs inside
   `tmux new-session -A -D -s ts-<nodeId>` on a dedicated socket (`-S
   <userData>/tmux-sockets/termsprawl`) with a generated config
