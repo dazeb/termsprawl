@@ -61,6 +61,10 @@ reported 4.1 kB writable layer while sharing the 1.83 GB virtual image.
 - The relief valve is idle-stop: containers stop after 30 min without a
   proxied request (wake-on-connect restarts them in seconds; scrollback and
   canvas come back from the volume + cloud snapshot).
+- Growth path (user decision 2026-08-31, deferred): if RAM becomes the
+  binding limit, upgrade the VPS or move spaces to a dedicated server
+  (Hetzner). No per-container tuning before that point — the caps are
+  already honest and disk is layer-shared.
 
 ## Idle-stop and waking
 
