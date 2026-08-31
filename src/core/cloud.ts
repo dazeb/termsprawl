@@ -14,6 +14,7 @@ import type {
   CloudUser,
 } from '../shared/types'
 import type { SpaceSnapshotPayload } from './space-sync'
+import type { SnapshotWorkspace } from './space-snapshots'
 
 export interface CloudClientConfig {
   /** The cloud origin, e.g. https://termsprawl.com (no trailing slash). The client appends /api/v1/... */
@@ -30,6 +31,21 @@ export interface CloudBackupPayload {
   name?: string
   workspace: unknown
   files: Record<string, unknown>
+}
+
+/** Whole-workspace bundle — the single-file envelope the export/import layer
+ * (core/workspace-bundle.ts) builds. Restated STRUCTURALLY here instead of
+ * imported: tsconfig.web.json's core whitelist doesn't include
+ * workspace-bundle.ts, and cloud.ts must stay in the web project's file set.
+ * The shapes are identical (core is type-checked as one graph), so a real
+ * WorkspaceBundle is assignable; validity is the caller's job via
+ * isValidBundle() — the server returns whatever was pushed. */
+export interface WorkspaceBundlePayload {
+  /** Header identifying the file format ('termsprawl-workspace') + version. */
+  bundle: { format: string; version: number; savedAt: string }
+  workspace: SnapshotWorkspace
+  files: Record<string, unknown>
+  scrollbacks: Record<string, string>
 }
 
 export class CloudError extends Error {
@@ -123,6 +139,27 @@ export class CloudClient {
   /** Push a snapshot to the user's space (session cookie; Pro; must have a
    * space). Resolves with the byte size the server reports. */
   async pushSpaceContent(payload: SpaceSnapshotPayload): Promise<{ ok: true; bytes: number }> {
+    return this.request<{ ok: true; bytes: number }>('/api/v1/spaces/push', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  }
+
+  /** Pull the WHOLE-workspace bundle (single-file envelope: bundle header +
+   * workspace index/nodes/revs + files + scrollbacks) from the user's space.
+   * Same endpoints as the snapshot pair — the stored body is a superset of
+   * SpaceSnapshotPayload, so the server needs no change. Returns null when
+   * the space has no content yet (404 no_content) — not an error. */
+  async pullWorkspaceContent(): Promise<WorkspaceBundlePayload | null> {
+    return this.requestNullable<WorkspaceBundlePayload>('/api/v1/spaces/pull', 404, 'no_content')
+  }
+
+  /** Push the whole-workspace bundle to the user's space (session cookie;
+   * Pro; must have a space). Same endpoint as the snapshot push — the bundle
+   * carries the snapshot envelope (workspace/files/scrollbacks) plus the
+   * `bundle` header, stored verbatim. Resolves with the server-reported byte
+   * size. */
+  async pushWorkspaceContent(payload: WorkspaceBundlePayload): Promise<{ ok: true; bytes: number }> {
     return this.request<{ ok: true; bytes: number }>('/api/v1/spaces/push', {
       method: 'POST',
       body: JSON.stringify(payload),

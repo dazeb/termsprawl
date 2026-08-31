@@ -101,6 +101,26 @@ describe('restoreFromCloud', () => {
     const noneDeps = makeDeps(vi.fn(async () => jsonResponse({ error: {} }, 404)))
     await expect(restoreFromCloud(noneDeps)).resolves.toMatchObject({ restored: false, reason: 'no-snapshot' })
   })
+
+  it('tolerates a workspace-bundle payload — the extra top-level `bundle` header key is ignored', async () => {
+    // Whole-workspace bundles ride the SAME /space/content endpoints; the
+    // stored body adds a `bundle` header on top of the snapshot envelope.
+    // Boot restore reads workspace/files/scrollbacks — unknown top-level keys
+    // must be ignored, not crash the boot path.
+    const payload = {
+      bundle: { format: 'termsprawl-workspace', version: 1, savedAt: '2026-08-31T00:00:00.000Z' },
+      workspace: { index: { projects: [PROJECT] }, projects: { 'p-1': [{ id: 'n9', data: {} }] }, revs: { 'p-1': 5 } },
+      files: {},
+      scrollbacks: { 'term-1': 'history' },
+    }
+    const deps = makeDeps(vi.fn(async () => jsonResponse(payload, 200)))
+    const out = await restoreFromCloud(deps)
+    expect(out.restored).toBe(true)
+    expect(out.projectsApplied).toBe(1)
+    expect(deps.calls.some((c) => c.method === 'workspace:save-nodes' && c.args[0] === 'p-1')).toBe(true)
+    const sb = join(dir, 'terminal-scrollback', 'term-1.txt')
+    expect(await import('node:fs').then((fs) => fs.existsSync(sb))).toBe(true)
+  })
 })
 
 describe('createSpacePusher', () => {
