@@ -142,6 +142,9 @@ const TABS: SettingsTab[] = [
   {
     id: 'agents',
     title: 'Agents',
+    /** Managed agent accounts + preset/permission machinery are desktop-main
+     * features; the canvas has chat-model defaults instead (Connections). */
+    editions: ['desktop'],
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <rect x="3" y="4" width="18" height="16" rx="2" />
