@@ -98,6 +98,22 @@ export const IPC = {
   cloudSpacePull: 'cloud:space-pull',
   cloudSpacePush: 'cloud:space-push',
 
+  // GitHub on the desktop (Task 4 — repo picker at project creation +
+  // connection row): the listing and the import both run in MAIN with the
+  // cloud session cookie; the credential-bearing clone URL never crosses
+  // IPC — githubClone's handler mints it via POST /github/import-url and
+  // hands it straight to the local clone. githubDisconnect wipes the cloud
+  // vault token (DELETE /github/connection).
+  githubRepos: 'github:repos',
+  githubClone: 'github:clone',
+  githubDisconnect: 'github:disconnect',
+
+  // GitHub repo import (Phase 17): the Server Edition clones a connected
+  // user's repo into the space (githubImport) and broadcasts import
+  // suggestions for repos not yet on the canvas (githubSuggest — push only).
+  githubImport: 'github:import',
+  githubSuggest: 'github:suggest',
+
   // Embedded browser node (Phase — browser node). The debug endpoint lets an
   // external agent drive the embedded guests; register maps a node id to its
   // guest, navigate centralises the URL policy.

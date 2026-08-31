@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useProjects } from '../state/projects'
 import { projectNameFromPath } from '../state/workspace'
 import { normalizeRemote, remoteLabel } from '@shared/remote-project'
+import type { CloudGithubFailure, CloudGithubRepo } from '@shared/types'
 import { HelpBadge } from './HelpBadge'
 
 // Project tabs — the app's window chrome drag region. Right-click a tab for
@@ -32,6 +33,17 @@ export function TabBar(): React.JSX.Element {
   const [remoteUser, setRemoteUser] = useState('')
   const [remotePort, setRemotePort] = useState('')
   const [remoteError, setRemoteError] = useState<string | null>(null)
+  // New-project "+" menu: two-item choice (folder vs GitHub import), styled
+  // like the stored-projects dropdown (absolutely positioned under the button).
+  const [newOpen, setNewOpen] = useState(false)
+  const newRef = useRef<HTMLDivElement>(null)
+  // GitHub repo picker dialog state (`.confirm-overlay` pattern).
+  const [ghOpen, setGhOpen] = useState(false)
+  const [ghRepos, setGhRepos] = useState<CloudGithubRepo[] | null>(null)
+  const [ghError, setGhError] = useState<string | null>(null)
+  const [ghErrorCode, setGhErrorCode] = useState<string | null>(null)
+  const [ghLoading, setGhLoading] = useState(false)
+  const [ghBusyName, setGhBusyName] = useState<string | null>(null)
   const storedRef = useRef<HTMLDivElement>(null)
   const settingsRef = useRef<HTMLDivElement>(null)
 
@@ -40,10 +52,67 @@ export function TabBar(): React.JSX.Element {
   const settingsProject = projects.find((p) => p.id === settingsId)
 
   const newProject = async (): Promise<void> => {
+    setNewOpen(false)
     const cwd = await window.termsprawl.workspace.selectFolder()
     if (!cwd) return
     const name = projectNameFromPath(cwd, `project-${openProjects.length + 1}`)
     await create(name, cwd)
+  }
+
+  // ── GitHub repo picker (Task 4) ──────────────────────────────────────────
+  // The renderer never sees a clone URL: repos() returns names only, and
+  // import({ fullName, name }) lets MAIN mint the credential-bearing URL and
+  // clone with it. On success the fresh path becomes the new project's cwd.
+
+  const ghFail = (f: CloudGithubFailure): string => {
+    setGhErrorCode(f.code)
+    return f.code === 'github_not_connected' ? 'Connect GitHub in Settings first' : f.message
+  }
+
+  const loadGhRepos = async (): Promise<void> => {
+    setGhLoading(true)
+    setGhError(null)
+    setGhErrorCode(null)
+    try {
+      const res = await window.termsprawl.github.repos()
+      if (res.ok) {
+        setGhRepos(res.repos)
+      } else {
+        setGhRepos(null)
+        setGhError(ghFail(res))
+      }
+    } finally {
+      setGhLoading(false)
+    }
+  }
+
+  const openGhDialog = (): void => {
+    setNewOpen(false)
+    setGhRepos(null)
+    setGhError(null)
+    setGhErrorCode(null)
+    setGhOpen(true)
+    void loadGhRepos()
+  }
+
+  const importGhRepo = async (repo: CloudGithubRepo): Promise<void> => {
+    if (ghBusyName) return
+    setGhError(null)
+    setGhErrorCode(null)
+    setGhBusyName(repo.fullName)
+    try {
+      const res = await window.termsprawl.github.import({ fullName: repo.fullName, name: repo.name })
+      if (!res.ok) {
+        setGhError(ghFail(res))
+        return
+      }
+      await create(repo.name, res.path)
+      setGhOpen(false)
+    } catch (error) {
+      setGhError(error instanceof Error ? error.message : 'import failed')
+    } finally {
+      setGhBusyName(null)
+    }
   }
 
   const openRemoteDialog = (): void => {
@@ -121,8 +190,10 @@ export function TabBar(): React.JSX.Element {
       const t = e.target as HTMLElement
       if (storedRef.current?.contains(t)) return
       if (settingsRef.current?.contains(t)) return
+      if (newRef.current?.contains(t)) return
       setMenu(null)
       setStoredOpen(false)
+      setNewOpen(false)
     }
     window.addEventListener('mousedown', onDown)
     return () => window.removeEventListener('mousedown', onDown)
@@ -142,9 +213,30 @@ export function TabBar(): React.JSX.Element {
           {p.name}
         </button>
       ))}
-      <button className="tab tab-new" onClick={() => void newProject()} title="New project (folder)">
-        +
-      </button>
+      <div className="tab-stored-wrap" ref={newRef}>
+        <button
+          className="tab tab-new"
+          onClick={() => {
+            setMenu(null)
+            setSettingsId(null)
+            setNewOpen((v) => !v)
+          }}
+          title="New project"
+        >
+          +
+        </button>
+        {newOpen && (
+          <div className="stored-menu new-project-menu">
+            <div className="stored-menu-title">New project</div>
+            <button className="new-project-row" onClick={() => void newProject()}>
+              New folder project…
+            </button>
+            <button className="new-project-row" onClick={openGhDialog}>
+              Import from GitHub…
+            </button>
+          </div>
+        )}
+      </div>
       <button className="tab tab-new" onClick={openRemoteDialog} title="New remote (SSH) project">
         ssh
       </button>
@@ -283,6 +375,60 @@ export function TabBar(): React.JSX.Element {
           </div>
         </div>
       )}
+      {ghOpen && (
+        <div className="confirm-overlay" onClick={() => setGhOpen(false)}>
+          <div className="confirm-dialog gh-picker" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-title">Import from GitHub</div>
+            <div className="confirm-body">
+              Clones a repo from your connected GitHub account into a new local
+              project (shallow clone into ~/termsprawl). Connect GitHub in
+              Settings → User &amp; cloud first.
+            </div>
+            <div className="gh-repo-list">
+              {ghLoading && <div className="gh-repo-note">loading repositories…</div>}
+              {!ghLoading && ghError && (
+                <div className="gh-repo-note gh-repo-error">
+                  {ghError}
+                  {ghErrorCode !== 'github_not_connected' && (
+                    <button className="gh-refresh" onClick={() => void loadGhRepos()}>
+                      Retry
+                    </button>
+                  )}
+                </div>
+              )}
+              {!ghLoading && !ghError && ghRepos && ghRepos.length === 0 && (
+                <div className="gh-repo-note">no repositories found in the connected account</div>
+              )}
+              {!ghLoading && !ghError &&
+                ghRepos?.map((repo) => (
+                  <div key={repo.fullName} className="gh-repo-row">
+                    <span className="gh-repo-name" title={repo.fullName}>
+                      {repo.fullName}
+                    </span>
+                    {repo.private && <span className="gh-repo-badge">private</span>}
+                    <button
+                      className="gh-import-btn"
+                      disabled={ghBusyName !== null}
+                      onClick={() => void importGhRepo(repo)}
+                    >
+                      {ghBusyName === repo.fullName ? 'cloning…' : 'Import'}
+                    </button>
+                  </div>
+                ))}
+            </div>
+            {ghError && ghErrorCode === 'github_not_connected' && (
+              <div className="gh-repo-note">open Settings → User &amp; cloud to connect your GitHub account</div>
+            )}
+            <div className="confirm-actions">
+              <button onClick={() => setGhOpen(false)}>Cancel</button>
+              <button disabled={ghLoading} onClick={() => void loadGhRepos()}>
+                Refresh
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {remoteOpen && (
         <div className="confirm-overlay" onClick={() => setRemoteOpen(false)}>
           <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>

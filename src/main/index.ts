@@ -43,7 +43,7 @@ import { createUpdateBridge } from './updates'
 import { createCloudRuntime } from './cloud'
 import { CloudError } from '../core/cloud'
 import { clampWindowBounds, desiredUiZoom, FALLBACK_WORK_AREA } from './window-metrics'
-import type { CloudBackup, CloudDevicePoll, CloudDeviceStart, CloudSpace, CloudSpacePullEmpty, CloudSpacePullResult, CloudSpacePushResult, CloudUser, WorkspaceBundleExportResult, WorkspaceBundleImportResult } from '../shared/types'
+import type { CloudBackup, CloudDevicePoll, CloudDeviceStart, CloudGithubFailure, CloudGithubImportResult, CloudGithubReposResult, CloudSpace, CloudSpacePullEmpty, CloudSpacePullResult, CloudSpacePushResult, CloudUser, WorkspaceBundleExportResult, WorkspaceBundleImportResult } from '../shared/types'
 import { HookServer } from '../core/hook-server'
 import { claudeSettingsPath, installClaudeHooks } from './agents/hook-installer'
 import { SessionNameTracker } from '../core/session-name'
@@ -894,6 +894,34 @@ function registerCloudIpc(): void {
   ipcMain.handle(IPC.cloudSpacePush, (_event, projectId: string): Promise<CloudSpacePushResult> =>
     pushProjectToSpace(typeof projectId === 'string' ? projectId : '')
   )
+  // GitHub repo picker + import (Task 4): both run HERE, with the same cloud
+  // session cookie the sign-in holds. The credential-bearing clone URL is
+  // minted by github:clone's handler (POST /github/import-url) and consumed
+  // by the local clone in the same call — it never crosses IPC, is never
+  // logged, and is never persisted. Errors map to { ok:false, code, message }
+  // so the renderer can branch on codes (github_not_connected → "Connect
+  // GitHub in Settings first") instead of parsing thrown strings.
+  ipcMain.handle(IPC.githubRepos, (): Promise<CloudGithubReposResult | CloudGithubFailure> =>
+    cloud
+      .githubRepos()
+      .then((r) => r)
+      .catch((e: unknown) => githubFailure(e))
+  )
+  ipcMain.handle(
+    IPC.githubClone,
+    (_event, req: { fullName?: unknown; name?: unknown }): Promise<CloudGithubImportResult | CloudGithubFailure> =>
+      cloud
+        .githubClone({
+          fullName: typeof req?.fullName === 'string' ? req.fullName : '',
+          name: typeof req?.name === 'string' ? req.name : '',
+          projectsRoot: defaultProjectsRoot()
+        })
+        .catch((e: unknown) => githubFailure(e))
+  )
+  // Disconnect GitHub (settings row): wipes the cloud vault token server-side.
+  ipcMain.handle(IPC.githubDisconnect, (): Promise<{ ok: true } | CloudGithubFailure> =>
+    cloud.githubDisconnect().catch((e: unknown) => githubFailure(e))
+  )
   // Phase 16 — "Export workspace…": the ENTIRE workspace (index + every
   // project's nodes + every terminal's scrollback) as ONE json file. Gathers
   // live state through the SAME singletons (workspaceStore + ptyManager) the
@@ -908,6 +936,29 @@ function registerCloudIpc(): void {
   ipcMain.handle(IPC.workspaceImportBundle, (): Promise<WorkspaceBundleImportResult> =>
     importWorkspaceBundle()
   )
+}
+
+// ---------------------------------------------------------------------------
+// GitHub on the desktop (Task 4) — helpers for the github:* IPC handlers.
+// ---------------------------------------------------------------------------
+
+/** Map any cloud/clone error to the { ok:false, code, message } shape the
+ * renderer branches on. CloudError carries the server's code verbatim
+ * (github_not_connected, missing_repo_scope, github_token_invalid,
+ * github_unreachable, rate_limited); anything else becomes 'import_failed'.
+ * Error text is renderer-safe: the clone url was already redacted by
+ * core/github-clone.ts and no code path logs it. */
+function githubFailure(e: unknown): CloudGithubFailure {
+  if (e instanceof CloudError) return { ok: false, code: e.code, message: e.message }
+  const message = e instanceof Error ? e.message : String(e)
+  return { ok: false, code: 'import_failed', message }
+}
+
+/** Default parent directory for cloned GitHub projects. There is no existing
+ * desktop convention for a projects home (folder projects are picked with
+ * the OS dialog), so clones land in ~/termsprawl/<name>. */
+function defaultProjectsRoot(): string {
+  return join(app.getPath('home'), 'termsprawl')
 }
 
 // ---------------------------------------------------------------------------

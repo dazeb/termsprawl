@@ -83,6 +83,12 @@ interface SectionCtx {
   cloudSignOut: () => Promise<void>
   cloudBackupNow: () => Promise<void>
   cloudOpenSpace: () => Promise<void>
+  /** GitHub connection row (Task 4): connected state + connect/disconnect. */
+  ghConnected: boolean
+  ghBusy: boolean
+  ghNote: string | null
+  ghConnect: () => Promise<void>
+  ghDisconnect: () => Promise<void>
   /** D1 — pull the online snapshot into a NEW local project and open it. */
   cloudOpenSnapshot: () => Promise<void>
   /** D2 — push the active project's nodes + scrollbacks to the space. */
@@ -303,6 +309,69 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
     await window.termsprawl.cloud.signOut()
     setCloudUser(null)
     setLastBackup(null)
+    setGhConnected(false)
+  }
+
+  // GitHub connection row (Task 4): the repo scope rides the existing device
+  // flow, so "Connect GitHub" just runs the same sign-in; after a successful
+  // sign-in we ask the cloud whether the vault holds a repo-scoped token by
+  // probing the repo listing. Disconnect wipes the cloud vault token
+  // (DELETE /github/connection).
+  const [ghConnected, setGhConnected] = useState(false)
+  const [ghBusy, setGhBusy] = useState(false)
+  const [ghNote, setGhNote] = useState<string | null>(null)
+
+  const refreshGhConnected = async (): Promise<boolean> => {
+    if (!cloudUser) {
+      setGhConnected(false)
+      return false
+    }
+    try {
+      const res = await window.termsprawl.github.repos()
+      setGhConnected(res.ok)
+      return res.ok
+    } catch {
+      setGhConnected(false)
+      return false
+    }
+  }
+
+  useEffect(() => {
+    void refreshGhConnected()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cloudUser])
+
+  const ghConnect = async (): Promise<void> => {
+    if (ghBusy) return
+    setGhBusy(true)
+    setGhNote(null)
+    try {
+      // Same device flow as the cloud sign-in — the repo scope rides it.
+      await cloudSignIn()
+      const connected = await refreshGhConnected()
+      // A grant that predates repo scope needs a re-approval on the GitHub
+      // side; surface it instead of claiming success.
+      setGhNote(connected ? null : 'GitHub connected, but repo access is missing — disconnect, then connect again and approve the repo scope')
+    } finally {
+      setGhBusy(false)
+    }
+  }
+
+  const ghDisconnect = async (): Promise<void> => {
+    if (ghBusy) return
+    setGhBusy(true)
+    setGhNote(null)
+    try {
+      const res = await window.termsprawl.github.disconnect()
+      if (res.ok) {
+        setGhConnected(false)
+        setGhNote('GitHub disconnected — the stored token was removed')
+      } else {
+        setGhNote(res.message)
+      }
+    } finally {
+      setGhBusy(false)
+    }
   }
 
   const cloudBackupNow = async (): Promise<void> => {
@@ -449,6 +518,11 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
     cloudSignOut,
     cloudBackupNow,
     cloudOpenSpace,
+    ghConnected,
+    ghBusy,
+    ghNote,
+    ghConnect,
+    ghDisconnect,
     cloudOpenSnapshot,
     cloudSyncProject,
     workspaceExportBundle,
@@ -761,7 +835,9 @@ function UserSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
   const {
     settings, update, cloudUser, cloudBusy, device, lastBackup,
     space, spaceBusy, spaceError, spaceNote, spaceLoaded,
-    cloudSignIn, cloudSignOut, cloudBackupNow, cloudOpenSpace, cloudOpenSnapshot, cloudSyncProject,
+    cloudSignIn, cloudSignOut, cloudBackupNow, cloudOpenSpace,
+    ghConnected, ghBusy, ghNote, ghConnect, ghDisconnect,
+    cloudOpenSnapshot, cloudSyncProject,
     workspaceExportBundle, workspaceImportBundle
   } = ctx
   const [draft, setDraft] = useState(settings.displayName ?? '')
@@ -853,6 +929,23 @@ function UserSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
           <button className="account-login" disabled={cloudBusy} onClick={() => void cloudSignIn()}>
             {cloudBusy ? 'waiting for github…' : 'sign in with github'}
           </button>
+        </div>
+      )}
+      {cloudUser && (
+        <div className="account-row">
+          {ghConnected ? (
+            <>
+              <span className="account-id">GitHub connected</span>
+              <button className="account-delete" disabled={ghBusy} onClick={() => void ghDisconnect()}>
+                {ghBusy ? 'working…' : 'disconnect'}
+              </button>
+            </>
+          ) : (
+            <button className="account-login" disabled={ghBusy || cloudBusy} onClick={() => void ghConnect()}>
+              {ghBusy || cloudBusy ? 'waiting for github…' : 'Connect GitHub'}
+            </button>
+          )}
+          {ghNote && <span className="account-confirm-text">{ghNote}</span>}
         </div>
       )}
       <label className="app-settings-toggle">

@@ -19,6 +19,7 @@ import { createDispatcher, type RpcDispatcher, type RpcResponse } from './rpc'
 import { startAgentBridge } from './agent-bridge'
 import { createSpacePusher, restoreFromCloud } from './space-sync-wiring'
 import { createAuthPolicy, authorizeUpgrade, type AuthPolicy } from './server-auth'
+import { IPC } from '../shared/ipc'
 
 const PORT = Number(process.env.PORT ?? process.argv[2] ?? 3110)
 const RENDERER_DIR = resolve('out/renderer')
@@ -332,6 +333,35 @@ if (process.env.TERMSPRAWL_SERVER_ENTRY === '1') {
       ])
       console.log('[server] seeded welcome terminal')
     }
+  }
+
+  // ---- GitHub import suggestions (Phase 17) ----
+  // Best-effort, once per boot: list the user's connected GitHub repos and
+  // broadcast the ones this space doesn't have yet — the renderer shows a
+  // one-click import banner. Never blocks boot; never throws.
+  if (process.env.TS_CLOUD_API && process.env.TS_SPACE_BOOT_TOKEN) {
+    void (async () => {
+      try {
+        const { listSuggestedRepos } = await import('../core/github-import')
+        const state = await callResult('workspace:snapshot', [])
+        const snapState = state as { index?: { projects?: Array<{ id: string; name?: string; cwd?: string | null; closed?: boolean; archived?: boolean }> } } | undefined
+        const projects = snapState?.index?.projects ?? []
+        const names = projects
+          .filter((p) => !p.archived)
+          .flatMap((p) => [p.name ?? '', (p.cwd ?? '').split('/').filter(Boolean).pop() ?? ''])
+          .filter(Boolean)
+        const repos = await listSuggestedRepos(
+          { cloudApi: process.env.TS_CLOUD_API as string, bootToken: process.env.TS_SPACE_BOOT_TOKEN as string },
+          names
+        )
+        if (repos.length > 0) {
+          platform.broadcast(IPC.githubSuggest, { repos })
+          console.log(`[github-import] suggesting ${repos.length} repo(s) for import`)
+        }
+      } catch (error) {
+        console.log('[github-import] suggest failed:', error instanceof Error ? error.message : String(error))
+      }
+    })()
   }
 
   // ---- Auto-save interval ----

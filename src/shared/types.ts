@@ -254,6 +254,44 @@ export interface CloudSpacePushResult {
   provisioned: boolean
 }
 
+/** One repo in GET /api/v1/github/repos (desktop repo picker). Shapes mirror
+ * the cloud endpoint: camelCase, sorted by updatedAt desc. `cloneUrl` is
+ * display-mapped by the server but the renderer never receives it — main
+ * mints the credential-bearing clone URL server-side at import time. */
+export interface CloudGithubRepo {
+  fullName: string
+  name: string
+  private: boolean
+  /** Present on the wire; stripped before anything crosses IPC. */
+  cloneUrl?: string
+  updatedAt: string
+}
+
+/** cloud:repos result — repos WITHOUT cloneUrl (never sent to the renderer). */
+export interface CloudGithubReposResult {
+  ok: true
+  repos: CloudGithubRepo[]
+}
+
+/** github:import (desktop clone-at-project-creation) result — metadata only;
+ * the clone URL is fetched and consumed inside main and never crosses IPC. */
+export interface CloudGithubImportResult {
+  ok: true
+  /** Absolute path of the fresh local clone (the new project's cwd). */
+  path: string
+  /** owner/repo the user picked. */
+  fullName: string
+}
+
+/** A { ok: false, code, message } failure shape shared by the github IPC
+ * handlers so the renderer can branch on codes (github_not_connected →
+ * "Connect GitHub in Settings first"). */
+export interface CloudGithubFailure {
+  ok: false
+  code: string
+  message: string
+}
+
 /** workspace:export-bundle result — the whole workspace written as ONE json
  * file the user picked in the save dialog. */
 export interface WorkspaceBundleExportResult {

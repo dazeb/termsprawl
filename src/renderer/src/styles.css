@@ -245,6 +245,129 @@ body {
   gap: 4px;
 }
 
+/* New-project "+" menu — two-item dropdown (folder / GitHub import), styled
+   like the stored-projects menu but left-aligned under the button. */
+.new-project-menu {
+  left: 0;
+  right: auto;
+  min-width: 190px;
+}
+
+.new-project-row {
+  display: block;
+  width: 100%;
+  background: none;
+  border: none;
+  border-radius: 5px;
+  color: var(--fg);
+  font-size: 13px;
+  text-align: left;
+  padding: 6px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.new-project-row:hover {
+  background: rgba(198, 241, 53, 0.12);
+  color: var(--accent);
+}
+
+/* GitHub repo picker dialog (Task 4): scrollable repo list with private
+   badges + per-row Import; errors (github_not_connected etc.) show inline. */
+.gh-picker {
+  width: 420px;
+  max-width: 90vw;
+}
+
+.gh-repo-list {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+.gh-repo-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.gh-repo-row:last-child {
+  border-bottom: none;
+}
+
+.gh-repo-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  /* ellipsized, single-line */
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--fg);
+}
+
+.gh-repo-badge {
+  flex: none;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+}
+
+.gh-import-btn {
+  flex: none;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--fg);
+  font-size: 11px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.gh-import-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.gh-import-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.gh-repo-note {
+  padding: 10px 8px;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.gh-repo-error {
+  color: #ff8a8a;
+}
+
+.gh-refresh {
+  margin-left: 8px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--fg);
+  font-size: 11px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.gh-refresh:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .stored-reopen {
   flex: 1;
   min-width: 0;

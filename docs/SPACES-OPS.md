@@ -49,6 +49,20 @@ with what the user writes) plus its `/data` volume (projects, scrollback,
 CLI auth — all small text). Verified empirically: two fresh containers each
 reported 4.1 kB writable layer while sharing the 1.83 GB virtual image.
 
+**GitHub import (Phase 17).** Spaces clone a user's connected GitHub repos
+via two cloud endpoints: `GET /api/v1/github/repos` (listing) and
+`POST /api/v1/github/import-url` (90-second `x-access-token` clone URL;
+session cookie OR the space's space-sync JWT; 30 req/min/user). The GitHub
+token itself NEVER leaves the cloud — it lives in the per-user encrypted
+vault (`DATA_DIR/vault.json`, AES-256-GCM), written at device-flow login
+(scope now includes `repo`; existing users re-consent once). `DELETE
+/api/v1/github/connection` wipes it (Settings disconnect). The container
+clones into `<TERMSPRAWL_DATA>/projects-src/<repo>` and adds the project;
+a boot-time suggestion broadcast (`github:suggest`) lists repos not yet on
+the canvas. pnpm 11.22.0 ships in the image; every project installs from
+ONE per-user store (`/data/pnpm-store` on the volume) via the `pnpmi`
+helper — installs are explicit, never automatic on import.
+
 ## Capacity math (the honest version)
 
 - Container caps: `--memory 384m --cpus 0.5 --pids-limit 128` per space.

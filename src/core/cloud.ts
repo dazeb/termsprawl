@@ -8,6 +8,7 @@ import type {
   CloudBackupDetail,
   CloudDevicePoll,
   CloudDeviceStart,
+  CloudGithubRepo,
   CloudSpace,
   CloudSpaceAccess,
   CloudSyncStatus,
@@ -152,6 +153,32 @@ export class CloudClient {
    * the space has no content yet (404 no_content) — not an error. */
   async pullWorkspaceContent(): Promise<WorkspaceBundlePayload | null> {
     return this.requestNullable<WorkspaceBundlePayload>('/api/v1/spaces/pull', 404, 'no_content')
+  }
+
+  /** GET /api/v1/github/repos — the connected account's repo listing for the
+   * desktop repo picker (session cookie; 404 github_not_connected when the
+   * user has never connected GitHub, 403 missing_repo_scope for an old
+   * grant). CloudError carries the server's code/message verbatim. The body
+   * is { repos: [...] } on the wire; normalized to { ok: true, repos }. */
+  async githubRepos(): Promise<{ ok: true; repos: CloudGithubRepo[] }> {
+    const body = await this.request<{ repos?: CloudGithubRepo[] }>('/api/v1/github/repos')
+    return { ok: true, repos: Array.isArray(body?.repos) ? body.repos : [] }
+  }
+
+  /** POST /api/v1/github/import-url — mint the short-lived credential-bearing
+   * clone URL for one repo. MAIN-PROCESS ONLY: the renderer must never
+   * receive this value (the github:clone handler consumes it directly). */
+  async githubImportUrl(fullName: string): Promise<{ url: string; expiresIn: number }> {
+    return this.request<{ url: string; expiresIn: number }>('/api/v1/github/import-url', {
+      method: 'POST',
+      body: JSON.stringify({ fullName }),
+    })
+  }
+
+  /** DELETE /api/v1/github/connection — wipe the stored GitHub token in the
+   * cloud vault (the settings panel's Disconnect). */
+  async githubDisconnect(): Promise<{ ok: true }> {
+    return this.request<{ ok: true }>('/api/v1/github/connection', { method: 'DELETE' })
   }
 
   /** Push the whole-workspace bundle to the user's space (session cookie;

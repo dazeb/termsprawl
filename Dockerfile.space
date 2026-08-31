@@ -92,6 +92,34 @@ RUN apt-get update \
 # /usr/local/bin/codex.
 RUN npm install -g --no-fund --no-audit @openai/codex
 
+# pnpm 11 (exact pin) for IMPORTED projects: projects come with their own
+# lockfile and install into a SHARED per-user store (/data/pnpm-store), so N
+# projects on one canvas reuse one content-addressed store instead of N
+# duplicate node_modules. Installed via npm -g rather than corepack: corepack's
+# "global" pin is per-user HOME state, so the root-installed pin never reached
+# the `space` user (bare pnpm silently resolved to corepack's bundled
+# latest-good).
+RUN npm install -g --no-fund --no-audit pnpm@11.22.0
+
+# pnpmi — explicit install for a project dir. Imported repos land with their
+# lockfile; deps are NOT auto-installed on import (384MB container cap, and
+# explicit beats implicit), so run `pnpmi` in the project (or let the coding
+# agent do it). Frozen when a lockfile exists, plain otherwise; extra args pass
+# through to pnpm install. Version checks go straight to pnpm.
+RUN printf '#!/bin/sh\n\
+# pnpmi — install project deps from the shared per-user store (/data/pnpm-store).\n\
+# Explicit by design: imports never auto-install; run pnpmi in the project dir.\n\
+set -eu\n\
+case "${1:-}" in\n\
+  -v|--version) exec pnpm "$@" ;;\n\
+esac\n\
+if [ -f pnpm-lock.yaml ]; then\n\
+  exec pnpm install --frozen-lockfile "$@"\n\
+fi\n\
+exec pnpm install "$@"\n' \
+      > /usr/local/bin/pnpmi \
+ && chmod +x /usr/local/bin/pnpmi
+
 # gemini → Antigravity shim. The Gemini CLI is now Antigravity (`agy`); the
 # app registry still presets `gemini` as the command (older persisted canvas
 # nodes carry it), so bridge the name to the real binary.
@@ -189,9 +217,25 @@ RUN mkdir -p /opt/cli-seed /data/cli-auth \
  && ln -sfn /data/cli-auth/grok   /home/space/.grok \
  && ln -sfn /data/cli-auth/gemini /home/space/.gemini
 
+# (pnpm store is configured via pnpm config set --global as the space user —
+# see the space-user block below. pnpm 11 does NOT read npm's ~/.npmrc, the
+# prefix npmrc, or npm_config_store_dir env — verified empirically.)
+
 # User-local bins on PATH: agent nodes resolve via command-resolver, but a
 # plain terminal must also be able to type `claude` / `agy` / `grok` directly.
 ENV PATH="/home/space/.local/bin:/home/space/.grok/bin:${PATH}"
+
+# Shared pnpm store — set AS the space user (pnpm's global config is per-user
+# at ~/.config/pnpm/rc; root-set pins do not carry over). Every project of this
+# user installs from one content-addressed store on the volume: no duplicated
+# node_modules per project, and the store survives container recreation.
+# PNPM_HOME must be on PATH for `pnpm config set --global` to run at build.
+# The path is HARDCODED in PATH (not ${PNPM_HOME}): the legacy docker builder
+# does not expand variables inside ENV values.
+ENV PNPM_HOME=/home/space/.local/share/pnpm
+ENV PATH="/home/space/.local/bin:/home/space/.grok/bin:/home/space/.local/share/pnpm:/home/space/.local/share/pnpm/bin:${PATH}"
+USER space
+RUN pnpm config set --global store-dir /data/pnpm-store
 
 # TERMSPRAWL_SERVER_HOST is deliberately NOT defaulted to 0.0.0.0 here: the
 # server's loopback default is a security feature. Exposing a space to the

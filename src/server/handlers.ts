@@ -26,6 +26,7 @@ import { generateCommitMessage } from '../core/commit-message'
 import { createChatRuntime, type ChatSendRequest } from '../core/chat/runtime'
 import { projectChatTools } from '../core/chat/project-tools'
 import { resolveGitScope, resolveFileScope, resolvePtyScope } from '../core/project-scope'
+import { importGitHubRepo } from '../core/github-import'
 import type { RpcHandler } from './rpc'
 import type { CorePlatform } from '../core/platform'
 import type {
@@ -180,6 +181,29 @@ export function buildHandlers(platform: CorePlatform): Record<string, RpcHandler
     [IPC.projectUpdateSettings]: (args) =>
       workspaceStore.updateSettings(String(args[0]), args[1] as ProjectSettings),
     [IPC.projectRename]: (args) => workspaceStore.renameProject(String(args[0]), String(args[1])),
+
+    // GitHub repo import (Phase 17): the SPACE clones the repo (its volume,
+    // its git) and it lands as a real project. Requires the space env
+    // (TS_CLOUD_API + TS_SPACE_BOOT_TOKEN); the clone URL is brokered by the
+    // cloud and never surfaces here. Errors come back as { ok:false, error }.
+    [IPC.githubImport]: async (args) => {
+      const fullName = String(args[0] ?? '')
+      const cloudApi = process.env.TS_CLOUD_API
+      const bootToken = process.env.TS_SPACE_BOOT_TOKEN
+      if (!cloudApi || !bootToken) return { ok: false as const, error: 'space env missing' }
+      const destRoot = join(platform.userDataPath, 'projects-src')
+      try {
+        mkdirSync(destRoot, { recursive: true })
+        const imported = await importGitHubRepo({ cloudApi, bootToken }, { fullName, destRoot })
+        // Project name = repo name; cwd = the fresh clone. If a project with
+        // this cwd already exists (re-import race) addProject throws — surface
+        // that as the error string.
+        const project = workspaceStore.addProject(imported.name, imported.path)
+        return { ok: true as const, project, path: imported.path, fullName: imported.fullName }
+      } catch (error) {
+        return { ok: false as const, error: error instanceof Error ? error.message : String(error) }
+      }
+    },
 
     [IPC.ptyCreate]: (args): ReturnType<PtyManager['create']> | { ok: false; error: string } => {
       const req = args[0] as PtyCreateRequest
