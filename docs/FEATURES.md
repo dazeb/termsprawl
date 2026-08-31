@@ -97,6 +97,15 @@ macOS-specific features are in scope, ever.
   (`termsprawl-workspace` format) via Settings → Export/Open workspace, and
   synced online as one request over the spaces content endpoints. One
   format across file export, cloud sync, and the space boot path.
+- ✅ GitHub project import (Phase 17): connect GitHub once (device flow, repo
+  scope) and import any of your repos as a real project — in the desktop at
+  project creation ("Import from GitHub…" next to New folder project) and on
+  online canvas spaces (one-click suggestions for repos not yet on the
+  canvas). The GitHub token lives ONLY in the cloud's per-user encrypted
+  vault; desktop and spaces clone through 90-second broker URLs and never see
+  the credential. Imported projects install with pnpm from a shared per-user
+  store (`pnpmi` in the space image) — one content-addressed store, no
+  duplicated node_modules per project. [own]
 - ✅ Standalone relay service (11.2, `relay/`): GitHub device-flow auth,
   host sessions, single-use invites with expiry/revocation/quotas,
   E2E-encrypted frames (X25519 + AES-256-GCM; the relay sees ciphertext only),

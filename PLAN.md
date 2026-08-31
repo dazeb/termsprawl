@@ -1103,3 +1103,15 @@ and can push a project back up. One writer at a time; no merge logic.*
   recreation; a seeded welcome project opens a fresh space on a ready
   terminal node. Registry display rename: 'Gemini CLI' → 'Antigravity'
   (id/command unchanged for persisted nodes).
+- ✅ Phase 17 — GitHub repo import (2026-08-31, branch feature/github-import):
+  connect GitHub once via the cloud device flow (scope now includes `repo`);
+  the token is stored ONLY in the cloud's per-user encrypted vault. Desktop:
+  "Import from GitHub…" at project creation + a GitHub connection row in
+  Settings → User & cloud (with disconnect = vault wipe). Spaces: `github:import`
+  RPC + boot-time `github:suggest` broadcast; the container clones via
+  90-second broker URLs (`POST /api/v1/github/import-url`, session OR
+  space-sync JWT, 30/min/user) and never sees the token. Imported projects
+  install with pnpm 11.22.0 from a shared per-user store
+  (/data/pnpm-store + `pnpmi` helper in the ts-space image). Branch state:
+  app 4 commits (749 tests), web 4 commits (99 tests); merge + release pending
+  user go-ahead.
