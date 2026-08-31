@@ -92,6 +92,11 @@ macOS-specific features are in scope, ever.
   "in sync like when we do a backup": one writer at a time, no merge logic.
   Desktop pulls snapshots in as a new local project and pushes a project
   back up; the dashboard provisions/opens/resumes the space.
+- ✅ Workspace bundle (Phase 16): the entire workspace — every project,
+  canvas, and terminal's scrollback — saved as ONE json file
+  (`termsprawl-workspace` format) via Settings → Export/Open workspace, and
+  synced online as one request over the spaces content endpoints. One
+  format across file export, cloud sync, and the space boot path.
 - ✅ Standalone relay service (11.2, `relay/`): GitHub device-flow auth,
   host sessions, single-use invites with expiry/revocation/quotas,
   E2E-encrypted frames (X25519 + AES-256-GCM; the relay sees ciphertext only),

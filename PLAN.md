@@ -903,6 +903,26 @@ DuckDuckGo, which the user can point at their own SearXNG (localhost or LAN).*
 
 ---
 
+## Phase 16 — Workspace bundle (user-directed 2026-08-30)
+
+*The whole workspace as ONE json file: all projects, every canvas, terminal
+scrollback. Format = the spaces-sync envelope (`SpaceSnapshotPayload`) plus a
+`bundle` header, so file export, cloud sync, and the space boot path all
+speak one format. Plan: `.hermes/plans/2026-08-30_123805-workspace-bundle.md`.*
+
+- ✅ Core: `buildBundle` / `applyBundlePlan` / `isValidBundle`
+  (`src/core/workspace-bundle.ts`, 17 tests) — fresh project ids,
+  collision-safe names, terminal-id remap on collision, revs required —
+  `dd115bc`.
+- ✅ Cloud sync: `CloudClient.pushWorkspaceContent`/`pullWorkspaceContent`
+  over the existing `/api/v1/spaces/push|pull` endpoints (no server change;
+  boot-restore tolerates the bundle header — test) — `2d3ed1c`.
+- ✅ Desktop: Export/Open workspace via IPC + save/open dialogs; Settings
+  rows; ScrollbackStore round-trip test — `8b44de1`.
+- ✅ AGENTS.md key-design-decisions entry — `edad4b7`.
+
+---
+
 ## Node-resize fixes (2026-08-27, post-phase)
 
 - **ResizeObserver loop warning on node resize.** TerminalNode's RO called
