@@ -50,7 +50,7 @@ describe('agent registry', () => {
   it('helpers return the agent title/command/name', () => {
     expect(agentTitle('claude')).toBe('claude')
     expect(agentCommand('codex')).toBe('codex')
-    expect(agentName('gemini')).toBe('Gemini CLI')
+    expect(agentName('gemini')).toBe('Antigravity')
     expect(agentTitle('grok')).toBe('grok')
     expect(agentCommand('grok')).toBe('grok')
     expect(agentName('grok')).toBe('Grok')

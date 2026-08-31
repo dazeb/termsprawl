@@ -15,6 +15,32 @@ DNS: `canvas.termsprawl.com` A → 178.104.6.193, **DNS-only** (grey cloud) so
 Caddy terminates TLS and ACME stays clean. Do not orange-cloud it without
 re-thinking the WebSocket path.
 
+## What's in the image
+
+`ts-space:latest` ships the full agent bench the canvas expects (registry:
+`src/shared/agents/config.ts`), installed by the vendors' own latest-channel
+installers at image build time (not pinned — rebuild to update):
+
+| Command | What | Notes |
+|---|---|---|
+| `claude` | Claude Code | Anthropic native installer → `~/.local/bin/claude` |
+| `codex` | Codex CLI | npm global (`@openai/codex`) → `/usr/local/bin/codex` |
+| `grok` | Grok CLI | x.ai installer → `~/.grok/bin/grok` (+ `~/.local/bin` link) |
+| `agy` | Antigravity | Google's flat native build → `~/.local/bin/agy` |
+| `gemini` | → Antigravity | `/usr/local/bin/gemini` shim execs `agy` (legacy name) |
+
+All four CLIs keep auth/config under `$HOME` (~/.claude, ~/.codex, ~/.grok,
+~/.gemini). Those paths are symlinks into `/data/cli-auth` on the space
+volume, so a user logs into each CLI ONCE and the session survives container
+recreation (stop/wake, reconcile-after-reboot, image update). The image also
+carries a seed copy (/opt/cli-seed): a space volume created before this image
+is initialized with fresh CLI config dirs on next boot. Browser-based logins
+(claude, agy) print an authorization URL in the terminal — paste the code
+back; the container has no browser.
+
+A fresh space's Welcome project is seeded with one terminal node (Server
+Edition boot, `src/server/index.ts`) so an empty canvas never greets a user.
+
 ## Capacity math (the honest version)
 
 - Container caps: `--memory 384m --cpus 0.5 --pids-limit 128` per space.

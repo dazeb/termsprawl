@@ -79,8 +79,12 @@ export const AGENT_REGISTRY: Record<AgentId, AgentConfig> = {
   },
   gemini: {
     id: 'gemini',
-    name: 'Gemini CLI',
-    title: 'gemini',
+    // The Gemini CLI is now Antigravity. The id and command stay 'gemini' so
+    // persisted canvas nodes keep their agent identity; the space image ships
+    // a `gemini` shim that execs `agy`, and desktop users with the old binary
+    // still work unchanged.
+    name: 'Antigravity',
+    title: 'antigravity',
     command: 'gemini',
     enabled: true,
     capabilities: {

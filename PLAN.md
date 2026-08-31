@@ -1095,3 +1095,11 @@ and can push a project back up. One writer at a time; no merge logic.*
   (AppImage + .deb + latest-linux.yml), termsprawl.com live at 0.14.0,
   `ts-space:latest` rebuilt on the box from final main. Web-dev handoff:
   termsprawl-web `docs/CANVAS-SPACES-NEXT-STEPS.md`.
+- ✅ Space image ships the full agent bench (2026-08-31): the starting
+  container now carries every CLI the canvas expects — `claude`, `codex`,
+  `grok`, and Antigravity (`agy`, the Gemini CLI) with a `gemini`→`agy` shim
+  for older canvas files. CLI auth dirs (~/.claude, ~/.codex, ~/.grok,
+  ~/.gemini) are symlinked onto the /data volume so logins survive container
+  recreation; a seeded welcome project opens a fresh space on a ready
+  terminal node. Registry display rename: 'Gemini CLI' → 'Antigravity'
+  (id/command unchanged for persisted nodes).

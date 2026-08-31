@@ -308,8 +308,30 @@ if (process.env.TERMSPRAWL_SERVER_ENTRY === '1') {
   const snap = await callResult('workspace:snapshot', [])
   const snapObj = snap as { index?: { projects?: unknown[] }; currentProjectId?: string; projects?: Record<string, { nodes?: unknown[] }> } | undefined
   if (snapObj?.index && Array.isArray(snapObj.index.projects) && snapObj.index.projects.length === 0) {
-    await call('project:add', ['Welcome', null, undefined])
+    const created = await callResult('project:add', ['Welcome', null, undefined]) as { id?: string } | undefined
     console.log('[server] created default welcome project')
+    // Seed ONE terminal node so a fresh space (or offline Server Edition boot)
+    // opens on a ready shell, not an empty canvas. Same shape the renderer's
+    // createTerminalNode factory persists (SerializedNode): explicit
+    // width/height + style so the node renders at terminal size instead of
+    // collapsing (see state/workspace.ts TERMINAL_DIMENSIONS comment).
+    // Only for the boot-created project (id known); a restore already wrote
+    // its own nodes — and the zero-projects guard means nothing else ran.
+    if (created?.id) {
+      await call('workspace:save-nodes', [
+        created.id,
+        [{
+          id: 'n-welcome',
+          type: 'terminal',
+          position: { x: 80, y: 90 },
+          width: 720,
+          height: 420,
+          style: { width: 720, height: 420 },
+          data: { kind: 'terminal', title: 'shell' }
+        }]
+      ])
+      console.log('[server] seeded welcome terminal')
+    }
   }
 
   // ---- Auto-save interval ----

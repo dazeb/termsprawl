@@ -27,6 +27,25 @@
 # from resolve('src/server/shim.js') relative to CWD (SHIM_PATH in
 # src/server/index.ts). It is not bundled into out/, so the image must keep
 # that exact relative path.
+#
+# ---- Agent CLI toolchain -------------------------------------------------
+# The canvas expects the full agent bench (src/shared/agents/config.ts is the
+# registry): claude, codex, gemini (→ Antigravity `agy`), grok. Agent nodes
+# spawn the CLI by name and command-resolver falls back to ~/.local/bin, and
+# plain terminals must type the same names — so all of them live on PATH.
+# Installers are the vendors' own latest-channel scripts (self-checksummed);
+# NOT pinned, so a rebuilt image ships current CLIs. Codex is the only
+# npm-distributed CLI (global, as root, /usr/local/bin).
+#
+# CLI auth persistence: each CLI keeps credentials/config under $HOME
+# (~/.claude, ~/.codex, ~/.grok, ~/.gemini). Those dirs are MOVED onto
+# /data/cli-auth (the VOLUME) and the home paths become symlinks, so a
+# Google/browser login survives container recreation — same lifecycle as the
+# canvas snapshot. A copy of each dir also sits in /opt/cli-seed and the boot
+# script re-seeds /data/cli-auth on first boot: a FRESH volume is initialized
+# from the image's /data layer automatically, but an EXISTING volume (spaces
+# provisioned before this image) is not — space-boot copies whatever is
+# missing, then execs the server (node stays PID 1 under tini).
 
 # ---- builder: prod node_modules with node-pty compiled for plain node ----
 FROM node:24-slim AS builder
@@ -62,15 +81,46 @@ FROM node:24-slim
 # tmux: session continuity for terminal nodes (cold-start scrollback replay).
 # git: the server exposes the git surface to the renderer.
 # procps: ps/top inside user terminals.
+# curl + ca-certificates: the agent CLI installers (curl|bash pattern).
+# zstd: the Claude installer prefers a zstd-compressed download when present.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends tmux git procps \
+ && apt-get install -y --no-install-recommends tmux git procps curl ca-certificates zstd \
  && rm -rf /var/lib/apt/lists/*
+
+# Codex CLI — the only npm-distributed agent CLI. Global install must run as
+# root (npm's prefix is /usr/local); it lands on the default PATH at
+# /usr/local/bin/codex.
+RUN npm install -g --no-fund --no-audit @openai/codex
+
+# gemini → Antigravity shim. The Gemini CLI is now Antigravity (`agy`); the
+# app registry still presets `gemini` as the command (older persisted canvas
+# nodes carry it), so bridge the name to the real binary.
+RUN printf '#!/bin/sh\n# The Gemini CLI is now Antigravity (termsprawl space image).\nexec agy "$@"\n' \
+      > /usr/local/bin/gemini \
+ && chmod +x /usr/local/bin/gemini
 
 # non-root user; fixed uid so host-mounted /data can be chowned predictably.
 # node:24-slim already ships user `node` at uid/gid 1000 — rename it to `space`
 # instead of useradd (uid 1000 is taken; useradd would fail with "not unique").
 RUN usermod -l space -d /home/space -m node \
  && groupmod -n space node
+
+# Boot wrapper: seed the volume's CLI auth dirs (from the image's seed copy)
+# when missing — covers existing space volumes created before this image —
+# then exec the server so node is the process tini (--init) supervises.
+RUN printf '#!/bin/sh\n\
+# space-boot: seed CLI auth dirs on the volume, then run the server.\n\
+set -eu\n\
+mkdir -p /data/cli-auth\n\
+for name in claude codex grok gemini; do\n\
+  if [ ! -e "/data/cli-auth/$name" ] && [ -e "/opt/cli-seed/$name" ]; then\n\
+    cp -a "/opt/cli-seed/$name" "/data/cli-auth/$name"\n\
+  fi\n\
+  mkdir -p "/data/cli-auth/$name"\n\
+done\n\
+exec node out/server/index.js\n' \
+      > /usr/local/bin/space-boot \
+ && chmod +x /usr/local/bin/space-boot
 
 WORKDIR /app
 
@@ -83,9 +133,65 @@ ENV NODE_ENV=production \
     TERMSPRAWL_SERVER_ENTRY=1 \
     TERMSPRAWL_DATA=/data
 
-# user data (projects, workspace, settings) survives via a volume mount
-RUN mkdir -p /data && chown space:space /data
+# user data (projects, workspace, settings) survives via a volume mount.
+# /data/cli-auth is created BEFORE the VOLUME directive on purpose: a fresh
+# named volume is initialized from the image's /data CONTENT as of the VOLUME
+# declaration — writes to /data in LATER build steps (the CLI seed below) are
+# discarded from the image, so anything a fresh volume must start with has to
+# exist up here.
+RUN mkdir -p /data/cli-auth && chown -R space:space /data
 VOLUME /data
+
+# ---- agent CLIs (as the space user — vendors' installers are HOME-based) ----
+# Layer order matters for caching: these big downloads sit AFTER the app COPY
+# layers so an app-only rebuild does not re-fetch them.
+USER space
+
+# Claude Code — Anthropic's native installer (downloads a self-contained
+# binary, then `claude install` sets up ~/.local/bin/claude).
+RUN curl -fsSL https://claude.ai/install.sh -o /tmp/claude-install.sh \
+ && bash /tmp/claude-install.sh \
+ && rm -f /tmp/claude-install.sh
+
+# Grok CLI — x.ai's installer puts the binary in ~/.grok/bin and links
+# ~/.local/bin/grok; re-link defensively so both PATH and the command
+# resolver's ~/.local/bin fallback see it.
+RUN curl -fsSL https://x.ai/cli/install.sh -o /tmp/grok-install.sh \
+ && bash /tmp/grok-install.sh \
+ && rm -f /tmp/grok-install.sh \
+ && ln -sf "$HOME/.grok/bin/grok" "$HOME/.local/bin/grok"
+
+# Antigravity (the Gemini CLI) — Google's flat native build straight into
+# ~/.local/bin/agy.
+RUN curl -fsSL https://antigravity.google/cli/install.sh -o /tmp/agy-install.sh \
+ && bash /tmp/agy-install.sh \
+ && rm -f /tmp/agy-install.sh
+
+# ---- Move CLI state onto the volume, symlink home, keep a seed copy ----
+# As root (for /opt) — so NO $HOME here: HOME follows the RUN's USER (/root),
+# and the dirs we want live in the space user's home. cp -a preserves the
+# space-owned files; mv: the real dirs leave /home/space (the symlink must not
+# shadow a populated dir — grok's BINARY lives inside ~/.grok/bin). cp to
+# /opt/cli-seed first: the boot wrapper re-seeds EXISTING volumes (image /data
+# content only initializes fresh ones). ~/.codex does not exist yet (codex was
+# never run) — space-boot's mkdir owns it consistently.
+USER root
+RUN mkdir -p /opt/cli-seed /data/cli-auth \
+ && for name in claude grok gemini; do \
+      if [ -d "/home/space/.$name" ]; then \
+        cp -a "/home/space/.$name" "/opt/cli-seed/$name"; \
+        mv "/home/space/.$name" "/data/cli-auth/$name"; \
+      fi; \
+    done \
+ && chown -R space:space /data/cli-auth /opt/cli-seed \
+ && ln -sfn /data/cli-auth/claude /home/space/.claude \
+ && ln -sfn /data/cli-auth/codex  /home/space/.codex \
+ && ln -sfn /data/cli-auth/grok   /home/space/.grok \
+ && ln -sfn /data/cli-auth/gemini /home/space/.gemini
+
+# User-local bins on PATH: agent nodes resolve via command-resolver, but a
+# plain terminal must also be able to type `claude` / `agy` / `grok` directly.
+ENV PATH="/home/space/.local/bin:/home/space/.grok/bin:${PATH}"
 
 # TERMSPRAWL_SERVER_HOST is deliberately NOT defaulted to 0.0.0.0 here: the
 # server's loopback default is a security feature. Exposing a space to the
@@ -93,4 +199,4 @@ VOLUME /data
 #   docker run -e TERMSPRAWL_SERVER_HOST=0.0.0.0 …
 EXPOSE 3110
 USER space
-CMD ["node", "out/server/index.js"]
+CMD ["/usr/local/bin/space-boot"]
