@@ -98,6 +98,12 @@ export const IPC = {
   cloudSpacePull: 'cloud:space-pull',
   cloudSpacePush: 'cloud:space-push',
 
+  // GitHub repo import (Phase 17): the Server Edition clones a connected
+  // user's repo into the space (githubImport) and broadcasts import
+  // suggestions for repos not yet on the canvas (githubSuggest — push only).
+  githubImport: 'github:import',
+  githubSuggest: 'github:suggest',
+
   // Embedded browser node (Phase — browser node). The debug endpoint lets an
   // external agent drive the embedded guests; register maps a node id to its
   // guest, navigate centralises the URL policy.
