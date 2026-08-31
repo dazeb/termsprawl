@@ -41,6 +41,14 @@ back; the container has no browser.
 A fresh space's Welcome project is seeded with one terminal node (Server
 Edition boot, `src/server/index.ts`) so an empty canvas never greets a user.
 
+**Disk is shared, not per-user.** The image is ~2.55 GB but Docker stores
+layers ONCE per host — every space container mounts the same read-only
+layers, so 99 spaces still cost 2.55 GB of disk, not 99 × 2.55 GB. What each
+container uniquely owns is its writable layer (starts at ~4 kB, grows only
+with what the user writes) plus its `/data` volume (projects, scrollback,
+CLI auth — all small text). Verified empirically: two fresh containers each
+reported 4.1 kB writable layer while sharing the 1.83 GB virtual image.
+
 ## Capacity math (the honest version)
 
 - Container caps: `--memory 384m --cpus 0.5 --pids-limit 128` per space.
