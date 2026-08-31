@@ -56,14 +56,12 @@ describe('prototype-pollution resistance', () => {
     expect(plan.projects).toHaveLength(1) // only p-1 imported; __proto__ entry ignored
   })
 
-  it('scrollback keys: __proto__ passes TERMINAL_ID_PATTERN (documented), but the write is a plain FILE name', () => {
-    // The pattern accepts '__proto__' — meaning ptyManager.importScrollback
-    // would write <dir>/__proto__.txt. That is a regular file, not property
-    // assignment: no runtime pollution. JSON.parse makes __proto__ an OWN
-    // property, so Object.entries DOES yield it — but pendingScrollbacks is
-    // a real Map (inert key) and the disk write is a filename. Documented,
-    // not exploitable.
-    expect(TERMINAL_ID_PATTERN.test('__proto__')).toBe(true)
+  it('scrollback keys: __proto__ is REJECTED by TERMINAL_ID_PATTERN (leading alnum required)', () => {
+    // The pattern's leading [A-Za-z0-9] rejects __proto__ (starts with '_'),
+    // so ptyManager.importScrollback never even writes such a file. Belt and
+    // braces: pendingScrollbacks is a real Map where '__proto__' is inert
+    // anyway, and the disk write would be a plain filename regardless.
+    expect(TERMINAL_ID_PATTERN.test('__proto__')).toBe(false)
     const plan = applyBundlePlan(
       {
         ...maliciousBundle,
@@ -76,7 +74,11 @@ describe('prototype-pollution resistance', () => {
         newTerminalId: (i) => `nb-${i}`,
       }
     )
-    expect(plan.pendingScrollbacks.has('__proto__')).toBe(true) // own prop via Object.entries
+    // pendingScrollbacks: the __proto__ entry's value is an OBJECT (not a
+    // string), so applyBundlePlan's typeof-string filter skips it — nothing
+    // lands, and TERMINAL_ID_PATTERN in ptyManager.importScrollback would
+    // reject the key anyway (leading alnum required).
+    expect(plan.pendingScrollbacks.has('__proto__')).toBe(false)
     expect(plan.pendingScrollbacks.get('n-1')).toBe('text')
     // And the runtime is not polluted by any of the above:
     expect(({} as Record<string, unknown>).polluted).toBeUndefined()

@@ -93,8 +93,10 @@ export function buildBundle(deps: BundleSourceDeps): WorkspaceBundle {
 }
 
 /** Structural validation: header format + supported version + the envelope
- * actually contains an index with projects and a matching projects map.
- * Never throws — callers hand it arbitrary parsed json. */
+ * actually contains a non-empty index whose projects each have a (possibly
+ * empty) nodes entry — a missing key means a truncated/corrupt bundle, and an
+ * empty workspace has nothing to import. Never throws — callers hand it
+ * arbitrary parsed json. */
 export function isValidBundle(value: unknown): value is WorkspaceBundle {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const b = value as Partial<WorkspaceBundle>
@@ -103,6 +105,7 @@ export function isValidBundle(value: unknown): value is WorkspaceBundle {
   if (typeof b.bundle.version !== 'number' || b.bundle.version !== BUNDLE_VERSION) return false
   const ws = b.workspace
   if (!ws || typeof ws !== 'object' || !ws.index || !Array.isArray(ws.index.projects)) return false
+  if (ws.index.projects.length === 0) return false // nothing to import
   if (!ws.projects || typeof ws.projects !== 'object') return false
   // Every index project must have a (possibly empty) nodes entry — a missing
   // key means a truncated/corrupt bundle.

@@ -160,10 +160,10 @@ describe('applyBundlePlan', () => {
     expect(plan.pendingScrollbacks.get(termIds[1])).toBe('text-n-3')
   })
 
-  it('throws on a bundle with no projects', () => {
+  it('throws on a bundle with no projects (invalid — empty index rejected by isValidBundle)', () => {
     const b = buildBundle(deps())
     ;(b.workspace.index.projects as unknown[]) = []
-    expect(() => applyBundlePlan(b, importOpts())).toThrow(/no projects/i)
+    expect(() => applyBundlePlan(b, importOpts())).toThrow(/invalid workspace bundle/i)
   })
 
   it('throws on an invalid bundle (wrong format/version)', () => {
