@@ -52,6 +52,11 @@ const api = {
   appVersion: (): Promise<string> => ipcRenderer.invoke(IPC.appVersion),
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke(IPC.openExternal, url),
 
+  // Which edition is running. The desktop preload always says 'desktop'; the
+  // Server Edition shim carries its own `runtime: { kind: 'server' }` — the
+  // settings panel reads this to show only surfaces that exist here.
+  runtime: { kind: 'desktop' as const },
+
   settings: {
     get: (): Promise<AppSettings> => ipcRenderer.invoke(IPC.appSettingsGet),
     set: (patch: Partial<AppSettings>): Promise<AppSettings> =>

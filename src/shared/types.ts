@@ -156,7 +156,10 @@ export interface Announcement {
 
 // Phase — Termsprawl Cloud. Shapes mirror the web API contract
 // (termsprawl-web/docs/cloud-app-integration.md).
-export type CloudPlan = 'free' | 'pro'
+// Cloud plans: free = backups only; pro = backup + full sync; canvas ($5) =
+// spaces entitlement (online canvas space). Kept in sync with the cloud API's
+// plan model (termsprawl-web server/index.mjs).
+export type CloudPlan = 'free' | 'pro' | 'canvas'
 export type CloudBackupStatus = 'ok' | 'restoring' | 'failed'
 export type CloudSyncState = 'synced' | 'syncing' | 'idle' | 'error'
 

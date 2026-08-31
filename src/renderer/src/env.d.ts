@@ -49,6 +49,10 @@ declare global {
     termsprawl: {
       appVersion(): Promise<string>
       openExternal(url: string): Promise<void>
+      /** Which edition serves this renderer — the settings panel shows only
+       * surfaces that exist here (the Server Edition shim carries
+       * runtime.kind = 'server'). */
+      runtime: { kind: 'desktop' | 'server' }
       settings: {
         get(): Promise<AppSettings>
         set(patch: Partial<AppSettings>): Promise<AppSettings>

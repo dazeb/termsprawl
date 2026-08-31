@@ -793,21 +793,6 @@ body {
   gap: 8px;
 }
 
-.settings-sheet-config {
-  padding: 5px 12px;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  color: var(--fg);
-  font: 12px/1.4 'Geist Mono', monospace;
-  cursor: pointer;
-}
-
-.settings-sheet-config:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
 .settings-sheet-body {
   flex: 1;
   display: flex;

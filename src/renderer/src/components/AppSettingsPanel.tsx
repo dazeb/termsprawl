@@ -48,10 +48,13 @@ const THEMES: { value: ThemeChoice; label: string }[] = [
 ]
 
 /** A settings-panel section. Adding one to a tab's render array adds content
- * to that sidebar tab — the extension point for future settings. */
+ * to that sidebar tab — the extension point for future settings. `editions`
+ * omits the current edition → the section is dropped from the panel (the
+ * canvas shows only what the Server Edition implements). */
 interface SettingsSection {
   id: string
   title: string
+  editions?: EditionKind[]
   render: (ctx: SectionCtx) => React.JSX.Element
 }
 
@@ -101,10 +104,18 @@ interface SectionCtx {
 
 type TabId = 'general' | 'user' | 'agents' | 'connections' | 'updates'
 
+/** Which edition is rendering this panel: the desktop app (full surface) or
+ * the Server Edition canvas in a browser (only what the server actually
+ * implements — no auto-update, no native dialogs, no desktop-only
+ * integrations). Read from the bridge's runtime hint. */
+type EditionKind = 'desktop' | 'server'
+
 interface SettingsTab {
   id: TabId
   title: string
   icon: React.JSX.Element
+  /** Editions this tab applies to (undefined = both). */
+  editions?: EditionKind[]
 }
 
 const TABS: SettingsTab[] = [
@@ -153,6 +164,9 @@ const TABS: SettingsTab[] = [
   {
     id: 'updates',
     title: 'Updates',
+    /** Auto-update is an Electron/OS-level feature — a container's canvas has
+     * nothing to update (the operator rebuilds the image). */
+    editions: ['desktop'],
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M21 12a9 9 0 1 1-2.64-6.36" />
@@ -190,6 +204,9 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
   const [spaceNote, setSpaceNote] = useState<string | null>(null)
   const [spaceLoaded, setSpaceLoaded] = useState(false)
   const [tab, setTab] = useState<TabId>('general')
+  // Which edition is serving this renderer — the bridge carries the hint.
+  const edition: EditionKind = window.termsprawl.runtime?.kind === 'server' ? 'server' : 'desktop'
+  const isDesktop = edition === 'desktop'
   // Drafts for the A2A + API add forms.
   const [peerLabel, setPeerLabel] = useState('')
   const [peerEndpoint, setPeerEndpoint] = useState('')
@@ -320,6 +337,11 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
   const [ghConnected, setGhConnected] = useState(false)
   const [ghBusy, setGhBusy] = useState(false)
   const [ghNote, setGhNote] = useState<string | null>(null)
+
+  // GitHub is a CLOUD feature, not a desktop-local one: the space imports
+  // repos too (the space container clones via the cloud broker). The
+  // connection row shows on both editions when the cloud is reachable.
+  const ghRelevant = isDesktop || cloudUser !== null
 
   const refreshGhConnected = async (): Promise<boolean> => {
     if (!cloudUser) {
@@ -529,64 +551,57 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
     workspaceImportBundle
   }
 
-  // Sidebar tabs, grouped by termsprawl domain. Each tab hosts the sections
-  // that actually belong to it; adding one to a tab's array adds content there.
-  const tabSections: Record<TabId, SettingsSection[]> = {
+  // Sidebar tabs, grouped by termsprawl domain, filtered by edition. Each tab
+  // hosts the sections that actually belong to it; a section whose `editions`
+  // omits the current one is dropped — the canvas panel only shows controls
+  // the Server Edition actually implements.
+  const allSections: Record<TabId, SettingsSection[]> = {
     general: [
       {
         id: 'prefs',
         title: 'Preferences',
         render: (c) => (
           <>
-            <div className="settings-pref-row">
-              <div className="settings-pref-copy">
-                <span className="settings-pref-label">Agent preset</span>
-                <span className="settings-pref-sub">Tuning for new agent sessions (standard / fast / full)</span>
+            {/* Canvas: the agent preset + permission selects are desktop-side
+                spawn defaults (they gate desktop agent-node launches); the
+                server has no agent-node spawning UI, so they hide there. */}
+            {isDesktop && (
+              <div className="settings-pref-row">
+                <div className="settings-pref-copy">
+                  <span className="settings-pref-label">Agent preset</span>
+                  <span className="settings-pref-sub">Tuning for new agent sessions (standard / fast / full)</span>
+                </div>
+                <select
+                  className="settings-select"
+                  value={c.settings.agentPreset ?? 'standard'}
+                  aria-label="Agent preset"
+                  onChange={(e) => void c.update({ agentPreset: e.target.value })}
+                >
+                  {PRESET_MODES.map((m) => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  ))}
+                </select>
               </div>
-              <select
-                className="settings-select"
-                value={c.settings.agentPreset ?? 'standard'}
-                aria-label="Agent preset"
-                onChange={(e) => void c.update({ agentPreset: e.target.value })}
-              >
-                {PRESET_MODES.map((m) => (
-                  <option key={m.value} value={m.value}>{m.label}</option>
-                ))}
-              </select>
-            </div>
+            )}
 
-            <div className="settings-pref-row">
-              <div className="settings-pref-copy">
-                <span className="settings-pref-label">Permission</span>
-                <span className="settings-pref-sub">Choose the default permission mode for new sessions</span>
+            {isDesktop && (
+              <div className="settings-pref-row">
+                <div className="settings-pref-copy">
+                  <span className="settings-pref-label">Permission</span>
+                  <span className="settings-pref-sub">Default permission mode for new agent sessions (when the CLI supports it)</span>
+                </div>
+                <select
+                  className="settings-select"
+                  value={c.settings.defaultPermission ?? 'workspaceWrite'}
+                  aria-label="Default permission mode"
+                  onChange={(e) => void c.update({ defaultPermission: e.target.value })}
+                >
+                  {PERMISSION_MODES.map((m) => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  ))}
+                </select>
               </div>
-              <select
-                className="settings-select"
-                value={c.settings.defaultPermission ?? 'workspaceWrite'}
-                aria-label="Default permission mode"
-                onChange={(e) => void c.update({ defaultPermission: e.target.value })}
-              >
-                {PERMISSION_MODES.map((m) => (
-                  <option key={m.value} value={m.value}>{m.label}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="settings-pref-row">
-              <div className="settings-pref-copy">
-                <span className="settings-pref-label">Language</span>
-                <span className="settings-pref-sub">English only for now — more languages coming</span>
-              </div>
-              <select
-                className="settings-select"
-                value="en"
-                disabled
-                aria-label="Language (English only for now)"
-                title="More languages coming"
-              >
-                <option value="en">English</option>
-              </select>
-            </div>
+            )}
 
             <div className="settings-group">
               <div className="settings-group-title">Appearance</div>
@@ -608,7 +623,7 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
             <div className="settings-pref-row">
               <div className="settings-pref-copy">
                 <span className="settings-pref-label">Enter behavior while busy</span>
-                <span className="settings-pref-sub">Busy only. Cmd/Ctrl+Enter uses the other behavior</span>
+                <span className="settings-pref-sub">In chat nodes: Enter sends; busy sessions queue, send, or prompt. Shift+Enter breaks the line</span>
               </div>
               <select
                 className="settings-select"
@@ -622,41 +637,48 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
               </select>
             </div>
 
-            <div className="settings-pref-row">
-              <div className="settings-pref-copy">
-                <span className="settings-pref-label">Allow agents to control browser nodes</span>
-                <span className="settings-pref-sub">
-                  Off (default): embedded browsers work normally but no agent endpoint exists. On: an external
-                  agent can open and drive browser nodes over a localhost-only CDP endpoint
-                </span>
-              </div>
-              <label className="app-settings-toggle">
-                <input
-                  type="checkbox"
-                  checked={c.settings.agentBrowserControl === true}
-                  onChange={(e) => void c.update({ agentBrowserControl: e.target.checked })}
-                />
-              </label>
-            </div>
+            {/* Browser nodes are Electron-only (sandboxed <webview> guests) —
+                a browser-based canvas cannot render one, so the whole browser
+                section (agent control + home page) is desktop-only. */}
+            {isDesktop && (
+              <>
+                <div className="settings-pref-row">
+                  <div className="settings-pref-copy">
+                    <span className="settings-pref-label">Allow agents to control browser nodes</span>
+                    <span className="settings-pref-sub">
+                      Off (default): embedded browsers work normally but no agent endpoint exists. On: an external
+                      agent can open and drive browser nodes over a localhost-only CDP endpoint
+                    </span>
+                  </div>
+                  <label className="app-settings-toggle">
+                    <input
+                      type="checkbox"
+                      checked={c.settings.agentBrowserControl === true}
+                      onChange={(e) => void c.update({ agentBrowserControl: e.target.checked })}
+                    />
+                  </label>
+                </div>
 
-            <div className="settings-pref-row">
-              <div className="settings-pref-copy">
-                <span className="settings-pref-label">Search provider / browser home</span>
-                <span className="settings-pref-sub">
-                  URL opened when a browser node or new tab starts — point this at
-                  your own SearXNG (e.g. http://127.0.0.1:8080 or a LAN host) for
-                  private search. Empty = DuckDuckGo
-                </span>
-              </div>
-              <input
-                type="text"
-                className="settings-text-input"
-                placeholder="https://duckduckgo.com"
-                spellCheck={false}
-                value={c.settings.browserHomeUrl ?? ''}
-                onChange={(e) => void c.update({ browserHomeUrl: e.target.value })}
-              />
-            </div>
+                <div className="settings-pref-row">
+                  <div className="settings-pref-copy">
+                    <span className="settings-pref-label">Search provider / browser home</span>
+                    <span className="settings-pref-sub">
+                      URL opened when a browser node or new tab starts — point this at
+                      your own SearXNG (e.g. http://127.0.0.1:8080 or a LAN host) for
+                      private search. Empty = DuckDuckGo
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    className="settings-text-input"
+                    placeholder="https://duckduckgo.com"
+                    spellCheck={false}
+                    value={c.settings.browserHomeUrl ?? ''}
+                    onChange={(e) => void c.update({ browserHomeUrl: e.target.value })}
+                  />
+                </div>
+              </>
+            )}
 
             <div className="settings-pref-row">
               <div className="settings-pref-copy">
@@ -678,13 +700,21 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
       }
     ],
     user: [
-      { id: 'user', title: 'User & cloud', render: (c) => <UserSection ctx={c} /> }
+      {
+        id: 'user',
+        title: isDesktop ? 'User & cloud' : 'Cloud',
+        render: (c) => <UserSection ctx={c} />
+      }
     ],
     agents: [
-      { id: 'agents', title: 'Agents', render: () => <AgentsSection /> },
+      // Canvas: the agents tab carries the account/permission machinery which
+      // is desktop-main-only — but chat-node defaults ARE server-relevant,
+      // and they live in Connections → Chat models on both editions.
+      { id: 'agents', title: 'Agents', editions: ['desktop'], render: () => <AgentsSection /> },
       {
         id: 'accounts',
         title: 'Agent accounts',
+        editions: ['desktop'],
         render: (c) => (
           <AccountsSection
             settings={c.settings}
@@ -706,6 +736,7 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
       {
         id: 'a2a',
         title: 'A2A peers',
+        editions: ['desktop'],
         render: (c) => (
           <A2ASection
             peers={c.settings.a2aPeers ?? []}
@@ -736,11 +767,13 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
       {
         id: 'telegram',
         title: 'Telegram bot',
+        editions: ['desktop'],
         render: (c) => <TelegramSection ctx={c} />
       },
       {
         id: 'relay',
         title: 'Relay',
+        editions: ['desktop'],
         render: (c) => <RelaySection ctx={c} />
       },
       {
@@ -754,26 +787,29 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
     ]
   }
 
+  // Filter the visible tab list by edition, then each tab's sections.
+  const visibleTabs = TABS.filter((t) => !t.editions || t.editions.includes(edition))
+  const tabSections: Record<TabId, SettingsSection[]> = allSections
+  // If the active tab vanished for this edition, snap back to General.
+  const activeTab: TabId = visibleTabs.some((t) => t.id === tab) ? tab : 'general'
+
   return (
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div className="settings-sheet" role="dialog" aria-modal="true" aria-label="settings">
         <div className="settings-sheet-head">
           <span className="settings-sheet-title">Settings</span>
           <div className="settings-sheet-head-actions">
-            <button className="settings-sheet-config" title="Open configuration file" onClick={onClose}>
-              open config file
-            </button>
             <button className="settings-modal-close" onClick={onClose} title="Close settings">×</button>
           </div>
         </div>
 
         <div className="settings-sheet-body">
           <nav className="settings-nav" aria-label="settings sections">
-            {TABS.map((t) => (
+            {visibleTabs.map((t) => (
               <button
                 key={t.id}
                 type="button"
-                className={`settings-nav-item${tab === t.id ? ' is-active' : ''}`}
+                className={`settings-nav-item${activeTab === t.id ? ' is-active' : ''}`}
                 onClick={() => setTab(t.id)}
               >
                 <span className="settings-nav-icon">{t.icon}</span>
@@ -783,12 +819,14 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
           </nav>
 
           <div className="settings-content">
-            {tabSections[tab].map((section) => (
-              <div key={section.id} className="settings-section">
-                <div className="settings-section-title">{section.title}</div>
-                {section.render(ctx)}
-              </div>
-            ))}
+            {tabSections[activeTab]
+              .filter((s) => !s.editions || s.editions.includes(edition))
+              .map((section) => (
+                <div key={section.id} className="settings-section">
+                  <div className="settings-section-title">{section.title}</div>
+                  {section.render(ctx)}
+                </div>
+              ))}
           </div>
         </div>
       </div>
@@ -840,6 +878,13 @@ function UserSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
     cloudOpenSnapshot, cloudSyncProject,
     workspaceExportBundle, workspaceImportBundle
   } = ctx
+  // Edition: the space rows (open your online canvas / open snapshot / sync
+  // this project) drive a DESKTOP↔space loop — from inside the space itself
+  // they are meaningless (you ARE the space). Workspace export/import needs
+  // native save dialogs — desktop-only. The GitHub connection row is a CLOUD
+  // feature (the space imports repos via the broker) but the shim's github
+  // stub rejects, so it only shows on desktop for now.
+  const isDesktop = window.termsprawl.runtime?.kind !== 'server'
   const [draft, setDraft] = useState(settings.displayName ?? '')
   useEffect(() => setDraft(settings.displayName ?? ''), [settings.displayName])
   // The upsell lands on the web dashboard's billing page — the same surface the
@@ -864,7 +909,7 @@ function UserSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
             {lastBackup && <span className="account-id">backup {lastBackup.id.slice(0, 8)} · {lastBackup.size_bytes} bytes</span>}
             <button className="account-delete" onClick={() => void cloudSignOut()}>sign out</button>
           </div>
-          {cloudUser.plan === 'pro' ? (
+          {isDesktop && (cloudUser.plan === 'pro' || cloudUser.plan === 'canvas') ? (
             <>
               <div className="account-row">
                 <button className="account-login" disabled={spaceBusy} onClick={() => void cloudOpenSpace()}>
@@ -917,7 +962,7 @@ function UserSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
                 </button>
               </div>
             </>
-          ) : (
+          ) : !isDesktop ? null : (
             <div className="account-row">
               <button className="account-login" onClick={openBilling}>upgrade to pro</button>
               <span className="account-id">pro adds an online canvas space that syncs with this desktop</span>
@@ -929,9 +974,10 @@ function UserSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
           <button className="account-login" disabled={cloudBusy} onClick={() => void cloudSignIn()}>
             {cloudBusy ? 'waiting for github…' : 'sign in with github'}
           </button>
+          {!isDesktop && <span className="account-id">sign in to sync this canvas with your desktop</span>}
         </div>
       )}
-      {cloudUser && (
+      {cloudUser && isDesktop && (
         <div className="account-row">
           {ghConnected ? (
             <>
@@ -961,7 +1007,11 @@ function UserSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
           }}
         />
       </label>
-      <p className="app-settings-hint">Termsprawl Cloud account (sign in to back up projects) and a basic display name. More user controls are added here later.</p>
+      <p className="app-settings-hint">
+        {isDesktop
+          ? 'Termsprawl Cloud account (sign in to back up projects) and a basic display name. Settings live in settings.json in the config directory.'
+          : 'Sign in with the same GitHub account as your desktop to sync projects between them. Cloud settings for this canvas are managed here; everything else lives on your desktop.'}
+      </p>
     </div>
   )
 }

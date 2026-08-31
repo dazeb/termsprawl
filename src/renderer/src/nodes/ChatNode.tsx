@@ -30,10 +30,18 @@ export function ChatNode({ id, data, selected }: NodeProps<ChatNodeData>): React
   // Per-model price overrides for the cost chip (audit B4) — settings are
   // local-only and cheap to read once per node mount.
   const [prices, setPrices] = useState<Record<string, ModelPrice>>({})
+  // Enter behavior while busy (General → Preferences): what Enter does when a
+  // turn is already streaming — queue it, send immediately (stop+send), or
+  // do nothing until the turn ends. Default 'queue'.
+  const [enterBehavior, setEnterBehavior] = useState<'queue' | 'send' | 'prompt'>('queue')
   useEffect(() => {
     let alive = true
     void window.termsprawl.settings.get().then((s) => {
-      if (alive && s.chat?.priceOverrides) setPrices(s.chat.priceOverrides)
+      if (!alive) return
+      if (s.chat?.priceOverrides) setPrices(s.chat.priceOverrides)
+      if (s.enterBehavior === 'queue' || s.enterBehavior === 'send' || s.enterBehavior === 'prompt') {
+        setEnterBehavior(s.enterBehavior)
+      }
     })
     return () => {
       alive = false
@@ -139,6 +147,21 @@ export function ChatNode({ id, data, selected }: NodeProps<ChatNodeData>): React
   })
 
   const send = (): void => {
+    // Enter behavior while busy (settings → General): the setting governs what
+    // Enter does when a turn is already streaming. 'send' stops the current
+    // turn first so the new message goes immediately; 'prompt' refuses until
+    // the turn ends (a note tells the user why); 'queue' (default) keeps the
+    // current behavior — the message is sent and the runtime serializes turns.
+    if (busy) {
+      if (enterBehavior === 'prompt') {
+        setError('waiting for the current reply — press stop to interrupt')
+        return
+      }
+      if (enterBehavior === 'send') {
+        void window.termsprawl.chat.stop(id)
+      }
+      // 'queue': fall through and send now.
+    }
     sendText(input.trim())
   }
 

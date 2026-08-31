@@ -134,6 +134,11 @@
       return Promise.resolve()
     },
 
+    // Which edition is serving this renderer. The settings panel uses it to
+    // hide surfaces that don't exist here (auto-update, native dialogs,
+    // desktop-only integrations) instead of rendering dead controls.
+    runtime: { kind: 'server' },
+
     settings: {
       get: function () { return invoke('app:settings-get') },
       set: function (patch) { return invoke('app:settings-set', [patch]) },
