@@ -30,6 +30,8 @@ import type {
   CloudSpacePullResult,
   CloudSpacePushResult,
   CloudUser,
+  WorkspaceBundleExportResult,
+  WorkspaceBundleImportResult,
   BrowserCdpInfo,
   BrowserNavigateResult
 } from '@shared/types'
@@ -64,6 +66,11 @@ declare global {
       workspace: {
         snapshot(): Promise<WorkspaceSnapshot>
         saveNodes(id: string, nodes: SerializedNode[]): Promise<number>
+        /** Phase 16 — the whole workspace as ONE json file (save dialog). */
+        exportBundle(): Promise<WorkspaceBundleExportResult>
+        /** Pick a saved bundle and land it as NEW local projects (fresh ids,
+         * collision-safe names, terminal ids remapped on collision). */
+        importBundle(): Promise<WorkspaceBundleImportResult>
         addProject(name: string, cwd: string | null, remote?: ProjectRemote): Promise<ProjectMeta>
         closeProject(id: string): Promise<void>
         archiveProject(id: string): Promise<void>

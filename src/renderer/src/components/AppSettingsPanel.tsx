@@ -87,6 +87,10 @@ interface SectionCtx {
   cloudOpenSnapshot: () => Promise<void>
   /** D2 — push the active project's nodes + scrollbacks to the space. */
   cloudSyncProject: () => Promise<void>
+  /** Phase 16 — save the ENTIRE workspace as ONE json file. */
+  workspaceExportBundle: () => Promise<void>
+  /** Phase 16 — open a saved bundle and land it as NEW local projects. */
+  workspaceImportBundle: () => Promise<void>
 }
 
 type TabId = 'general' | 'user' | 'agents' | 'connections' | 'updates'
@@ -374,6 +378,51 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
     }
   }
 
+  // Phase 16 — "Export workspace…": main gathers the ENTIRE workspace (index,
+  // every project's nodes, every terminal's scrollback) into ONE json file via
+  // the save dialog. Canceled dialog = silent no-op.
+  const workspaceExportBundle = async (): Promise<void> => {
+    if (spaceBusy) return
+    setSpaceBusy(true)
+    setSpaceError(null)
+    setSpaceNote(null)
+    try {
+      const result = await window.termsprawl.workspace.exportBundle()
+      setSpaceNote(result.saved ? `Workspace saved to ${result.path}` : null)
+    } catch (e) {
+      setSpaceError(e instanceof Error ? e.message : 'could not export the workspace')
+    } finally {
+      setSpaceBusy(false)
+    }
+  }
+
+  // Phase 16 — "Open workspace…": a saved bundle lands as NEW local projects
+  // (collision-safe names, terminal ids remapped on collision, scrollbacks
+  // persisted for replay). On success the canvas switches to the first
+  // imported project the same way the online-snapshot flow does.
+  const workspaceImportBundle = async (): Promise<void> => {
+    if (spaceBusy) return
+    setSpaceBusy(true)
+    setSpaceError(null)
+    setSpaceNote(null)
+    try {
+      const result = await window.termsprawl.workspace.importBundle()
+      if (result.imported === 0 || !result.firstProjectId) {
+        return // dialog canceled — nothing to report
+      }
+      // Refresh the projects store from disk (the import happened in main),
+      // then switch the canvas to the first imported project via the one-shot
+      // canvas request — the exact D1 sequence.
+      await useProjects.getState().load()
+      useCanvasRequests.getState().spawn({ kind: 'switchProject', projectId: result.firstProjectId })
+      onClose()
+    } catch (e) {
+      setSpaceError(e instanceof Error ? e.message : 'could not open the workspace file')
+    } finally {
+      setSpaceBusy(false)
+    }
+  }
+
   const ctx: SectionCtx = {
     settings,
     update,
@@ -401,7 +450,9 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
     cloudBackupNow,
     cloudOpenSpace,
     cloudOpenSnapshot,
-    cloudSyncProject
+    cloudSyncProject,
+    workspaceExportBundle,
+    workspaceImportBundle
   }
 
   // Sidebar tabs, grouped by termsprawl domain. Each tab hosts the sections
@@ -710,7 +761,8 @@ function UserSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
   const {
     settings, update, cloudUser, cloudBusy, device, lastBackup,
     space, spaceBusy, spaceError, spaceNote, spaceLoaded,
-    cloudSignIn, cloudSignOut, cloudBackupNow, cloudOpenSpace, cloudOpenSnapshot, cloudSyncProject
+    cloudSignIn, cloudSignOut, cloudBackupNow, cloudOpenSpace, cloudOpenSnapshot, cloudSyncProject,
+    workspaceExportBundle, workspaceImportBundle
   } = ctx
   const [draft, setDraft] = useState(settings.displayName ?? '')
   useEffect(() => setDraft(settings.displayName ?? ''), [settings.displayName])
@@ -767,6 +819,25 @@ function UserSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
                   onClick={() => void cloudSyncProject()}
                 >
                   {spaceBusy ? 'working…' : 'sync this project online'}
+                </button>
+              </div>
+              {/* Phase 16 — the whole workspace as ONE json file: save/open
+                  dialogs live in main; the same busy/error/note surface as the
+                  spaces rows above. Works signed-in or not. */}
+              <div className="account-row">
+                <button
+                  className="account-login"
+                  disabled={spaceBusy}
+                  onClick={() => void workspaceExportBundle()}
+                >
+                  {spaceBusy ? 'working…' : 'export workspace…'}
+                </button>
+                <button
+                  className="account-login"
+                  disabled={spaceBusy}
+                  onClick={() => void workspaceImportBundle()}
+                >
+                  {spaceBusy ? 'working…' : 'open workspace…'}
                 </button>
               </div>
             </>

@@ -17,6 +17,11 @@ export const IPC = {
   // Workspace / projects (Phase 5)
   workspaceSnapshot: 'workspace:snapshot',
   workspaceSaveNodes: 'workspace:save-nodes',
+  // Phase 16 — the ENTIRE workspace as ONE json file: export gathers live
+  // state through the single dispatcher's stores, import lands it as NEW
+  // projects (fresh ids, collision-safe names, remapped terminal ids).
+  workspaceExportBundle: 'workspace:export-bundle',
+  workspaceImportBundle: 'workspace:import-bundle',
   projectAdd: 'project:add',
   /** Import a project with a caller-supplied id (snapshot restore keeps ids
    * stable across machines); rejects when the id already exists. */

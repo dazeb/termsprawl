@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, Notification, protocol, net, shell, screen } from 'electron'
 import { execFileSync, spawn } from 'node:child_process'
-import { appendFileSync, readFileSync } from 'node:fs'
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, join, posix } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -35,6 +35,7 @@ import { WorkspaceStore } from '../core/workspace-store'
 import type { ProjectMeta } from '../core/workspace-files'
 import { loadProjectFile } from '../core/workspace-files'
 import { buildProjectPushPayload, snapshotCurrentProject, uniqueOnlineSnapshotName, type SnapshotWorkspace } from '../core/space-snapshots'
+import { applyBundlePlan, buildBundle, isValidBundle, terminalIdsIn, type WorkspaceBundle } from '../core/workspace-bundle'
 import { deleteProjectAndDestroyTerminals } from '../core/project-deletion'
 import { closeTerminalNode } from '../core/terminal-close'
 import { loadAppSettings, saveAppSettings } from '../core/app-settings'
@@ -42,7 +43,7 @@ import { createUpdateBridge } from './updates'
 import { createCloudRuntime } from './cloud'
 import { CloudError } from '../core/cloud'
 import { clampWindowBounds, desiredUiZoom, FALLBACK_WORK_AREA } from './window-metrics'
-import type { CloudBackup, CloudDevicePoll, CloudDeviceStart, CloudSpace, CloudSpacePullEmpty, CloudSpacePullResult, CloudSpacePushResult, CloudUser } from '../shared/types'
+import type { CloudBackup, CloudDevicePoll, CloudDeviceStart, CloudSpace, CloudSpacePullEmpty, CloudSpacePullResult, CloudSpacePushResult, CloudUser, WorkspaceBundleExportResult, WorkspaceBundleImportResult } from '../shared/types'
 import { HookServer } from '../core/hook-server'
 import { claudeSettingsPath, installClaudeHooks } from './agents/hook-installer'
 import { SessionNameTracker } from '../core/session-name'
@@ -893,6 +894,20 @@ function registerCloudIpc(): void {
   ipcMain.handle(IPC.cloudSpacePush, (_event, projectId: string): Promise<CloudSpacePushResult> =>
     pushProjectToSpace(typeof projectId === 'string' ? projectId : '')
   )
+  // Phase 16 — "Export workspace…": the ENTIRE workspace (index + every
+  // project's nodes + every terminal's scrollback) as ONE json file. Gathers
+  // live state through the SAME singletons (workspaceStore + ptyManager) the
+  // other handlers use — never a second store instance (that desyncs the
+  // store's revs map, the v0.14.0 bug class).
+  ipcMain.handle(IPC.workspaceExportBundle, (): Promise<WorkspaceBundleExportResult> =>
+    exportWorkspaceBundle()
+  )
+  // "Open workspace…": one saved bundle lands as NEW local projects — fresh
+  // ids, collision-safe names, terminal ids remapped on collision — with the
+  // scrollbacks persisted so restored terminals replay their history.
+  ipcMain.handle(IPC.workspaceImportBundle, (): Promise<WorkspaceBundleImportResult> =>
+    importWorkspaceBundle()
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -986,6 +1001,108 @@ async function pushProjectToSpace(projectId: string): Promise<CloudSpacePushResu
   }
   const result = await cloud.pushSpace(payload)
   return { ...result, provisioned }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 16 — workspace bundle over a single json file. Same shape as the
+// spaces-sync envelope; export gathers through the ONE workspaceStore /
+// ptyManager pair, import lands everything as NEW projects the way D1 does.
+// ---------------------------------------------------------------------------
+
+/** Export: build the bundle from LIVE state and write it to the file the user
+ * picks. Revs come from the persisted project files (the same read
+ * pushProjectToSpace uses); scrollbacks from the ONE ptyManager's store. */
+async function exportWorkspaceBundle(): Promise<WorkspaceBundleExportResult> {
+  const snap = workspaceStore.snapshot()
+  if (snap.index.projects.length === 0) {
+    throw new Error('Nothing to export — create a project first')
+  }
+  const win = BrowserWindow.getFocusedWindow()
+  const result = await dialog.showSaveDialog(win!, {
+    defaultPath: `termsprawl-workspace-${new Date().toISOString().slice(0, 10)}.json`,
+    filters: [{ name: 'termsprawl workspace', extensions: ['json'] }]
+  })
+  if (result.canceled || !result.filePath) return { saved: false }
+  const bundle = buildBundle({
+    index: snap.index as unknown as SnapshotWorkspace['index'],
+    nodesFor: (id) => snap.projects[id] ?? [],
+    revFor: (id) => {
+      const meta = snap.index.projects.find((p) => p.id === id)
+      return meta ? (loadProjectFile(platform.userDataPath, meta)?.rev ?? 0) : 0
+    },
+    scrollbacksFor: (ids) => ptyManager.readScrollbacks(ids),
+    currentProjectId: useActiveProjectId(snap)
+  })
+  try {
+    writeFileSync(result.filePath, JSON.stringify(bundle, null, 2), 'utf8')
+  } catch (err) {
+    throw new Error(`Could not write the workspace file: ${err instanceof Error ? err.message : String(err)}`)
+  }
+  return { saved: true, path: result.filePath }
+}
+
+/** The bundle's currentProjectId: the renderer's active project. The store
+ * doesn't track "active" (that's renderer state), so carry the FIRST OPEN
+ * project — the same resolution snapshotCurrentProject falls back to. */
+function useActiveProjectId(snap: ReturnType<WorkspaceStore['snapshot']>): string | undefined {
+  const open = snap.index.projects.find((p) => !p.closed && !p.archived) ?? snap.index.projects[0]
+  return open?.id
+}
+
+/** Import: pick a bundle file, validate it, land every planned project as a
+ * NEW local project (workspaceStore methods directly — the same store path
+ * pullAndImportSpaceSnapshot uses; node ids were already remapped by
+ * applyBundlePlan), persist the scrollbacks, and return the first project id
+ * so the renderer can switch to it. */
+async function importWorkspaceBundle(): Promise<WorkspaceBundleImportResult> {
+  const win = BrowserWindow.getFocusedWindow()
+  const picked = await dialog.showOpenDialog(win!, {
+    properties: ['openFile'],
+    filters: [{ name: 'termsprawl workspace', extensions: ['json'] }]
+  })
+  if (picked.canceled || picked.filePaths.length === 0) return { imported: 0 }
+
+  let bundle: WorkspaceBundle
+  try {
+    bundle = JSON.parse(readFileSync(picked.filePaths[0], 'utf8')) as WorkspaceBundle
+  } catch {
+    throw new Error('Invalid workspace bundle — the file is not readable json')
+  }
+  if (!isValidBundle(bundle)) {
+    throw new Error('Invalid workspace bundle (bad format, unsupported version, or truncated)')
+  }
+
+  const snap = workspaceStore.snapshot()
+  // ALL terminal ids in use locally — a collision in ANY project remaps that
+  // project's terminals so live pty/tmux/scrollback identities stay intact.
+  const existingTerminalIds = new Set<string>(
+    snap.index.projects.flatMap((p) => terminalIdsIn(snap.projects[p.id] ?? []))
+  )
+  const plan = applyBundlePlan(bundle, {
+    existingNames: snap.index.projects.map((p) => p.name),
+    existingTerminalIds,
+    newProjectId: (() => {
+      let counter = 0
+      return () => `p-${Date.now().toString(36)}-${counter++}`
+    })(),
+    newTerminalId: (i) => `nb-${Date.now().toString(36)}-${i}`
+  })
+
+  // Land each planned project directly through the store — project:import is
+  // wrong here (ids are fresh); addProject + saveNodes is the D1 path.
+  let firstProjectId: string | undefined
+  for (const entry of plan.projects) {
+    const project = workspaceStore.addProject(entry.name, null, undefined, { id: entry.id })
+    workspaceStore.saveNodes(project.id, entry.nodes)
+    firstProjectId ??= project.id
+  }
+  const scrollbacksImported = ptyManager.importScrollback(
+    Object.fromEntries(plan.pendingScrollbacks)
+  )
+  if (scrollbacksImported < plan.pendingScrollbacks.size) {
+    console.error(`[workspace-bundle] some scrollbacks were skipped on import (${scrollbacksImported}/${plan.pendingScrollbacks.size})`)
+  }
+  return { imported: plan.projects.length, firstProjectId }
 }
 
 function registerBrowserIpc(): void {

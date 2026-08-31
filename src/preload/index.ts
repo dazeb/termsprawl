@@ -33,6 +33,8 @@ import type {
   CloudSpacePullResult,
   CloudSpacePushResult,
   CloudUser,
+  WorkspaceBundleExportResult,
+  WorkspaceBundleImportResult,
   BrowserCdpInfo,
   BrowserNavigateResult,
   ChatSettings
@@ -81,6 +83,11 @@ const api = {
     snapshot: (): Promise<WorkspaceSnapshot> => ipcRenderer.invoke(IPC.workspaceSnapshot),
     saveNodes: (id: string, nodes: SerializedNode[]): Promise<number> =>
       ipcRenderer.invoke(IPC.workspaceSaveNodes, id, nodes),
+    // Phase 16 — the whole workspace as ONE json file (save/open dialogs).
+    exportBundle: (): Promise<WorkspaceBundleExportResult> =>
+      ipcRenderer.invoke(IPC.workspaceExportBundle),
+    importBundle: (): Promise<WorkspaceBundleImportResult> =>
+      ipcRenderer.invoke(IPC.workspaceImportBundle),
     addProject: (name: string, cwd: string | null, remote?: ProjectRemote): Promise<ProjectMeta> =>
       ipcRenderer.invoke(IPC.projectAdd, name, cwd, remote),
     closeProject: (id: string): Promise<void> => ipcRenderer.invoke(IPC.projectClose, id),

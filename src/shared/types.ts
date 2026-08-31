@@ -254,6 +254,23 @@ export interface CloudSpacePushResult {
   provisioned: boolean
 }
 
+/** workspace:export-bundle result — the whole workspace written as ONE json
+ * file the user picked in the save dialog. */
+export interface WorkspaceBundleExportResult {
+  saved: boolean
+  /** The written file's path (absent when the dialog was canceled). */
+  path?: string
+}
+
+/** workspace:import-bundle result — the bundle landed as NEW local projects
+ * (fresh ids, collision-safe names, terminal ids remapped on collision). */
+export interface WorkspaceBundleImportResult {
+  /** How many projects were imported from the bundle. */
+  imported: number
+  /** The first imported project — the renderer switches the canvas to it. */
+  firstProjectId?: string
+}
+
 export interface AppSettings {
   autoDownloadUpdates: boolean
   /** Managed agent accounts (7.6). v1: Claude only. Null active = default ~/.claude. */
