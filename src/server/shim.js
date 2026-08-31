@@ -306,6 +306,16 @@
       spacePull: notAvailable('cloud'),
       spacePush: notAvailable('cloud'),
       openSpace: notAvailable('cloud')
+    },
+
+    // GitHub on the desktop (Task 4) — cloud-backed repo import is a desktop
+    // feature (main holds the session cookie). The desktop preload always
+    // exposes `github`, so the shim must carry the same top-level shape or
+    // renderer code touching window.termsprawl.github would crash the canvas.
+    github: {
+      repos: function () { return Promise.resolve({ ok: false, code: 'unavailable', message: 'GitHub import is not available in the server edition' }) },
+      import: function () { return Promise.resolve({ ok: false, code: 'unavailable', message: 'GitHub import is not available in the server edition' }) },
+      disconnect: function () { return Promise.resolve({ ok: false, code: 'unavailable', message: 'GitHub import is not available in the server edition' }) }
     }
   }
 })()

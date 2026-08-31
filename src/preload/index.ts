@@ -32,6 +32,9 @@ import type {
   CloudSpacePullEmpty,
   CloudSpacePullResult,
   CloudSpacePushResult,
+  CloudGithubFailure,
+  CloudGithubImportResult,
+  CloudGithubReposResult,
   CloudUser,
   WorkspaceBundleExportResult,
   WorkspaceBundleImportResult,
@@ -235,6 +238,23 @@ const api = {
     /** Push the given project's nodes + scrollbacks to the space. */
     pushSpace: (projectId: string): Promise<CloudSpacePushResult> =>
       ipcRenderer.invoke(IPC.cloudSpacePush, projectId)
+  },
+
+  // GitHub on the desktop (Task 4): the repo listing and the import run in
+  // MAIN with the cloud session cookie. The credential-bearing clone URL is
+  // minted and consumed inside main — the renderer only ever sends
+  // { fullName, name } and receives the clone's local path.
+  github: {
+    /** The connected account's repos (no cloneUrl — names + badges only). */
+    repos: (): Promise<CloudGithubReposResult | CloudGithubFailure> =>
+      ipcRenderer.invoke(IPC.githubRepos),
+    /** Clone a picked repo into the default projects root; main mints the
+     * import-url itself. Returns the new project's local path. */
+    import: (req: { fullName: string; name: string }): Promise<CloudGithubImportResult | CloudGithubFailure> =>
+      ipcRenderer.invoke(IPC.githubClone, req),
+    /** Disconnect GitHub: wipe the stored token in the cloud vault. */
+    disconnect: (): Promise<{ ok: true } | CloudGithubFailure> =>
+      ipcRenderer.invoke(IPC.githubDisconnect)
   },
 
   browser: {

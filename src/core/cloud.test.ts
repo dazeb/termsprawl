@@ -137,4 +137,61 @@ describe('CloudClient', () => {
     const st = (await client.syncStatus()) as CloudSyncStatus
     expect(st.backup_requested_at).toBe('2026-08-24T01:00:00Z')
   })
+
+  it('githubRepos() GETs /github/repos with the session cookie and returns the listing', async () => {
+    let sentCookie: string | null = null
+    const repos = [
+      { fullName: 'dazeb/private-repo', name: 'private-repo', private: true, cloneUrl: 'https://github.com/dazeb/private-repo.git', updatedAt: '2026-08-31T00:00:00Z' },
+      { fullName: 'dazeb/my-repo', name: 'my-repo', private: false, cloneUrl: 'https://github.com/dazeb/my-repo.git', updatedAt: '2026-08-30T00:00:00Z' },
+    ]
+    const fetchFn = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(url)).toBe(`${ORIGIN}/api/v1/github/repos`)
+      expect((init?.method ?? 'GET').toUpperCase()).toBe('GET')
+      sentCookie = (init?.headers as Record<string, string>)?.Cookie ?? null
+      return jsonResponse({ repos }, 200)
+    })
+    const client = new CloudClient({ apiBase: ORIGIN, fetchFn, keepCookie: () => {}, getCookie: () => 'ts_session=abc' })
+    const result = await client.githubRepos()
+    expect(sentCookie).toBe('ts_session=abc')
+    expect(result.ok).toBe(true)
+    expect(result.repos).toHaveLength(2)
+    expect(result.repos[0].fullName).toBe('dazeb/private-repo')
+  })
+
+  it('githubImportUrl() POSTs { fullName } and returns the url + expiry; error shapes surface as CloudError', async () => {
+    const fetchFn = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(url)).toBe(`${ORIGIN}/api/v1/github/import-url`)
+      expect((init?.method ?? 'GET').toUpperCase()).toBe('POST')
+      expect(JSON.parse(String(init?.body))).toEqual({ fullName: 'dazeb/my-repo' })
+      return jsonResponse({ url: 'https://x-access-token:secret@github.com/dazeb/my-repo.git', expiresIn: 90 }, 200)
+    })
+    const client = new CloudClient({ apiBase: ORIGIN, fetchFn, keepCookie: () => {}, getCookie: () => 'ts_session=x' })
+    const minted = await client.githubImportUrl('dazeb/my-repo')
+    expect(minted.url).toContain('x-access-token')
+    expect(minted.expiresIn).toBe(90)
+
+    const unauthFetch = vi.fn(async () => jsonResponse({ error: { code: 'github_not_connected', message: 'Connect GitHub first' } }, 404))
+    const unauthClient = new CloudClient({ apiBase: ORIGIN, fetchFn: unauthFetch, keepCookie: () => {}, getCookie: () => 'ts_session=x' })
+    let thrown: unknown
+    try {
+      await unauthClient.githubImportUrl('dazeb/my-repo')
+    } catch (e) {
+      thrown = e
+    }
+    expect(thrown).toBeInstanceOf(CloudError)
+    expect((thrown as CloudError).code).toBe('github_not_connected')
+  })
+
+  it('githubDisconnect() DELETEs /github/connection with the session cookie and resolves { ok: true }', async () => {
+    let method = ''
+    const fetchFn = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(url)).toBe(`${ORIGIN}/api/v1/github/connection`)
+      method = (init?.method ?? 'GET').toUpperCase()
+      return jsonResponse({ ok: true }, 200)
+    })
+    const client = new CloudClient({ apiBase: ORIGIN, fetchFn, keepCookie: () => {}, getCookie: () => 'ts_session=x' })
+    const result = await client.githubDisconnect()
+    expect(method).toBe('DELETE')
+    expect(result).toEqual({ ok: true })
+  })
 })

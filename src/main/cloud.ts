@@ -9,7 +9,10 @@
 // workspace content itself.
 import { shell } from 'electron'
 import { CloudClient, CloudError, spaceOpenUrl } from '../core/cloud'
-import type { CloudBackup, CloudDevicePoll, CloudDeviceStart, CloudSpace, CloudUser, WorkspaceSnapshot } from '../shared/types'
+import { cloneRepo } from '../core/github-clone'
+import { basename, join } from 'node:path'
+import { mkdir } from 'node:fs/promises'
+import type { CloudBackup, CloudDevicePoll, CloudDeviceStart, CloudGithubRepo, CloudSpace, CloudUser, WorkspaceSnapshot } from '../shared/types'
 import type { SpaceSnapshotPayload } from '../core/space-sync'
 
 export interface CloudRuntimeOptions {
@@ -40,6 +43,16 @@ export interface CloudRuntime {
   /** Mint a short-lived space access token and open the canvas URL with it
    * in the system browser (Pro-gated server-side; free users get 403). */
   openSpace: () => Promise<void>
+  /** The connected account's repos for the desktop repo picker. cloneUrl is
+   * stripped from every entry — the renderer never receives a URL. */
+  githubRepos: () => Promise<{ ok: true; repos: CloudGithubRepo[] }>
+  /** Clone a picked repo locally for project creation: main mints the
+   * credential-bearing import-url itself (the renderer only sends
+   * fullName), clones into <projectsRoot>/<name>, and returns the path.
+   * The URL never crosses IPC and is never logged. */
+  githubClone: (req: { fullName: string; name: string; projectsRoot: string }) => Promise<{ ok: true; path: string; fullName: string }>
+  /** Disconnect GitHub: DELETE /github/connection wipes the cloud vault token. */
+  githubDisconnect: () => Promise<{ ok: true }>
 }
 
 function sleep(ms: number): Promise<void> {
@@ -139,6 +152,39 @@ export function createCloudRuntime(opts: CloudRuntimeOptions): CloudRuntime {
     void shell.openExternal(url)
   }
 
+  async function githubRepos(): Promise<{ ok: true; repos: CloudGithubRepo[] }> {
+    const listing = await client.githubRepos()
+    // The listing's cloneUrl is display-mapped by the server; strip it here so
+    // no URL shape of any kind crosses IPC — the renderer sees names only.
+    return {
+      ok: true,
+      repos: listing.repos.map((r) => {
+        const { cloneUrl: _dropped, ...rest } = r
+        return rest
+      }),
+    }
+  }
+
+  async function githubClone(req: { fullName: string; name: string; projectsRoot: string }): Promise<{ ok: true; path: string; fullName: string }> {
+    const fullName = String(req.fullName ?? '')
+    const name = String(req.name ?? '') || basename(fullName).replace(/\.git$/, '')
+    // Strict owner/repo shape (same pattern github-import.ts enforces) —
+    // refuse anything else before any network call.
+    if (!/^[\w.-]+\/[\w.-]+$/.test(fullName)) throw new CloudError(0, 'invalid_full_name', 'Expected owner/repo')
+    // Main mints the credential-bearing URL here, server-side: it goes
+    // straight into the local clone and is never logged, never sent to the
+    // renderer, and never persisted.
+    const minted = await client.githubImportUrl(fullName)
+    const dest = join(req.projectsRoot, name)
+    await mkdir(req.projectsRoot, { recursive: true })
+    const result = await cloneRepo({}, { url: minted.url, dest })
+    return { ok: true, path: result.path, fullName }
+  }
+
+  function githubDisconnect(): Promise<{ ok: true }> {
+    return client.githubDisconnect()
+  }
+
   // Fulfil a "Back up now" requested from the web dashboard. The web raises
   // backup_requested_at via POST /api/v1/sync/now; the app (which owns the
   // workspace content) sees it here, runs a real backup, and the server clears
@@ -169,7 +215,7 @@ export function createCloudRuntime(opts: CloudRuntimeOptions): CloudRuntime {
     }
   }
 
-  return { getUser, deviceStart, devicePoll, signOut, backupNow, listBackups, getSpace, provisionSpace, pullSpace, pushSpace, openSpace }
+  return { getUser, deviceStart, devicePoll, signOut, backupNow, listBackups, getSpace, provisionSpace, pullSpace, pushSpace, openSpace, githubRepos, githubClone, githubDisconnect }
 }
 
 export { CloudError }

@@ -29,6 +29,10 @@ import type {
   CloudSpacePullEmpty,
   CloudSpacePullResult,
   CloudSpacePushResult,
+  CloudGithubFailure,
+  CloudGithubImportResult,
+  CloudGithubReposResult,
+  CloudGithubRepo,
   CloudUser,
   WorkspaceBundleExportResult,
   WorkspaceBundleImportResult,
@@ -143,6 +147,17 @@ declare global {
         pullSpace(): Promise<CloudSpacePullResult | CloudSpacePullEmpty>
         /** Push the given project's nodes + scrollbacks to the space. */
         pushSpace(projectId: string): Promise<CloudSpacePushResult>
+      }
+      github: {
+        /** The connected account's repos (names + private badge; main strips
+         * cloneUrl — the renderer never receives a URL of any kind). */
+        repos(): Promise<CloudGithubReposResult | CloudGithubFailure>
+        /** Clone a picked repo into the default projects root and return its
+         * local path. Main mints the credential-bearing import-url itself;
+         * the renderer sends only { fullName, name }. */
+        import(req: { fullName: string; name: string }): Promise<CloudGithubImportResult | CloudGithubFailure>
+        /** Disconnect GitHub: wipe the stored token in the cloud vault. */
+        disconnect(): Promise<{ ok: true } | CloudGithubFailure>
       }
       browser: {
         cdpInfo(): Promise<BrowserCdpInfo>
