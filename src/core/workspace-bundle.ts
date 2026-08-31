@@ -141,7 +141,7 @@ export function applyBundlePlan(
 ): BundleImportPlan {
   if (!isValidBundle(bundle)) throw new Error('Invalid workspace bundle (bad format, unsupported version, or truncated)')
   const index = bundle.workspace.index
-  if (index.projects.length === 0) throw new Error('The workspace bundle has no projects to import')
+  if (index.projects.length === 0) throw new Error('The workspace bundle has no projects to bring in')
 
   const takenNames = new Set(opts.existingNames)
   const plan: BundleImportPlan = { projects: [], pendingScrollbacks: new Map() }
