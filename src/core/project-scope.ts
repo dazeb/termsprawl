@@ -8,6 +8,7 @@
 
 import type { WorkspaceStore } from './workspace-store'
 import type { ProjectRemote, GitTarget } from '../shared/types'
+import { agentConfig, agentIds } from '../shared/agents/config'
 
 export interface ProjectScope {
   kind: 'local'
@@ -79,16 +80,32 @@ export function resolveFileScope(
   return { ok: false, reason: 'path is outside every known project folder' }
 }
 
-/** PtyCreateRequest gate: terminals may only spawn INSIDE a known project
- * cwd, and arbitrary commands are a desktop-renderer-only affordance (the
- * Server Edition refuses them — a WS client must not get command execution). */
+/** PtyCreateRequest gate for the SERVER bridge. Terminals must live in a known
+ * project OR have no cwd at all (cwd-less projects — Welcome, cloud-restored
+ * canvases — start the shell in the process workdir; inside a per-user space
+ * container that IS the user's sandbox). Commands: the renderer can only
+ * produce the shared agent presets (`claude|codex|gemini|grok`) and `druk`, so
+ * exactly those are allowed — each is no more capable than the interactive
+ * shell a user already gets, and node commands AUTO-RUN on open, which is why
+ * an allowlist (not arbitrary strings) is the boundary here. Unknown explicit
+ * cwds and unknown commands stay refused. The desktop renderer path never
+ * calls this gate (its own renderer is trusted). */
 export function resolvePtyScope(
   store: WorkspaceStore,
   req: { cwd?: string | null; command?: string; remote?: unknown; id?: string },
   opts: { allowCommands: boolean }
 ): { ok: true } | { ok: false; reason: string } {
   if (req.command && !opts.allowCommands) {
-    return { ok: false, reason: 'arbitrary commands are not permitted over the server bridge' }
+    // The agent presets + druk editor preset are the commands the renderer's
+    // own factories can produce (shared/agents/config.ts + workspace.ts);
+    // anything else is not a shape this app's UI emits.
+    const first = req.command.trim().split(/\s+/)[0]
+    const isPreset =
+      agentIds().some((id) => agentConfig(id).enabled && first === agentConfig(id).command) ||
+      first === 'druk'
+    if (!isPreset) {
+      return { ok: false, reason: 'command is not an agent or editor preset' }
+    }
   }
   if (req.remote) {
     // remote terminals: must reference a known remote project (path match)
@@ -104,8 +121,9 @@ export function resolvePtyScope(
     if (!known) return { ok: false, reason: 'remote is not a known project' }
     return { ok: true }
   }
-  const cwd = req.cwd ?? ''
-  if (!cwd || !isKnownProjectCwd(store, cwd)) {
+  // No cwd at all is legitimate (cwd-less projects: the shell starts in the
+  // server's workdir). An EXPLICIT cwd must belong to a known project.
+  if (req.cwd && !isKnownProjectCwd(store, req.cwd)) {
     return { ok: false, reason: 'cwd is not a known project' }
   }
   return { ok: true }

