@@ -51,6 +51,7 @@ import { useCanvasRequests } from '../state/canvas-requests'
 import { useBrowserHome } from '../state/browser-home'
 import { deserializeLinks, linksFromSerialized, removeLinksForNode, serializeLinks } from '../state/workspace-links'
 import { NodeLinkEdge } from './NodeLinkEdge'
+import { LinkInspector } from '../components/LinkInspector'
 import type { SprawlNodeData, TerminalNodeData } from '../state/workspace'
 
 // Monaco-backed nodes load on first use (audit F7): the editor + diff bundles
@@ -574,6 +575,63 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
     setSelectedIds(sel.map((n) => n.id))
   }, [])
 
+  // --- Link inspector (Phase 18) ---------------------------------------------
+  // Selecting an edge opens the inspector; Escape / pane click closes it.
+  const [inspectedLinkId, setInspectedLinkId] = useState<string | null>(null)
+  const onEdgeClick = useCallback((_event: React.MouseEvent, edge: Edge) => {
+    setInspectedLinkId(edge.id)
+  }, [])
+  const closeInspector = useCallback(() => setInspectedLinkId(null), [])
+  useEffect(() => {
+    if (!inspectedLinkId) return
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setInspectedLinkId(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [inspectedLinkId])
+  const updateLink = useCallback(
+    (linkId: string, patch: Partial<Pick<NodeLink, 'kind' | 'auto' | 'config'>>): void => {
+      linksRef.current = linksRef.current.map((l) =>
+        l.id === linkId
+          ? {
+              ...l,
+              ...(patch.kind !== undefined ? { kind: patch.kind } : {}),
+              ...(patch.auto !== undefined ? { auto: patch.auto } : {}),
+              ...(patch.config !== undefined ? { config: patch.config } : {})
+            }
+          : l
+      )
+      setEdges(linksFromSerialized(linksRef.current))
+      if (activeProjectIdRef.current) persistLinks(activeProjectIdRef.current, linksRef.current)
+    },
+    [persistLinks]
+  )
+  /** Re-read the latest link record after a run (lastRun status for the UI). */
+  const refreshLinkAfterRun = useCallback(
+    (linkId: string, result: { ok: boolean; summary: string }): void => {
+      linksRef.current = linksRef.current.map((l) =>
+        l.id === linkId ? { ...l, lastRun: { at: Date.now(), ok: result.ok, summary: result.summary } } : l
+      )
+      setEdges(linksFromSerialized(linksRef.current))
+    },
+    []
+  )
+  const [linkRunBusy, setLinkRunBusy] = useState<string | null>(null)
+  /** The inspected link + its endpoint node kinds (null when the edge vanished). */
+  const inspectedLink = useMemo(() => {
+    if (!inspectedLinkId) return null
+    const link = linksRef.current.find((l) => l.id === inspectedLinkId)
+    if (!link) return null
+    const source = nodes.find((n) => n.id === link.source)
+    const target = nodes.find((n) => n.id === link.target)
+    return {
+      link,
+      sourceKind: source?.data.kind ?? 'terminal',
+      targetKind: link.kind === 'a2a-peer' ? 'a2a-peer' : target?.data.kind ?? 'file'
+    }
+  }, [inspectedLinkId, nodes])
+
   // Group the current selection (plus the right-clicked node) under a frame.
   const groupSelection = useCallback(() => {
     const ids = new Set(selectedIds)
@@ -852,7 +910,11 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
         onConnect={onConnect}
         onPaneContextMenu={onPaneContextMenu}
         onNodeContextMenu={onNodeContextMenu}
-        onPaneClick={onPaneClick}
+        onEdgeClick={onEdgeClick}
+        onPaneClick={() => {
+          setMenu(null)
+          setInspectedLinkId(null)
+        }}
         onSelectionChange={onSelectionChange}
         zoomOnScroll
         minZoom={MIN_ZOOM}
@@ -951,6 +1013,29 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
         onOpenFile={openFileFromTree}
         openEditors={openEditorTabs(nodes)}
       />
+
+      {inspectedLink && (
+        <LinkInspector
+          link={inspectedLink.link}
+          sourceKind={inspectedLink.sourceKind}
+          targetKind={inspectedLink.targetKind}
+          running={linkRunBusy === inspectedLink.link.id}
+          onChange={(patch) => updateLink(inspectedLink.link.id, patch)}
+          onRun={() => {
+            const linkId = inspectedLink.link.id
+            setLinkRunBusy(linkId)
+            void window.termsprawl.links
+              .run(linkId)
+              .then((result) => refreshLinkAfterRun(linkId, result))
+              .finally(() => setLinkRunBusy(null))
+          }}
+          onDelete={() => {
+            deleteLink(inspectedLink.link.id)
+            setInspectedLinkId(null)
+          }}
+          onClose={closeInspector}
+        />
+      )}
       </div>
     </CanvasContext.Provider>
   )
