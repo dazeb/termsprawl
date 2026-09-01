@@ -1,9 +1,9 @@
 // A2A protocol primitives (Phase 19) — Google Agent2Agent, JSON-RPC 2.0 over
 // HTTP. Pure functions only: build requests, validate agent cards, and parse
 // responses/errors. Never throws; junk in → null / ok:false out.
+// Electron-free AND browser-safe: no node imports (the renderer imports this
+// for peer testing) — randomUUID comes from the platform global.
 // Clean-room: written fresh for termsprawl.
-
-import { randomUUID } from 'node:crypto'
 
 /** A peer agent's self-description (the discoverable subset we use). */
 export interface AgentCard {
@@ -38,7 +38,7 @@ export function buildMessageSend(text: string, opts?: { id?: number | string }):
       message: {
         role: 'user',
         kind: 'message',
-        messageId: `tsprawl-${randomUUID()}`,
+        messageId: `tsprawl-${globalThis.crypto.randomUUID()}`,
         parts: [{ kind: 'text', text }]
       }
     }
