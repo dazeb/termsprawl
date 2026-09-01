@@ -23,6 +23,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   // Browser nodes are usable by the user out of the box; the agent-control
   // surface (CDP facade + /open server) is opt-in, off by default.
   agentBrowserControl: false,
+  // The A2A server (expose agent nodes to peers) is opt-in, off by default.
+  agentA2aServer: false,
   // Mousewheel zooms the canvas; scroll-up = zoom in by default.
   invertWheelZoom: false,
   // Telegram bot is opt-in, off by default (token required to start).
@@ -184,6 +186,7 @@ export function normalizeAppSettings(raw: unknown): AppSettings {
     enterBehavior:
       typeof obj.enterBehavior === 'string' && obj.enterBehavior.length > 0 ? obj.enterBehavior : 'queue',
     agentBrowserControl: obj.agentBrowserControl === true,
+    agentA2aServer: obj.agentA2aServer === true,
     invertWheelZoom: obj.invertWheelZoom === true,
     telegram: normalizeTelegram(obj.telegram),
     ...(normalizeChat(obj.chat) ? { chat: normalizeChat(obj.chat) } : {}),

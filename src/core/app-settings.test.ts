@@ -47,6 +47,7 @@ describe('app-settings', () => {
       defaultPermission: 'workspaceWrite',
       enterBehavior: 'queue',
       agentBrowserControl: false,
+      agentA2aServer: false,
       invertWheelZoom: false,
       telegram: { enabled: false, allowedChatIds: [] }
     }

@@ -344,6 +344,10 @@ export interface AppSettings {
    * off (default) browser nodes still work manually but no agent endpoint
    * exists. */
   agentBrowserControl?: boolean
+  /** Expose live agent terminal nodes as A2A agents (Phase 19): when on, an
+   * opt-in loopback server (token-gated, 127.0.0.1 only) accepts message/send
+   * and delivers text into the node's PTY. Off (default) = no A2A endpoint. */
+  agentA2aServer?: boolean
   /** Invert the mousewheel canvas zoom direction. Default (false): scroll up
    * zooms in. True: scroll up zooms out. */
   invertWheelZoom?: boolean

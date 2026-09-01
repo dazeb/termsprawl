@@ -59,6 +59,7 @@ import {
 } from './browser/manager'
 import { startAgentServer, type AgentServerHandle } from './browser/agent-server'
 import { startCdpFacade, type CdpFacadeHandle } from './browser/cdp-facade'
+import { startA2aServer, type A2aServerHandle, type A2aNodeInfo } from './a2a/server'
 import type { BrowserCdpInfo, BrowserNavigateResult } from '../shared/types'
 
 // App settings must be readable BEFORE the ozone-respawn / debug-port decision
@@ -293,6 +294,74 @@ function syncAgentBrowserControl(): void {
     void startBrowserControlEndpoints()
   } else {
     stopBrowserControlEndpoints()
+  }
+}
+
+// ---------------------------------------------------------------------------
+// A2A server (Phase 19): expose live agent terminal nodes as A2A agents.
+// Opt-in (agentA2aServer, default OFF), loopback-only, token-gated.
+// ---------------------------------------------------------------------------
+let a2aServer: A2aServerHandle | null = null
+let a2aEpoch = 0
+
+/** Live agent terminal nodes: a terminal node spawned with an agent command
+ * preset (command set + agentCommand known to the registry). */
+function liveA2aNodes(): A2aNodeInfo[] {
+  const out: A2aNodeInfo[] = []
+  for (const project of workspaceStore.snapshot().index.projects) {
+    for (const node of workspaceStore.snapshot().projects[project.id] ?? []) {
+      const data = node.data as { kind?: string; command?: string; title?: string }
+      if (data?.kind !== 'terminal' || typeof data.command !== 'string' || data.command.length === 0) {
+        continue
+      }
+      out.push({
+        id: node.id,
+        title: data.title ?? data.command,
+        command: data.command
+      })
+    }
+  }
+  return out
+}
+
+async function startA2aEndpoint(): Promise<void> {
+  if (a2aServer) return
+  const epoch = ++a2aEpoch
+  try {
+    const handle = await startA2aServer({
+      userDataPath: platform.userDataPath,
+      agentNodes: liveA2aNodes,
+      deliverToNode: async (nodeId, text) => {
+        // Bracketed paste: the ONE inbound channel every agent CLI reads.
+        ptyManager.write(nodeId, `\x1b[200~${text}\x1b[201~`)
+      }
+    })
+    if (epoch !== a2aEpoch) {
+      // Toggled off while starting — shut it straight back down.
+      await handle.close()
+      return
+    }
+    a2aServer = handle
+  } catch (err) {
+    console.error('[a2a] server failed to start:', err)
+    a2aServer = null
+  }
+}
+
+function stopA2aEndpoint(): void {
+  a2aEpoch += 1
+  if (a2aServer) {
+    void a2aServer.close()
+    a2aServer = null
+  }
+}
+
+/** Keep the A2A endpoint in sync with the settings toggle. */
+function syncA2aServer(): void {
+  if (appSettings.current.agentA2aServer === true) {
+    void startA2aEndpoint()
+  } else {
+    stopA2aEndpoint()
   }
 }
 
@@ -860,6 +929,7 @@ function registerUpdateIpc(): void {
     appSettings.current = saveAppSettings(platform.userDataPath, patch)
     updateBridge.setAutoDownload(appSettings.current.autoDownloadUpdates)
     syncAgentBrowserControl()
+    syncA2aServer()
     syncTelegramBot()
     return appSettings.current
   })
@@ -1443,6 +1513,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   ptyManager.killAll()
   linkService.dispose()
+  stopA2aEndpoint()
   telegramBot?.stop()
   void agentServer?.close()
   void cdpFacade?.close()

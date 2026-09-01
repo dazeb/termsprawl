@@ -971,6 +971,90 @@ speak one format. Plan: `.hermes/plans/2026-08-30_123805-workspace-bundle.md`.*
 
 ---
 
+## Phase 18 — Node links (typed, persisted edges) — DONE 2026-09-01
+
+*User-directed: canvas edges become first-class "links" — extract a node's
+content, inject it somewhere (file / chat conversation / agent terminal / A2A
+peer). Plan: `.hermes/plans/2026-09-01_123613-node-links-a2a.md`. Branch
+`feature/node-links`. Executed parent-side after both Phase-18 subagent
+dispatches died to provider API errors (HTTP 405 / non-streaming timeouts).*
+
+- **18.1 Types + channels (0254fbd):** `NodeLink` / `LinkKind` / `LinkConfig`
+  discriminated union + `LinkRunResult` in `src/shared/types.ts`;
+  `links:list/run/mark-dirty/update` in `src/shared/ipc.ts`.
+- **18.2 Registry + extractors (a4a0760):** `src/core/links/registry.ts` —
+  `LINK_SOURCES`/`LINK_TARGETS` matrices, `validateLink`, `linkDefaultConfig`,
+  `connectableLinkKinds` (node-drag surface), `extractContent` (sticky/terminal
+  via `capturePane`, editor via saved file, chat via message serialization;
+  fail-open to empty). 17 tests.
+- **18.3 Engine (fa2c873):** `src/core/links/engine.ts` — `runLink` never
+  throws; injectors: file-output (project-root containment via injected
+  `resolveOutputPath`, 1MB truncate note, header stamp, overwrite/append),
+  context-inject → chat (one `chatInject` dep riding the chat event channel),
+  context-inject → agent terminal (staged file under
+  `.termsprawl/links/context/<id>.md` + ONE bracketed-paste pointer line),
+  a2a-peer (dep-injected; Phase 19 wires the real client). 31 tests.
+- **18.4 Persistence (c2cdde3):** `ProjectFile.links?` (optional — pre-link
+  files load unchanged); parse rules in `src/shared/node-links.ts` (junk
+  dropped, not fatal; renderer-safe — workspace-files re-exports; a first cut
+  put them in workspace-files.ts and the renderer build externalized node:fs —
+  build caught it); `saveProjectFile` PRESERVES existing links on node-only
+  saves (nodes save constantly; link edits are explicit); store gains
+  `linksFor`/`saveLinks`/`allLinks`/`findLink`/`recordLinkRun`.
+- **18.5 Canvas (8281e89 + 2c8788b):** links load over IPC on project switch
+  and render as `type: 'nodelink'` edges (`NodeLinkEdge.tsx` — kind chip at
+  the midpoint, lime on selection); `onConnect` creates/updates a link
+  (validated via `connectableLinkKinds` + `isValidConnection` guard); edge
+  delete = link delete; node deletes cascade (`removeLinksForNode` on all
+  three removal paths); **every node kind renders `LinkHandles`** (subtle
+  source/target dots, visible on hover/selected/while connecting) — React
+  Flow cannot render an edge between handle-less nodes (found live: 0 edges
+  rendered until handles existed).
+- **18.6 Inspector (aba735a):** `LinkInspector.tsx` — edge click opens it
+  (Esc/pane-click closes): kind picker (valid kinds only), per-kind options,
+  auto toggle, Run now (busy state), delete with in-app confirm, lastRun
+  status line.
+- **18.7 Main (d16aac1):** `src/main/links/service.ts` (`LinkService` —
+  resolves link → source content → engine deps; project root = folder cwd or
+  `userData/link-outputs/<projectId>`), `src/main/links/scheduler.ts`
+  (`LinkScheduler` — per-link debounce timers, 3s quiescence gap, in-flight
+  dedupe, dirty-before-load replay, dispose on quit); PTY activity tapped in
+  `platform.broadcast` on `pty:data:*`; dirty signals from StickyNode (typing,
+  800ms debounce), EditorNode (Ctrl+S), ChatNode (turn commit); `chatInject`
+  rides `chat:event:<nodeId>` as a new `context-added` ChatEvent that ChatNode
+  commits straight to node data (dedup by messageId, persists via project
+  file).
+- **18.8 E2E verified (headless, built app, raw CDP):** seeded project →
+  boot: 2 nodes + 1 edge; `links.run` through real IPC wrote
+  `.termsprawl/outputs/sticky.md` with header + payload; editing the sticky
+  auto re-ran the link (file updated within the debounce+gap window); links
+  persisted (lastRun recorded); chat inject: `[context from sticky]` appeared
+  in the ChatNode transcript AND persisted into the project file. Gates:
+  typecheck, 804 tests, build, originality green.
+
+---
+
+## Phase 19 — A2A agent-to-agent communication (in progress)
+
+*User-directed: A2A (Google Agent2Agent, JSON-RPC 2.0 over HTTP) so every agent
+CLI node can exchange messages with other agents — including Hermes mesh peers
+— as a client (send to configured peers) and a server (expose live agent nodes
+on an opt-in loopback endpoint).*
+
+### Task 19.1: Protocol primitives (core, TDD)
+- `src/core/a2a/protocol.ts` — `buildMessageSend`, `parseAgentCard`,
+  `extractResponseText`, `parseRpcError`, `isRpcResponse`. Pure, never throws.
+- **Status: DONE (TDD, on feature/node-links).** 12 tests (message shape,
+  card accept/reject matrix, message/task/error extraction, junk tolerance).
+
+### Task 19.2: A2A client (core, TDD)
+- `src/core/a2a/client.ts` — `discoverAgentCard` + `sendText` (injectable
+  fetch, mandatory timeouts, optional Bearer token). Telegram-client patterns.
+- **Status: DONE (TDD, on feature/node-links).** 14 tests (paths, headers,
+  body shape, task/message forms, RPC errors, timeout abort, empty refusal).
+
+---
+
 ## Testing strategy
 
 - Unit: vitest for core services (pty, workspace files, git ops, normalizers).
