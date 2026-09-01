@@ -32,7 +32,7 @@ import { projectChatTools } from '../core/chat/project-tools'
 import { resolveFileScope } from '../core/project-scope'
 import { createRelayRuntime, type RelayRuntime } from './relay'
 import { WorkspaceStore } from '../core/workspace-store'
-import { LinkService } from './links/service'
+import { LinkService } from '../core/links/service'
 import type { NodeLink } from '../shared/types'
 import type { ProjectMeta } from '../core/workspace-files'
 import { loadProjectFile } from '../core/workspace-files'
@@ -1490,6 +1490,8 @@ void app.whenReady().then(async () => {
   registerBrowserIpc()
   registerChatIpc()
   registerRelayIpc()
+  // Opt-in agent surfaces honor their settings gate at boot (13.4 pattern).
+  syncA2aServer()
   if (app.isPackaged) void fetchLatestAnnouncement()
 
   for (const entry of workspaceStore.pendingTerminalNodeCleanup()) {

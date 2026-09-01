@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { LinkScheduler } from './scheduler'
+import { LinkScheduler } from './links-scheduler'
 import type { NodeLink } from '@shared/types'
 
 function link(overrides: Partial<NodeLink> = {}): NodeLink {

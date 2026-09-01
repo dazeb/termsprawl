@@ -27,6 +27,10 @@ import { createChatRuntime, type ChatSendRequest } from '../core/chat/runtime'
 import { projectChatTools } from '../core/chat/project-tools'
 import { resolveGitScope, resolveFileScope, resolvePtyScope } from '../core/project-scope'
 import { importGitHubRepo } from '../core/github-import'
+import { LinkService } from '../core/links/service'
+import { sendText } from '../core/a2a/client'
+import { loadProjectFile } from '../core/workspace-files'
+import type { NodeLink } from '../shared/types'
 import type { RpcHandler } from './rpc'
 import type { CorePlatform } from '../core/platform'
 import type {
@@ -138,6 +142,48 @@ export function buildHandlers(platform: CorePlatform): Record<string, RpcHandler
       return cwd ? projectChatTools(workspaceStore, { cwd }) : []
     },
     log: (msg: string) => console.log(`[chat] ${msg}`)
+  })
+
+  // Node links (Phase 18): same LinkService as desktop, wired to the server's
+  // stores. PTY writes and pane capture ride the server's own PtyManager.
+  const linkService = new LinkService({
+    allLinks: () => workspaceStore.allLinks(),
+    findLink: (id) => workspaceStore.findLink(id),
+    projectOfNode: (nodeId) => {
+      for (const project of workspaceStore.snapshot().index.projects) {
+        const nodes = workspaceStore.snapshot().projects[project.id] ?? []
+        if (nodes.some((n) => n.id === nodeId)) return { id: project.id, cwd: project.cwd }
+      }
+      return null
+    },
+    capturePane: (id) => ptyManager.capturePane(id),
+    ptyWrite: (id, data) => ptyManager.write(id, data),
+    chatBroadcast: (nodeId, event) => platform.broadcast(`chat:event:${nodeId}`, event),
+    nodesOfProject: (projectId) => (workspaceStore.snapshot().projects[projectId] ?? []) as unknown as Array<Record<string, unknown>>,
+    recordLinkRun: (projectId, linkId, at, ok, summary) =>
+      workspaceStore.recordLinkRun(projectId, linkId, at, ok, summary),
+    sendToPeer: async (peerId, text, opts) => {
+      const settings = loadAppSettings(userDataPath)
+      const peer = settings.a2aPeers?.find((p) => p.id === peerId)
+      if (!peer) throw new Error(`unknown peer: ${peerId}`)
+      const envToken = process.env[`TERMSPRAWL_A2A_PEER_TOKEN_${peerId.toUpperCase().replace(/[^A-Z0-9]/g, '_')}`]
+      const res = await sendText(peer.endpoint, text, { token: envToken || peer.token, timeoutMs: 20000 })
+      if (!res.ok) throw new Error(res.error)
+      const replyText = 'text' in res ? res.text : undefined
+      if (opts.deliverReply && replyText && opts.sourceNodeId) {
+        // Server Edition: replies come back as a chat context event (the
+        // server has no live terminal paste target guarantee).
+        platform.broadcast(`chat:event:${opts.sourceNodeId}`, {
+          kind: 'context-added',
+          messageId: `a2a-${Date.now().toString(36)}`,
+          role: 'user',
+          content: `[reply from peer ${peerId}]\n${replyText}`,
+          sourceTitle: `peer ${peerId}`
+        })
+      }
+      return { reply: replyText }
+    },
+    userDataPath
   })
 
   return {
@@ -427,6 +473,38 @@ export function buildHandlers(platform: CorePlatform): Record<string, RpcHandler
       if (typeof nodeId === 'string' && typeof callId === 'string' && (decision === 'approve' || decision === 'deny')) {
         chatRuntime.approve(nodeId, callId, decision)
       }
+    },
+    // Node links (Phase 18) — same engine as desktop (core/links), wired to the
+    // server's stores. The A2A peer client rides app settings, same as desktop.
+    [IPC.linksList]: (args) => {
+      const [projectId] = args as [string]
+      if (typeof projectId !== 'string') return []
+      const project = workspaceStore.snapshot().index.projects.find((p) => p.id === projectId)
+      if (!project) return []
+      return loadProjectFile(userDataPath, project)?.links ?? []
+    },
+    [IPC.linksRun]: (args) => {
+      const [linkId] = args as [string]
+      if (typeof linkId !== 'string') return Promise.resolve({ ok: false, summary: 'bad request' })
+      return linkService.runById(linkId)
+    },
+    [IPC.linksMarkDirty]: (args) => {
+      const [sourceId] = args
+      if (typeof sourceId === 'string') linkService.markDirty(sourceId)
+    },
+    [IPC.linksUpdate]: (args) => {
+      const [projectId, links] = args as [string, NodeLink[]]
+      if (typeof projectId !== 'string' || !Array.isArray(links)) return 0
+      const rev = workspaceStore.saveLinks(projectId, links)
+      linkService.linksChanged()
+      return rev
+    },
+    [IPC.linksSendToPeer]: (args) => {
+      const [nodeId, peerId] = args as [string, string]
+      if (typeof nodeId !== 'string' || typeof peerId !== 'string') {
+        return Promise.resolve({ ok: false, summary: 'bad request' })
+      }
+      return linkService.sendNodeToPeer(nodeId, peerId)
     }
   }
 }

@@ -1034,7 +1034,7 @@ dispatches died to provider API errors (HTTP 405 / non-streaming timeouts).*
 
 ---
 
-## Phase 19 — A2A agent-to-agent communication (in progress)
+## Phase 19 — A2A agent-to-agent communication — DONE 2026-09-01
 
 *User-directed: A2A (Google Agent2Agent, JSON-RPC 2.0 over HTTP) so every agent
 CLI node can exchange messages with other agents — including Hermes mesh peers
@@ -1043,15 +1043,55 @@ on an opt-in loopback endpoint).*
 
 ### Task 19.1: Protocol primitives (core, TDD)
 - `src/core/a2a/protocol.ts` — `buildMessageSend`, `parseAgentCard`,
-  `extractResponseText`, `parseRpcError`, `isRpcResponse`. Pure, never throws.
-- **Status: DONE (TDD, on feature/node-links).** 12 tests (message shape,
-  card accept/reject matrix, message/task/error extraction, junk tolerance).
+  `extractResponseText`, `parseRpcError`, `isRpcResponse`. Pure, never throws,
+  browser-safe (no node imports — the renderer imports it for peer testing).
+- **Status: DONE (TDD, 13 tests).**
 
 ### Task 19.2: A2A client (core, TDD)
 - `src/core/a2a/client.ts` — `discoverAgentCard` + `sendText` (injectable
   fetch, mandatory timeouts, optional Bearer token). Telegram-client patterns.
-- **Status: DONE (TDD, on feature/node-links).** 14 tests (paths, headers,
-  body shape, task/message forms, RPC errors, timeout abort, empty refusal).
+- **Status: DONE (TDD, 9 tests).**
+
+### Task 19.3: A2A server for agent nodes (main, TDD)
+- `src/main/a2a/server.ts` — loopback-only, token-gated JSON-RPC endpoint;
+  agent card at `/.well-known/agent-card.json` (open — titles only);
+  `message/send` → bracketed-paste into the target node's PTY; opt-in setting
+  `agentA2aServer` (default OFF); discovery file `userData/a2a-agent.json`
+  (removed on close); targets matched by `@title:` prefix (fallback: first
+  live agent — an unmatched address never silently drops a message).
+- **Status: DONE (TDD, 9 tests) + live-verified.** Boot-gate fix: the gate now
+  also syncs at `whenReady` (it previously only fired on settings-set, so a
+  pre-set setting never started the server). E2E (headless, built app, real
+  protocol): card 200 + lists the live node; no-token 401; message/send →
+  agent Message result; **pasted text visible in the terminal node**; unknown
+  method → -32601. 9/9 passed.
+
+### Task 19.4: A2A client wiring + send-to-peer
+- `LinkService.a2aSend` → the real `core/a2a/client.sendText` (env token
+  `TERMSPRAWL_A2A_PEER_TOKEN_<ID>` wins); peer replies delivered back into the
+  source node (chat context event, or a one-line terminal paste);
+  `links:send-to-peer` IPC + `links.sendToPeer` bridge; canvas context menu
+  "A2A send to peer ▸" on any agent terminal (peers from settings; inline
+  status note).
+- **Status: DONE.**
+
+### Task 19.5: Settings — tokens, test, toggle
+- `A2APeer.token?` (normalize round-trips it); peer rows gain **test**
+  (discoverAgentCard → "✓ <peer name>" / "✗ <error>") + a token field; General
+  gains the "Expose agent nodes to A2A peers" toggle.
+- **Status: DONE.**
+
+### Task 19.6: Loopback round-trip e2e
+- **Status: DONE** (see 19.3 — same run).
+
+### Task 19.7: Server Edition links parity
+- `src/main/links/*` moved to `src/core/links/service.ts` +
+  `src/core/links-scheduler.ts` (the no-electron guard caught the server →
+  main import; now both hosts construct the same service). Server handlers
+  gained all five `links:*` channels; the shim's `links` namespace is a REAL
+  implementation, not a stub. The A2A **server** (exposing nodes) stays
+  desktop-only by design; A2A **client** (send-to-peer) works in both editions.
+- **Status: DONE.** typecheck + 835 tests + build + build:server green.
 
 ---
 

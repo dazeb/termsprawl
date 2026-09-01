@@ -1,15 +1,15 @@
-// Node link service (Phase 18): main-process wiring that turns persisted
-// NodeLink records into live engine runs. Owns the auto-run scheduler, PTY
-// activity taps, and the resolver that maps link endpoints to nodes, project
-// roots, and fs paths. Operates across ALL projects (a background terminal's
-// auto-link keeps running when its tab is not active). Electron-free except
-// for the final IPC registration in main/index.ts (all deps injected).
+// Node link service (Phase 18): wiring that turns persisted NodeLink records
+// into live engine runs. Owns the auto-run scheduler, PTY activity taps, and
+// the resolver that maps link endpoints to nodes, project roots, and fs paths.
+// Operates across ALL projects (a background terminal's auto-link keeps
+// running when its tab is not active). Electron-free, fully dep-injected —
+// the desktop main process AND the Server Edition handlers both construct it.
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path'
 import { mkdir, readFile, writeFile, appendFile } from 'node:fs/promises'
 import type { NodeLink } from '@shared/types'
-import { runLink, stagedContextPath, type LinkEngineDeps } from '../../core/links/engine'
-import { extractContent } from '../../core/links/registry'
-import { LinkScheduler } from './scheduler'
+import { runLink, stagedContextPath, type LinkEngineDeps } from './engine'
+import { extractContent } from './registry'
+import { LinkScheduler } from '../links-scheduler'
 
 export interface LinkServiceDeps {
   /** All persisted links (store.allLinks). */
