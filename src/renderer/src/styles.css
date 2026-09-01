@@ -2245,6 +2245,15 @@ html[data-theme='light'] .settings-nav-item:hover {
   font-size: 12px;
 }
 
+/* Inline status line inside a context submenu (A2A send feedback). */
+.context-note {
+  padding: 5px 10px 6px 18px;
+  font-size: 11px;
+  color: #9a9a94;
+  word-break: break-word;
+  max-width: 240px;
+}
+
 /* Node-link edges (Phase 18): a small kind chip at the edge midpoint. Kind
    hues come from the muted palette; lime stays functional (selection only). */
 .nodelink-chip {

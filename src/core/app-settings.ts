@@ -45,7 +45,7 @@ function isPermissionMode(v: unknown): v is 'default' | 'acceptEdits' | 'bypassP
   return v === 'default' || v === 'acceptEdits' || v === 'bypassPermissions'
 }
 
-function asSafePeer(raw: unknown): { id?: string; label?: string; endpoint?: string } {
+function asSafePeer(raw: unknown): { id?: string; label?: string; endpoint?: string; token?: string } {
   return raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
 }
 
@@ -148,7 +148,12 @@ export function normalizeAppSettings(raw: unknown): AppSettings {
             typeof p.endpoint === 'string' &&
             p.endpoint.length > 0
         )
-        .map((p) => ({ id: p.id as string, label: p.label as string, endpoint: p.endpoint as string }))
+        .map((p) => ({
+          id: p.id as string,
+          label: p.label as string,
+          endpoint: p.endpoint as string,
+          ...(typeof p.token === 'string' && p.token.length > 0 ? { token: p.token } : {})
+        }))
     : []
   const apiProviders = Array.isArray(obj.apiProviders)
     ? obj.apiProviders

@@ -279,7 +279,8 @@
       list: function (projectId) { return invoke('links:list', [projectId]) },
       run: function (linkId) { return invoke('links:run', [linkId]) },
       markDirty: function (sourceId) { return invoke('links:mark-dirty', [sourceId]) },
-      update: function (projectId, links) { return invoke('links:update', [projectId, links]) }
+      update: function (projectId, links) { return invoke('links:update', [projectId, links]) },
+      sendToPeer: function (nodeId, peerId) { return invoke('links:send-to-peer', [nodeId, peerId]) }
     },
     // Relay seam (audit B7): the server routes relay:connect/disconnect/status
     // through the same RPC surface; frames stream on the relay:frame channel.

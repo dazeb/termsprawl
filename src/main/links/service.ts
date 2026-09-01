@@ -28,6 +28,12 @@ export interface LinkServiceDeps {
   nodesOfProject(projectId: string): Array<Record<string, unknown>>
   /** Save link lastRun status back (best-effort; never throws). */
   recordLinkRun(projectId: string, linkId: string, at: number, ok: boolean, summary: string): void
+  /** Send text to a configured A2A peer (real client, wired in main). */
+  sendToPeer(
+    peerId: string,
+    text: string,
+    opts: { deliverReply: boolean; sourceNodeId?: string }
+  ): Promise<{ reply?: string }>
   /** userData dir — cwd-less projects write link outputs under it. */
   userDataPath: string
 }
@@ -74,15 +80,15 @@ export class LinkService {
     return this.runLink(found.link, found.projectId)
   }
 
-  /** Extract content from a link's source node. */
-  private async extract(link: NodeLink, projectId: string) {
+  /** Extract content from a source node by id. */
+  private async extractByNode(nodeId: string, projectId: string) {
     const nodes = this.deps.nodesOfProject(projectId)
-    const node = nodes.find((n) => n.id === link.source) as
+    const node = nodes.find((n) => n.id === nodeId) as
       | { id: string; type?: string; data?: Record<string, unknown> }
       | undefined
     if (!node) return { kind: 'empty' as const }
     return extractContent(
-      { nodeId: link.source, nodeKind: String(node.type ?? node.data?.kind ?? ''), data: node.data ?? {} },
+      { nodeId, nodeKind: String(node.type ?? node.data?.kind ?? ''), data: node.data ?? {} },
       {
         capturePane: async (id) => this.deps.capturePane(id),
         readFile: async (path) => {
@@ -102,7 +108,7 @@ export class LinkService {
     // Folder projects root link outputs at the project folder; cwd-less
     // (inline/remote) projects get a per-project dir under userData.
     const projectRoot = project?.cwd ?? join(this.deps.userDataPath, 'link-outputs', projectId)
-    const source = await this.extract(link, projectId)
+    const source = await this.extractByNode(link.source, projectId)
     const nodes = this.deps.nodesOfProject(projectId)
     const targetNode = nodes.find((n) => n.id === link.target) as
       | { id: string; type?: string; data?: Record<string, unknown> }
@@ -135,10 +141,8 @@ export class LinkService {
       ptyWrite: async (nodeId, data) => {
         this.deps.ptyWrite(nodeId, data)
       },
-      a2aSend: async () => {
-        // Honest placeholder until Phase 19 wires the real A2A client:
-        // throwing surfaces "link failed: …" in lastRun instead of a fake send.
-        throw new Error('A2A peer sending is wired in Phase 19')
+      a2aSend: async (peerId, text, opts) => {
+        return this.deps.sendToPeer(peerId, text, { ...opts, sourceNodeId: link.source })
       }
     }
 
@@ -159,6 +163,21 @@ export class LinkService {
   /** The staged context path for a terminal target (for tests / CLI docs). */
   stagedPathFor(targetNodeId: string): string {
     return stagedContextPath(targetNodeId)
+  }
+
+  /** One-shot send: extract a node's content and forward it to a peer. */
+  async sendNodeToPeer(nodeId: string, peerId: string): Promise<{ ok: boolean; summary: string }> {
+    const project = this.deps.projectOfNode(nodeId)
+    if (!project) return { ok: false, summary: 'node not found' }
+    const source = await this.extractByNode(nodeId, project.id)
+    if (source.kind === 'empty') return { ok: false, summary: 'source is empty' }
+    try {
+      const res = await this.deps.sendToPeer(peerId, source.text, { deliverReply: false, sourceNodeId: nodeId })
+      const reply = res.reply ? ` — reply: ${res.reply.slice(0, 120)}` : ''
+      return { ok: true, summary: `sent to peer ${peerId}${reply}` }
+    } catch (err) {
+      return { ok: false, summary: `send failed: ${err instanceof Error ? err.message : String(err)}` }
+    }
   }
 
   dispose(): void {

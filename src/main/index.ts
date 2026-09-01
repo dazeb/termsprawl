@@ -60,6 +60,7 @@ import {
 import { startAgentServer, type AgentServerHandle } from './browser/agent-server'
 import { startCdpFacade, type CdpFacadeHandle } from './browser/cdp-facade'
 import { startA2aServer, type A2aServerHandle, type A2aNodeInfo } from './a2a/server'
+import { sendText } from '../core/a2a/client'
 import type { BrowserCdpInfo, BrowserNavigateResult } from '../shared/types'
 
 // App settings must be readable BEFORE the ozone-respawn / debug-port decision
@@ -175,6 +176,45 @@ const linkService = new LinkService({
   nodesOfProject: (projectId) => (workspaceStore.snapshot().projects[projectId] ?? []) as unknown as Array<Record<string, unknown>>,
   recordLinkRun: (projectId, linkId, at, ok, summary) =>
     workspaceStore.recordLinkRun(projectId, linkId, at, ok, summary),
+  sendToPeer: async (peerId, text, opts) => {
+    // Resolve the configured peer (settings a2aPeers; env token wins).
+    const peer = appSettings.current.a2aPeers?.find((p) => p.id === peerId)
+    if (!peer) throw new Error(`unknown peer: ${peerId}`)
+    const envToken = process.env[`TERMSPRAWL_A2A_PEER_TOKEN_${peerId.toUpperCase().replace(/[^A-Z0-9]/g, '_')}`]
+    const res = await sendText(peer.endpoint, text, {
+      token: envToken || peer.token,
+      timeoutMs: 20000
+    })
+    if (!res.ok) throw new Error(res.error)
+    // A peer's text reply, when asked for, is delivered back into the SOURCE
+    // node (chat: appended message; terminal: one-line paste).
+    const replyText = res.ok && 'text' in res ? res.text : undefined
+    if (opts.deliverReply && replyText && opts.sourceNodeId) {
+      let srcKind: string | undefined
+      for (const project of workspaceStore.snapshot().index.projects) {
+        const nodes = workspaceStore.snapshot().projects[project.id] ?? []
+        const found = nodes.find((n) => n.id === opts.sourceNodeId) as
+          | { data?: { kind?: string } }
+          | undefined
+        if (found) {
+          srcKind = found.data?.kind
+          break
+        }
+      }
+      if (srcKind === 'chat') {
+        platform.broadcast(`chat:event:${opts.sourceNodeId}`, {
+          kind: 'context-added',
+          messageId: `a2a-${Date.now().toString(36)}`,
+          role: 'user',
+          content: `[reply from peer ${peerId}]\n${replyText}`,
+          sourceTitle: `peer ${peerId}`
+        })
+      } else {
+        ptyManager.write(opts.sourceNodeId, `\x1b[200~[termsprawl] peer ${peerId} replied: ${replyText}\x1b[201~`)
+      }
+    }
+    return { reply: replyText }
+  },
   userDataPath: platform.userDataPath
 })
 const updateBridge = createUpdateBridge({
@@ -534,6 +574,12 @@ function registerWorkspaceIpc(): void {
     const rev = workspaceStore.saveLinks(projectId, links)
     linkService.linksChanged()
     return rev
+  })
+  ipcMain.handle(IPC.linksSendToPeer, (_event, nodeId: string, peerId: string) => {
+    if (typeof nodeId !== 'string' || typeof peerId !== 'string') {
+      return { ok: false, summary: 'bad request' }
+    }
+    return linkService.sendNodeToPeer(nodeId, peerId)
   })
   ipcMain.handle(IPC.projectAdd, (_event, name: string, cwd: string | null, remote?: ProjectRemote): ProjectMeta => {
     // Dedupe only local folder projects (a remote project has cwd null, so any

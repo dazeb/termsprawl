@@ -188,6 +188,7 @@ declare global {
         run(linkId: string): Promise<LinkRunResult>
         markDirty(sourceId: string): Promise<void>
         update(projectId: string, links: NodeLink[]): Promise<number>
+        sendToPeer(nodeId: string, peerId: string): Promise<LinkRunResult>
       }
       relay: {
         status(): Promise<{ state: string; error: string | null }>

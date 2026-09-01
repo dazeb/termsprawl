@@ -65,6 +65,7 @@ export const IPC = {
   linksMarkDirty: 'links:mark-dirty',
   linksUpdate: 'links:update',
   linksList: 'links:list',
+  linksSendToPeer: 'links:send-to-peer',
 
   // Managed accounts (Phase 7, 7.6)
   accountCreate: 'app:account-create',

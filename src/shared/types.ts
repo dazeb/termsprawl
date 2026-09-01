@@ -433,6 +433,9 @@ export interface A2APeer {
   label: string
   /** Base URL of the peer's A2A endpoint. */
   endpoint: string
+  /** Optional bearer token (peers that gate message/send). Env override
+   * TERMSPRAWL_A2A_PEER_TOKEN_<ID> wins; never logged. */
+  token?: string
 }
 
 /** A non-secret provider endpoint (name + base URL) for the chat/agent drivers. */

@@ -826,6 +826,39 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
     typeof (menuNode.data as { command?: string }).command === 'string' &&
     (menuNode.data as { command?: string }).command?.startsWith('claude') === true
 
+  // --- A2A send-to-peer (Phase 19): any agent terminal can forward its content
+  // to a configured peer (Settings → Connections → A2A peers).
+  const [a2aMenuOpen, setA2aMenuOpen] = useState(false)
+  const [a2aPeers, setA2aPeers] = useState<Array<{ id: string; label: string; endpoint: string }>>([])
+  const [a2aSendNote, setA2aSendNote] = useState<string | null>(null)
+  const menuIsAgentNode =
+    menuNode?.type === 'terminal' && isAgentCommand((menuNode.data as { command?: string }).command)
+  // Load the peer list when the submenu opens (settings are the source).
+  useEffect(() => {
+    if (!a2aMenuOpen) return
+    let cancelled = false
+    void window.termsprawl.settings
+      .get()
+      .then((s) => {
+        if (!cancelled) setA2aPeers(s.a2aPeers ?? [])
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [a2aMenuOpen])
+  const sendToA2aPeer = useCallback(
+    (peerId: string, peerLabel: string) => {
+      if (!menu?.nodeId) return
+      setA2aSendNote(`sending to ${peerLabel}…`)
+      void window.termsprawl.links
+        .sendToPeer(menu.nodeId, peerId)
+        .then((res) => setA2aSendNote(`${res.ok ? '✓' : '✗'} ${res.summary}`))
+        .catch((err: unknown) => setA2aSendNote(`✗ ${err instanceof Error ? err.message : String(err)}`))
+    },
+    [menu]
+  )
+
   // Context-link submenu: other agent terminals on this canvas (folder projects
   // only). `linkedIds` mirrors the link files on disk.
   const menuNodeData = menu?.nodeId ? (menuNode?.data as TerminalNodeData | undefined) : undefined
@@ -950,6 +983,31 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
             canGroup && <button onClick={groupSelection}>Group selection</button>
           )}
           {menu?.nodeId && <button onClick={closeMenuNode}>Close</button>}
+          {menuIsAgentNode && (
+            <>
+              <button
+                className="context-submenu-toggle"
+                onClick={() => setA2aMenuOpen((v) => !v)}
+              >
+                {a2aMenuOpen ? 'A2A send to peer ▾' : 'A2A send to peer ▸'}
+              </button>
+              {a2aMenuOpen && (
+                <div className="context-submenu">
+                  {a2aPeers.length === 0 && (
+                    <button disabled title="Add peers in Settings → Connections → A2A peers">
+                      no peers configured
+                    </button>
+                  )}
+                  {a2aPeers.map((peer) => (
+                    <button key={peer.id} onClick={() => sendToA2aPeer(peer.id, peer.label)}>
+                      send to {peer.label}
+                    </button>
+                  ))}
+                  {a2aSendNote && <div className="context-note">{a2aSendNote}</div>}
+                </div>
+              )}
+            </>
+          )}
           {menuIsClaudeAgent && (
             <>
               <button onClick={branchAgentSession} title="Send /branch to the agent">

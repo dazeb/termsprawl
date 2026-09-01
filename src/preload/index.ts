@@ -311,7 +311,9 @@ const api = {
     run: (linkId: string): Promise<LinkRunResult> => ipcRenderer.invoke(IPC.linksRun, linkId),
     markDirty: (sourceId: string): Promise<void> => ipcRenderer.invoke(IPC.linksMarkDirty, sourceId),
     update: (projectId: string, links: NodeLink[]): Promise<number> =>
-      ipcRenderer.invoke(IPC.linksUpdate, projectId, links)
+      ipcRenderer.invoke(IPC.linksUpdate, projectId, links),
+    sendToPeer: (nodeId: string, peerId: string): Promise<LinkRunResult> =>
+      ipcRenderer.invoke(IPC.linksSendToPeer, nodeId, peerId)
   },
 
   // Relay seam (Phase 11 Task 11.2, surfaced by audit B7): dial/disconnect the
