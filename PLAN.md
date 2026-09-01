@@ -1095,7 +1095,36 @@ on an opt-in loopback endpoint).*
 
 ---
 
-## Testing strategy
+## Settings polish (2026-09-01, branch feature/settings-polish)
+
+*User report: the settings panel had purple highlights (the OS/GTK accent
+leaking through native form controls), cramped 10px mono buttons, and dead
+controls on editions/installs that can't use them.*
+
+- **One control system for the whole sheet** (`styles.css`, scoped to
+  `.settings-content`): checkboxes/radios get `accent-color: var(--accent)`
+  (lime, both themes — the OS purple can never reappear); inputs/selects/
+  textareas share one 32px box at 13px Geist (sans, body font stack); selects
+  are `appearance: none` with an inline SVG chevron; every control gets a
+  lime `:focus-visible` ring; buttons are a two-variant system —
+  `.settings-btn` (neutral) / `.settings-btn.accent` (primary, lime outline) /
+  `.settings-btn.danger` (red is a hover/armed STATE, never a resting color).
+  All sections (accounts, A2A peers, API providers, cloud/user, telegram,
+  relay, agents, updates) use it; the old cramped `.account-login/-delete`
+  10px mono styles are gone. The LinkInspector popover shares the system.
+- **Edition/feature gating**: `runtimeInfo()` on the bridge (main answers
+  `app:runtime-info` with `app.isPackaged`; the Server Edition shim returns
+  `packaged: false`) — the Updates section shows its real toggle only in a
+  packaged desktop build and an honest explanation otherwise. Tab/section
+  edition filters were already in place and verified.
+- **Verified** (headless, built app, raw CDP — assertions on computed styles
+  across all five tabs): buttons 32px/13px Geist/`rgb(198,241,53)` accent;
+  selects `appearance: none` + 32px; checkbox/radio accent lime; focused input
+  gets a lime border + ring; **zero purple-painted pixels** in the sheet;
+  destructive buttons rest neutral. 835 tests, typecheck, build, originality
+  green. Screenshot: e2e artifact (not committed).
+
+---
 
 - Unit: vitest for core services (pty, workspace files, git ops, normalizers).
 - Integration: IPC flow tests; tmux lifecycle tests (session survives kill,

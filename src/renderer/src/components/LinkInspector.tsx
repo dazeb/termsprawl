@@ -172,12 +172,12 @@ export function LinkInspector(props: LinkInspectorProps): React.JSX.Element {
       </label>
 
       <div className="link-inspector-actions">
-        <button className="link-inspector-run" onClick={onRun} disabled={props.running}>
+        <button className="settings-btn accent" onClick={onRun} disabled={props.running}>
           {props.running ? 'running…' : 'Run now'}
         </button>
         {confirmDelete ? (
           <button
-            className="link-inspector-delete-confirm"
+            className="settings-btn danger armed"
             onClick={() => {
               onDelete()
             }}
@@ -185,7 +185,7 @@ export function LinkInspector(props: LinkInspectorProps): React.JSX.Element {
             confirm delete
           </button>
         ) : (
-          <button className="link-inspector-delete" onClick={() => setConfirmDelete(true)}>
+          <button className="settings-btn danger" onClick={() => setConfirmDelete(true)}>
             delete
           </button>
         )}

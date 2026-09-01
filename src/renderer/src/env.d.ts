@@ -55,6 +55,8 @@ declare global {
        * surfaces that exist here (the Server Edition shim carries
        * runtime.kind = 'server'). */
       runtime: { kind: 'desktop' | 'server' }
+      /** Runtime facts for UI gating (updates only work packaged). */
+      runtimeInfo(): Promise<{ packaged: boolean }>
       settings: {
         get(): Promise<AppSettings>
         set(patch: Partial<AppSettings>): Promise<AppSettings>

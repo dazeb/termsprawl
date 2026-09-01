@@ -57,7 +57,12 @@ const api = {
   // Which edition is running. The desktop preload always says 'desktop'; the
   // Server Edition shim carries its own `runtime: { kind: 'server' }` — the
   // settings panel reads this to show only surfaces that exist here.
+  // `packaged` mirrors app.isPackaged: electron-updater (and other OS-installed
+  // behaviors) are inactive in unpackaged/dev builds, so dead controls hide.
   runtime: { kind: 'desktop' as const },
+  /** Runtime facts for UI gating (main answers over IPC). */
+  runtimeInfo: (): Promise<{ packaged: boolean }> =>
+    ipcRenderer.invoke('app:runtime-info').catch(() => ({ packaged: true })),
 
   settings: {
     get: (): Promise<AppSettings> => ipcRenderer.invoke(IPC.appSettingsGet),

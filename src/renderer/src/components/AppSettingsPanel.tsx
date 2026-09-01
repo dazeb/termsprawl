@@ -212,6 +212,13 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
   // Which edition is serving this renderer — the bridge carries the hint.
   const edition: EditionKind = window.termsprawl.runtime?.kind === 'server' ? 'server' : 'desktop'
   const isDesktop = edition === 'desktop'
+  // electron-updater is only real in a packaged build (dev = documented no-op);
+  // the updates section hides its toggle there. Defaults true so a slow
+  // runtimeInfo answer never flashes the toggle away after paint.
+  const [isPackaged, setIsPackaged] = useState(true)
+  useEffect(() => {
+    void window.termsprawl.runtimeInfo?.().then((r) => setIsPackaged(r.packaged)).catch(() => {})
+  }, [])
   // Drafts for the A2A + API add forms.
   const [peerLabel, setPeerLabel] = useState('')
   const [peerEndpoint, setPeerEndpoint] = useState('')
@@ -837,7 +844,7 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
       }
     ],
     updates: [
-      { id: 'updates', title: 'Updates', render: (c) => <UpdatesSection ctx={c} /> }
+      { id: 'updates', title: 'Updates', render: (c) => <UpdatesSection ctx={c} isPackaged={isPackaged} /> }
     ]
   }
 
@@ -959,14 +966,14 @@ function UserSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
             signed in as {cloudUser.github_login} · {cloudUser.plan} plan. Backups are encrypted server-side with your key.
           </p>
           <div className="account-row">
-            <button className="account-login" onClick={() => void cloudBackupNow()}>back up now</button>
+            <button className="settings-btn accent" onClick={() => void cloudBackupNow()}>back up now</button>
             {lastBackup && <span className="account-id">backup {lastBackup.id.slice(0, 8)} · {lastBackup.size_bytes} bytes</span>}
-            <button className="account-delete" onClick={() => void cloudSignOut()}>sign out</button>
+            <button className="settings-btn danger" onClick={() => void cloudSignOut()}>sign out</button>
           </div>
           {isDesktop && (cloudUser.plan === 'pro' || cloudUser.plan === 'canvas') ? (
             <>
               <div className="account-row">
-                <button className="account-login" disabled={spaceBusy} onClick={() => void cloudOpenSpace()}>
+                <button className="settings-btn accent" disabled={spaceBusy} onClick={() => void cloudOpenSpace()}>
                   {spaceBusy ? 'opening…' : 'open your online canvas'}
                 </button>
                 {space && <span className="account-id">{spaceUrlLabel(space)} · {space.status}</span>}
@@ -978,7 +985,7 @@ function UserSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
                     switch to it. Disabled while busy; a space with nothing
                     online yet shows the note instead of failing. */}
                 <button
-                  className="account-login"
+                  className="settings-btn accent"
                   disabled={spaceBusy || !spaceLoaded}
                   title={spaceLoaded ? undefined : 'checking your space…'}
                   onClick={() => void cloudOpenSnapshot()}
@@ -988,7 +995,7 @@ function UserSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
                 {/* D2 — push the active project's nodes + scrollbacks. Provisions
                     the space first when the user has none. */}
                 <button
-                  className="account-login"
+                  className="settings-btn accent"
                   disabled={spaceBusy || !spaceLoaded}
                   title={spaceLoaded ? undefined : 'checking your space…'}
                   onClick={() => void cloudSyncProject()}
@@ -1001,14 +1008,14 @@ function UserSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
                   spaces rows above. Works signed-in or not. */}
               <div className="account-row">
                 <button
-                  className="account-login"
+                  className="settings-btn accent"
                   disabled={spaceBusy}
                   onClick={() => void workspaceExportBundle()}
                 >
                   {spaceBusy ? 'working…' : 'export workspace…'}
                 </button>
                 <button
-                  className="account-login"
+                  className="settings-btn accent"
                   disabled={spaceBusy}
                   onClick={() => void workspaceImportBundle()}
                 >
@@ -1018,14 +1025,14 @@ function UserSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
             </>
           ) : !isDesktop ? null : (
             <div className="account-row">
-              <button className="account-login" onClick={openBilling}>upgrade to pro</button>
+              <button className="settings-btn accent" onClick={openBilling}>upgrade to pro</button>
               <span className="account-id">pro adds an online canvas space that syncs with this desktop</span>
             </div>
           )}
         </>
       ) : (
         <div className="account-row">
-          <button className="account-login" disabled={cloudBusy} onClick={() => void cloudSignIn()}>
+          <button className="settings-btn accent" disabled={cloudBusy} onClick={() => void cloudSignIn()}>
             {cloudBusy ? 'waiting for github…' : 'sign in with github'}
           </button>
           {!isDesktop && <span className="account-id">sign in to sync this canvas with your desktop</span>}
@@ -1036,12 +1043,12 @@ function UserSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
           {ghConnected ? (
             <>
               <span className="account-id">GitHub connected</span>
-              <button className="account-delete" disabled={ghBusy} onClick={() => void ghDisconnect()}>
+              <button className="settings-btn danger" disabled={ghBusy} onClick={() => void ghDisconnect()}>
                 {ghBusy ? 'working…' : 'disconnect'}
               </button>
             </>
           ) : (
-            <button className="account-login" disabled={ghBusy || cloudBusy} onClick={() => void ghConnect()}>
+            <button className="settings-btn accent" disabled={ghBusy || cloudBusy} onClick={() => void ghConnect()}>
               {ghBusy || cloudBusy ? 'waiting for github…' : 'Connect GitHub'}
             </button>
           )}
@@ -1070,15 +1077,27 @@ function UserSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
   )
 }
 
-function UpdatesSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
-  const { settings, update } = ctx
+function UpdatesSection({ ctx, isPackaged }: { ctx: SectionCtx; isPackaged: boolean }): React.JSX.Element {
+  // electron-updater only runs in a packaged build (dev is a documented
+  // no-op) — hide the dead control instead of rendering a toggle that does
+  // nothing. The Updates TAB itself is already desktop-only.
+  if (!isPackaged) {
+    return (
+      <div className="settings-section">
+        <p className="app-settings-hint">
+          Updates come from GitHub Releases. This build is unpackaged (dev), so the
+          updater is inactive — launch the installed AppImage/.deb to manage updates.
+        </p>
+      </div>
+    )
+  }
   return (
     <div className="settings-section">
       <label className="app-settings-toggle">
         <input
           type="checkbox"
-          checked={settings.autoDownloadUpdates}
-          onChange={(e) => void update({ autoDownloadUpdates: e.target.checked })}
+          checked={ctx.settings.autoDownloadUpdates}
+          onChange={(e) => void ctx.update({ autoDownloadUpdates: e.target.checked })}
         />
         auto download updates when available
         <HelpBadge
@@ -1142,21 +1161,21 @@ function AccountsSection(props: {
               <option value="bypassPermissions">bypass</option>
             </select>
           )}
-          {!confirmDelete && <button className="account-login" title="open a login terminal for this account" onClick={() => void loginInto(acc)}>login</button>}
+          {!confirmDelete && <button className="settings-btn accent" title="open a login terminal for this account" onClick={() => void loginInto(acc)}>login</button>}
           {confirmDelete === acc.id ? (
             <span className="account-confirm">
               <span className="account-confirm-text">removes its local config dir</span>
-              <button className="account-danger" onClick={() => void deleteAccount(acc.id)}>confirm delete</button>
+              <button className="settings-btn danger armed" onClick={() => void deleteAccount(acc.id)}>confirm delete</button>
               <button onClick={() => setConfirmDelete(null)}>keep</button>
             </span>
           ) : (
-            <button className="account-delete" title="delete this account" onClick={() => setConfirmDelete(acc.id)}>delete</button>
+            <button className="settings-btn danger" title="delete this account" onClick={() => setConfirmDelete(acc.id)}>delete</button>
           )}
         </div>
       ))}
       <div className="account-new">
         <input className="account-label-input" value={newLabel} placeholder="account label" onChange={(e) => setNewLabel(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void addAccount() }} />
-        <button onClick={() => void addAccount()}>add account</button>
+        <button className="settings-btn accent" onClick={() => void addAccount()}>add account</button>
       </div>
     </div>
   )
@@ -1187,8 +1206,8 @@ function A2ASection(props: {
         <div key={p.id} className="account-row">
           <span className="account-label">{p.label}</span>
           <span className="account-id">{p.endpoint}</span>
-          <button className="account-login" title="discover the peer's agent card" onClick={() => void testPeer(p)}>test</button>
-          <button className="account-delete" onClick={() => void removePeer(p.id)}>remove</button>
+          <button className="settings-btn" title="discover the peer's agent card" onClick={() => void testPeer(p)}>test</button>
+          <button className="settings-btn danger" onClick={() => void removePeer(p.id)}>remove</button>
           {peerTestId === p.id && peerTestNote && <span className="a2a-test-note">{peerTestNote}</span>}
         </div>
       ))}
@@ -1196,7 +1215,7 @@ function A2ASection(props: {
         <input className="account-label-input" value={peerLabel} placeholder="peer label" onChange={(e) => setPeerLabel(e.target.value)} />
         <input className="account-label-input" value={peerEndpoint} placeholder="http://127.0.0.1:8787" onChange={(e) => setPeerEndpoint(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void addPeer() }} />
         <input className="account-label-input" value={peerToken} placeholder="bearer token (optional)" onChange={(e) => setPeerToken(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void addPeer() }} />
-        <button onClick={() => void addPeer()}>add peer</button>
+        <button className="settings-btn accent" onClick={() => void addPeer()}>add peer</button>
       </div>
     </div>
   )
@@ -1211,13 +1230,13 @@ function ApiSection(props: { providers: ApiProviderConfig[]; providerName: strin
         <div key={p.id} className="account-row">
           <span className="account-label">{p.name}</span>
           <span className="account-id">{p.baseUrl}</span>
-          <button className="account-delete" onClick={() => void removeProvider(p.id)}>remove</button>
+          <button className="settings-btn danger" onClick={() => void removeProvider(p.id)}>remove</button>
         </div>
       ))}
       <div className="account-new">
         <input className="account-label-input" value={providerName} placeholder="provider (e.g. xAI)" onChange={(e) => setProviderName(e.target.value)} />
         <input className="account-label-input" value={providerBaseUrl} placeholder="https://api.x.ai/v1" onChange={(e) => setProviderBaseUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void addProvider() }} />
-        <button onClick={() => void addProvider()}>add provider</button>
+        <button className="settings-btn accent" onClick={() => void addProvider()}>add provider</button>
       </div>
     </div>
   )
@@ -1446,7 +1465,7 @@ function RelaySection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
         </div>
         {conn.state === 'paired' || conn.state === 'connecting' ? (
           <button
-            className="account-login"
+            className="settings-btn accent"
             disabled={busy}
             onClick={() => {
               void window.termsprawl.relay.disconnect()
@@ -1456,7 +1475,7 @@ function RelaySection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
             disconnect
           </button>
         ) : (
-          <button className="account-login" disabled={busy || !relay.url} onClick={() => void connect()}>
+          <button className="settings-btn accent" disabled={busy || !relay.url} onClick={() => void connect()}>
             connect
           </button>
         )}

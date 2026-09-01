@@ -1477,6 +1477,9 @@ function registerPtyIpc(): void {
 
 void app.whenReady().then(async () => {
   ipcMain.handle(IPC.appVersion, () => app.getVersion())
+  // Runtime hints for the renderer (settings panel gating): packaged = the
+  // electron-updater surface is real; unpackaged/dev = it no-ops and hides.
+  ipcMain.handle('app:runtime-info', () => ({ packaged: app.isPackaged }))
   registerPtyIpc()
   registerWorkspaceIpc()
   registerDiffIpc()
