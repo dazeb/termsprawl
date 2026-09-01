@@ -54,7 +54,7 @@ Actively developed. Phases 0–12 of [PLAN.md](PLAN.md) are shipped:
   invites with expiry/revocation/quotas, admin API. App-side client seam
   shipped; in-app pairing UI is a follow-up.
 
-Current version: **0.18.0**.
+Current version: **0.18.1**.
 
 Linux only — AppImage and `.deb` artifacts. No macOS support, by design.
 
