@@ -11,6 +11,7 @@ export type CanvasSpawnRequest =
   | { kind: 'agentLogin'; command: string }
   | { kind: 'browser'; url: string }
   | { kind: 'switchProject'; projectId: string }
+  | { kind: 'organize'; mode: 'cascade' | 'flat' | 'restore' }
 
 interface CanvasRequestsState {
   request: CanvasSpawnRequest | null

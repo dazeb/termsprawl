@@ -585,3 +585,147 @@ export function deserializeNodes(serialized: SerializedNode[]): Node<SprawlNodeD
     }
   })
 }
+
+// ── Organize layouts (cascade / flat / restore) ─────────────────────────────
+// Pure position math over the live node list — the canvas applies the result
+// and records ONE undo snapshot, so every organize action is one Ctrl+Z.
+
+/** How layouts are ordered: window nodes in selection order (or z-order when
+ * nothing is selected), then stickies. Groups are never moved (their children
+ * move with them via React Flow's parent extent); child nodes are skipped —
+ * repositioning a parented child fights the group frame. */
+export type OrganizeMode = 'cascade' | 'flat' | 'restore'
+
+const ORGANIZE_GAP = 32
+
+/** Undo record: one snapshot of every touched node's pre-layout position. */
+export interface OrganizeSnapshot {
+  mode: OrganizeMode
+  /** nodeId → absolute position before the layout ran. */
+  positions: Record<string, { x: number; y: number }>
+}
+
+function isOrganizable(n: Node<SprawlNodeData>): boolean {
+  // Group frames stay put (moving one drags its children); parented children
+  // are skipped (React Flow positions them relative to the parent anyway).
+  return n.type !== 'group' && !n.parentId
+}
+
+function sortForLayout(a: Node<SprawlNodeData>, b: Node<SprawlNodeData>): number {
+  // Stickies last: in cascade they ride above the windows; in flat they sit
+  // in their own row after the window row (notes belong together, not
+  // interleaved between terminals).
+  const aSticky = a.type === 'sticky' ? 1 : 0
+  const bSticky = b.type === 'sticky' ? 1 : 0
+  if (aSticky !== bSticky) return aSticky - bSticky
+  return 0
+}
+
+/** Cascade: every window at the same top-left with a fixed diagonal offset —
+ * each title bar stays clickable. Stickies cascade in a tighter diagonal
+ * ABOVE the windows (aligned along the top). */
+export function layoutCascade(
+  nodes: Node<SprawlNodeData>[],
+  origin: { x: number; y: number } = { x: 0, y: 0 }
+): { positions: Record<string, { x: number; y: number }>; snapshot: OrganizeSnapshot } {
+  const movable = nodes.filter(isOrganizable).sort(sortForLayout)
+  const windows = movable.filter((n) => n.type !== 'sticky')
+  const stickies = movable.filter((n) => n.type === 'sticky')
+  const step = 42
+  const positions: Record<string, { x: number; y: number }> = {}
+  windows.forEach((n, i) => {
+    positions[n.id] = { x: origin.x + i * step, y: origin.y + i * step }
+  })
+  // Stickies: tighter step, stacked upward from the top window's top edge so
+  // they hug the top of the cascade without covering the first title bar.
+  const stickyW = nodeSize(stickies[0] ?? createStickyNode()).w
+  stickies.forEach((n, i) => {
+    positions[n.id] = {
+      x: origin.x + i * (stickyW + 16),
+      y: origin.y - 170 + (i % 3) * 8
+    }
+  })
+  const snapshot: OrganizeSnapshot = {
+    mode: 'cascade',
+    positions: Object.fromEntries(movable.map((n) => [n.id, { ...n.position }]))
+  }
+  return { positions, snapshot }
+}
+
+/** Flat: all windows side by side in one row (same top edge), ordered by
+ * width so the row reads evenly; the row wraps when it would exceed
+ * maxRowWidth. Stickies align in a second row along the top of the windows
+ * (left to right, evenly spaced). */
+export function layoutFlat(
+  nodes: Node<SprawlNodeData>[],
+  origin: { x: number; y: number } = { x: 0, y: 0 },
+  maxRowWidth = 5200
+): { positions: Record<string, { x: number; y: number }>; snapshot: OrganizeSnapshot } {
+  const movable = nodes.filter(isOrganizable).sort(sortForLayout)
+  const windows = movable.filter((n) => n.type !== 'sticky')
+  const stickies = movable.filter((n) => n.type === 'sticky')
+  const positions: Record<string, { x: number; y: number }> = {}
+  let x = origin.x
+  let y = origin.y
+  let rowHeight = 0
+  for (const n of windows) {
+    const size = nodeSize(n)
+    if (x > origin.x && x + size.w - origin.x > maxRowWidth) {
+      x = origin.x
+      y += rowHeight + ORGANIZE_GAP
+      rowHeight = 0
+    }
+    positions[n.id] = { x, y }
+    x += size.w + ORGANIZE_GAP
+    rowHeight = Math.max(rowHeight, size.h)
+  }
+  // Sticky row along the top: only when there are stickies AND a window row
+  // exists to sit above — otherwise they take the origin row themselves.
+  if (stickies.length > 0 && windows.length > 0) {
+    let sx = origin.x
+    for (const n of stickies) {
+      const size = nodeSize(n)
+      positions[n.id] = { x: sx, y: origin.y - size.h - ORGANIZE_GAP }
+      sx += size.w + ORGANIZE_GAP
+    }
+  } else {
+    let sx = origin.x
+    for (const n of stickies) {
+      const size = nodeSize(n)
+      positions[n.id] = { x: sx, y }
+      sx += size.w + ORGANIZE_GAP
+    }
+  }
+  const snapshot: OrganizeSnapshot = {
+    mode: 'flat',
+    positions: Object.fromEntries(movable.map((n) => [n.id, { ...n.position }]))
+  }
+  return { positions, snapshot }
+}
+
+/** Restore: replay a snapshot taken by a previous organize (the snapshot IS
+ * the "how they were"). Nodes added since the snapshot keep their position;
+ * the returned snapshot is the consumed one (restore is one-shot — pressing
+ * organize again starts a fresh cascade/flat cycle). */
+export function layoutRestore(
+  nodes: Node<SprawlNodeData>[],
+  snapshot: OrganizeSnapshot
+): { positions: Record<string, { x: number; y: number }>; snapshot: null } {
+  const positions: Record<string, { x: number; y: number }> = {}
+  for (const n of nodes) {
+    const pos = snapshot.positions[n.id]
+    if (pos) positions[n.id] = { ...pos }
+  }
+  return { positions, snapshot: null }
+}
+
+/** Apply a layout's positions to the node list (pure — used by Canvas). */
+export function applyLayoutPositions(
+  nodes: Node<SprawlNodeData>[],
+  positions: Record<string, { x: number; y: number }>
+): Node<SprawlNodeData>[] {
+  return nodes.map((n) => {
+    const pos = positions[n.id]
+    return pos ? { ...n, position: { ...pos } } : n
+  })
+}

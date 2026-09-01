@@ -9,6 +9,7 @@ import {
 import {
   activateBrowserTab,
   addBrowserTab,
+  applyLayoutPositions,
   createAgentLoginNode,
   createAgentNode,
   createBrowserNode,
@@ -24,6 +25,9 @@ import {
   closeBrowserTab,
   deserializeNodes,
   isAgentCommand,
+  layoutCascade,
+  layoutFlat,
+  layoutRestore,
   nodeTitle,
   projectNameFromPath,
   pushBrowserHistory,
@@ -661,5 +665,89 @@ describe('online snapshot round-trip (space snapshots ↔ canvas nodes)', () => 
     // restore saves is exactly what a desktop pull would render.
     const again = deserializeNodes((payload.workspace as SnapshotWorkspace).projects.p1)
     expect(again.map((n) => n.id)).toEqual(['term-1', 'sticky-1'])
+  })
+})
+
+// ── Organize layouts (cascade / flat / restore) ─────────────────────────────
+describe('organize layouts', () => {
+  // Deterministic stand-ins: two windows + one sticky at scattered spots.
+  const mk = () => {
+    const t1 = createTerminalNode()
+    t1.position = { x: 900, y: 700 }
+    const t2 = createTerminalNode()
+    t2.position = { x: 1500, y: 1500 }
+    const sticky = createStickyNode()
+    sticky.position = { x: 2000, y: 2000 }
+    return [t1, t2, sticky]
+  }
+
+  it('cascade stacks every window on the same diagonal; stickies ride above the top', () => {
+    const nodes = mk()
+    const { positions, snapshot } = layoutCascade(nodes)
+    const [t1, t2] = nodes
+    // Both windows share one diagonal: equal offsets from the origin.
+    expect(positions[t1.id]).toEqual({ x: 0, y: 0 })
+    expect(positions[t2.id]).toEqual({ x: 42, y: 42 })
+    // Stickies sit above the window origin, left-to-right.
+    const stickyPos = positions[nodes[2].id]
+    expect(stickyPos.y).toBeLessThan(0)
+    expect(stickyPos.x).toBeGreaterThanOrEqual(0)
+    // Snapshot records the ORIGINAL positions for restore.
+    expect(snapshot.positions[t1.id]).toEqual({ x: 900, y: 700 })
+    expect(snapshot.positions[t2.id]).toEqual({ x: 1500, y: 1500 })
+    expect(snapshot.positions[nodes[2].id]).toEqual({ x: 2000, y: 2000 })
+  })
+
+  it('flat lays windows side by side on one row; stickies align in a row above', () => {
+    const nodes = mk()
+    const { positions } = layoutFlat(nodes)
+    const [t1, t2, sticky] = nodes
+    // Same top edge, side by side with a gap (terminal is 720 wide).
+    expect(positions[t1.id].y).toBe(positions[t2.id].y)
+    expect(positions[t2.id].x).toBe(positions[t1.id].x + 720 + 32)
+    // Sticky row sits above the window row.
+    expect(positions[sticky.id].y).toBeLessThan(positions[t1.id].y)
+    expect(positions[sticky.id].x).toBe(0)
+  })
+
+  it('flat wraps to a new row past maxRowWidth', () => {
+    const nodes = [createTerminalNode(), createTerminalNode()]
+    const { positions } = layoutFlat(nodes, { x: 0, y: 0 }, 800)
+    // Second window can't fit in an 800-wide row → wraps below the first.
+    expect(positions[nodes[1].id].y).toBeGreaterThan(positions[nodes[0].id].y)
+    expect(positions[nodes[1].id].x).toBe(0)
+  })
+
+  it('restore replays the snapshot positions exactly and consumes it', () => {
+    const nodes = mk()
+    const original = nodes.map((n) => ({ ...n.position }))
+    const { snapshot } = layoutCascade(nodes)
+    const cascaded = applyLayoutPositions(nodes, layoutCascade(nodes).positions)
+    expect(cascaded[0].position).not.toEqual(original[0])
+    const { positions, snapshot: consumed } = layoutRestore(cascaded, snapshot)
+    const restored = applyLayoutPositions(cascaded, positions)
+    expect(restored.map((n) => n.position)).toEqual(original)
+    expect(consumed).toBeNull()
+  })
+
+  it('group frames and parented children are never moved', () => {
+    const nodes = mk()
+    const { group, children } = createGroup(nodes.slice(0, 2), { x: 0, y: 0 })
+    const all = [...children, group, nodes[2]]
+    const before = group.position
+    const { positions } = layoutCascade(all)
+    expect(positions[group.id]).toBeUndefined()
+    expect(positions[children[0].id]).toBeUndefined()
+    expect(group.position).toEqual(before)
+  })
+
+  it('applyLayoutPositions only touches nodes present in the map', () => {
+    const nodes = mk()
+    const untouched = createTerminalNode()
+    const all = [...nodes, untouched]
+    const out = applyLayoutPositions(all, { [nodes[0].id]: { x: 5, y: 6 } })
+    expect(out.find((n) => n.id === nodes[0].id)?.position).toEqual({ x: 5, y: 6 })
+    expect(out.find((n) => n.id === untouched.id)?.position).toEqual(untouched.position)
+    expect(out.find((n) => n.id === nodes[2].id)?.position).toEqual(nodes[2].position)
   })
 })

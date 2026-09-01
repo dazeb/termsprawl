@@ -6,6 +6,7 @@ import { UpdateToast } from './components/UpdateToast'
 import { AnnouncementBanner } from './components/AnnouncementBanner'
 import { AppSettingsPanel } from './components/AppSettingsPanel'
 import { CogMenu } from './components/CogMenu'
+import { OrganizeButton } from './components/OrganizeButton'
 import { HelpBadge } from './components/HelpBadge'
 import { isResizeObserverNoise } from './ro-noise'
 import { useProjects } from './state/projects'
@@ -79,6 +80,7 @@ export function App(): React.JSX.Element {
           />
         </span>
         <TabBar />
+        <OrganizeButton disabled={!activeProjectId} />
         <CogMenu onOpenSettings={() => setSettingsOpen(true)} />
         <span className="version">v{version}</span>
       </div>

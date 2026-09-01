@@ -18,6 +18,7 @@ import { GroupNode } from '../nodes/GroupNode'
 import { BrowserNode } from '../nodes/BrowserNode'
 import { ChatNode } from '../nodes/ChatNode'
 import {
+  applyLayoutPositions,
   createAgentLoginNode,
   createAgentNode,
   createDiffNode,
@@ -30,6 +31,9 @@ import {
   createBrowserNode,
   createChatNode,
   isAgentCommand,
+  layoutCascade,
+  layoutFlat,
+  layoutRestore,
   removeNode,
   resolveHomeUrl,
   serializeNodes,
@@ -37,6 +41,7 @@ import {
   topZ,
   ungroup
 } from '../state/workspace'
+import type { OrganizeSnapshot } from '../state/workspace'
 import { agentIds, agentName, agentTitle } from '@shared/agents/config'
 import type { AgentId } from '@shared/agents/config'
 import type { ProjectRemote } from '@shared/types'
@@ -121,7 +126,7 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [cleanupError, setCleanupError] = useState<string | null>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
-  const { screenToFlowPosition, getViewport, setViewport } = useReactFlow()
+  const { screenToFlowPosition, getViewport, setViewport, fitView } = useReactFlow()
   const loadingRef = useRef(false)
   const latestNodesRef = useRef(nodes)
   latestNodesRef.current = nodes
@@ -513,6 +518,51 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
     setMenu(null)
   }, [menu, closeNode])
 
+  // Organize layouts (toolbar button → canvas request): cascade / flat /
+  // restore. Cascade and flat take a snapshot of the current positions first;
+  // restore replays it. The BASE snapshot (before the first layout of an
+  // organize session) is the one restore keeps — organize → flat → restore
+  // returns you to how the windows were before you started, not to the
+  // intermediate cascade. A new layout after a restore starts a fresh session.
+  // ONE undo entry per action — the layout is a single setNodes + push. The
+  // origin anchors the layout near the top-left of the current content so it
+  // lands in view, and the viewport refits so the result is visible.
+  const organizeSnapshotRef = useRef<OrganizeSnapshot | null>(null)
+  const organize = useCallback(
+    (mode: 'cascade' | 'flat' | 'restore') => {
+      const current = latestNodesRef.current
+      if (current.length === 0) return
+      // Origin: top-left of the union bounds — organized layouts appear where
+      // the content already is.
+      const xs = current.map((n) => n.position.x)
+      const ys = current.map((n) => n.position.y)
+      const origin = { x: Math.min(...xs), y: Math.min(...ys) }
+
+      if (mode === 'restore') {
+        const snap = organizeSnapshotRef.current
+        if (!snap) return // nothing to restore yet — the click is a no-op
+        const { positions } = layoutRestore(current, snap)
+        setNodes((nds) => applyLayoutPositions(nds, positions))
+        organizeSnapshotRef.current = null // consumed — next layout starts fresh
+      } else {
+        // Keep the FIRST snapshot of the session as the restore base.
+        if (!organizeSnapshotRef.current) {
+          organizeSnapshotRef.current =
+            mode === 'cascade' ? layoutCascade(current, origin).snapshot : layoutFlat(current, origin).snapshot
+        }
+        const layout = mode === 'cascade' ? layoutCascade(current, origin) : layoutFlat(current, origin)
+        setNodes((nds) => applyLayoutPositions(nds, layout.positions))
+      }
+      push()
+      // Frame the new layout: fitView a beat after React Flow applies the
+      // positions (same settle pattern as the project-load path).
+      setTimeout(() => {
+        void fitView({ padding: 0.15, duration: 200 })
+      }, 50)
+    },
+    [push, fitView]
+  )
+
   // Agent-node actions (Phase 7, Task 7.4). An agent node is a terminal whose
   // command launches a CLI (claude/codex/gemini/grok/druk). Branching pushes
   // Claude's /branch into the live PTY; resuming spawns a NEW node that
@@ -554,9 +604,11 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
       // The nodes were already saved to disk in main and cached in the
       // projects store — the activeProjectId effect above hydrates them.
       useProjects.getState().select(spawnRequest.projectId)
+    } else if (spawnRequest.kind === 'organize') {
+      organize(spawnRequest.mode)
     }
     useCanvasRequests.getState().consume()
-  }, [spawnRequest, cwd, appendOnTop, push])
+  }, [spawnRequest, cwd, appendOnTop, push, organize])
 
   // An external agent (via the loopback agent-control server) can ask the app to
   // open a browser node; route it through the same one-shot spawn store so the
