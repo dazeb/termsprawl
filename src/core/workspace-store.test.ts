@@ -16,6 +16,7 @@ import {
   type SerializedNode
 } from './workspace-files'
 import type { CorePlatform } from './platform'
+import type { NodeLink } from '../shared/types'
 
 class TestPlatform implements CorePlatform {
   userDataPath: string
@@ -98,6 +99,35 @@ describe('WorkspaceStore', () => {
     } finally {
       rmSync(cwd, { recursive: true, force: true })
     }
+  })
+
+  it('persists links: explicit save writes them, node-only saves preserve them', () => {
+    const project = store.addProject('links', null)
+    store.saveNodes(project.id, [makeNode('n1', 1, 1), makeNode('n2', 2, 2)])
+    const link: NodeLink = {
+      id: 'lk-1',
+      source: 'n1',
+      target: 'n2',
+      kind: 'file-output',
+      auto: true,
+      config: { kind: 'file-output', path: 'out/n.md', mode: 'append', header: false },
+      createdAt: 42
+    }
+
+    // Explicit link save lands in the file.
+    store.saveLinks(project.id, [link])
+    expect(store.linksFor(project.id)).toHaveLength(1)
+
+    // A later node-only save (no links arg) must NOT wipe the links.
+    store.saveNodes(project.id, [makeNode('n1', 9, 9), makeNode('n2', 9, 9)])
+    const reloaded = new WorkspaceStore(platform)
+    const links = reloaded.linksFor(project.id)
+    expect(links).toHaveLength(1)
+    expect(links[0]).toEqual(link)
+
+    // Saving an empty array is an explicit clear.
+    store.saveLinks(project.id, [])
+    expect(new WorkspaceStore(platform).linksFor(project.id)).toEqual([])
   })
 
   it('close/reopen flags a project without dropping it', () => {

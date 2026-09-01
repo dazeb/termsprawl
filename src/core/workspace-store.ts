@@ -18,7 +18,7 @@ import {
   type SerializedNode,
   type WorkspaceIndex
 } from './workspace-files'
-import type { ProjectRemote } from '../shared/types'
+import type { NodeLink, ProjectRemote } from '../shared/types'
 
 export interface WorkspaceSnapshot {
   index: WorkspaceIndex
@@ -254,8 +254,10 @@ export class WorkspaceStore {
     this.index = nextIndex
   }
 
-  /** Save nodes for a project; returns the new monotonic rev. */
-  saveNodes(id: string, nodes: SerializedNode[]): number {
+  /** Save nodes for a project; returns the new monotonic rev. Links are
+   * preserved from the existing file when not supplied (node saves are
+   * frequent; link edits are explicit). */
+  saveNodes(id: string, nodes: SerializedNode[], links?: NodeLink[]): number {
     const project = this.index.projects.find((p) => p.id === id)
     if (!project) return 0
     const tombstones = new Set(
@@ -268,10 +270,26 @@ export class WorkspaceStore {
       this.platform.userDataPath,
       project,
       filteredNodes,
-      this.revs.get(id) ?? 0
+      this.revs.get(id) ?? 0,
+      links
     )
     this.revs.set(id, rev)
     return rev
+  }
+
+  /** Persisted links for a project (empty when none). */
+  linksFor(id: string): NodeLink[] {
+    const project = this.index.projects.find((p) => p.id === id)
+    if (!project) return []
+    return loadProjectFile(this.platform.userDataPath, project)?.links ?? []
+  }
+
+  /** Persist links for a project; returns the new monotonic rev. */
+  saveLinks(id: string, links: NodeLink[]): number {
+    const project = this.index.projects.find((p) => p.id === id)
+    if (!project) return 0
+    const nodes = loadProjectFile(this.platform.userDataPath, project)?.nodes ?? []
+    return this.saveNodes(id, nodes, links)
   }
 
   /** Whether a folder already has a project file (adoption path). */
