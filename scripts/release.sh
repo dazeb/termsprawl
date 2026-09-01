@@ -1,14 +1,20 @@
 #!/usr/bin/env bash
-# termsprawl-release.sh — automate the full desktop release pipeline.
+# termsprawl-release.sh — automate the desktop release pipeline.
 #
-# Usage: scripts/release.sh <new-version> [--from <branch>] [--skip-dist]
+# Usage: scripts/release.sh <new-version> [--from <branch>] [--local-dist]
 #   <new-version>  e.g. 0.8.4 (no leading "v" — the tag is v<version>)
 #   --from <branch>  merge this feature branch into main first (default: none;
 #                     expects you're already on main with the work merged)
 #   --merge-all      merge every local branch that is ahead of main (all pending)
+#   --local-dist     escape hatch: also build + stage + gh-release locally
+#                     (the Gitea Actions builder is the canonical publisher)
 #
-# Runs: merge (optional) → bump → gates → push main→3 remotes → dist →
-# stage artifacts → tag+push → gh release create → verify by read-back.
+# Default (builder) flow: merge (optional) → bump → gates → push main→3 remotes
+# → tag+push. The Gitea Actions `release` job on the builder (CT 109) picks up
+# the tag, builds, and publishes to BOTH Gitea and GitHub. Nothing else to do
+# but watch the run and verify the release read-back.
+# With --local-dist it also: dist → stage artifacts → gh release create →
+# verify by read-back (the pre-builder behaviour).
 # Aims to be idempotent-ish: fails loudly and stops on any error.
 #
 # Prereqs (see AGENTS.md + the termsprawl skill): gh authed for
@@ -20,20 +26,21 @@ REPO="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 NEW_VER=""
 SOURCE_BRANCH=""
 MERGE_ALL=0
-SKIP_DIST=0
+LOCAL_DIST=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --from) SOURCE_BRANCH="$2"; shift 2 ;;
     --merge-all) MERGE_ALL=1; shift ;;
-    --skip-dist) SKIP_DIST=1; shift ;;
+    --local-dist) LOCAL_DIST=1; shift ;;
+    --skip-dist) echo "==> --skip-dist is now the default (builder publishes); ignoring"; shift ;;
     -*) echo "unknown option: $1" >&2; exit 2 ;;
     *) NEW_VER="$1"; shift ;;
   esac
 done
 
 if [[ -z "$NEW_VER" ]]; then
-  echo "usage: scripts/release.sh <version> [--from <branch> | --merge-all] [--skip-dist]" >&2
+  echo "usage: scripts/release.sh <version> [--from <branch> | --merge-all] [--local-dist]" >&2
   echo "  e.g. scripts/release.sh 0.8.4 --from feat/resizable-all-nodes" >&2
   exit 2
 fi
@@ -105,60 +112,63 @@ git push origin main
 git push gitea main
 git push github main
 
-# ---- 5. dist ----
-if [[ "$SKIP_DIST" -eq 1 ]]; then
-  echo "==> --skip-dist: skipping pnpm run dist"
-else
-  echo "==> pnpm run dist"
-  pnpm run dist
-fi
-
-# ---- 6. stage artifacts immediately (AppImageLauncher danger) ----
-STAGE="/tmp/termsprawl-release-$NEW_VER"
-rm -rf "$STAGE"; mkdir -p "$STAGE"
-if [[ -f "dist/termsprawl-$NEW_VER.AppImage" ]]; then
-  cp "dist/termsprawl-$NEW_VER.AppImage" "$STAGE/"
-  cp "dist/termsprawl_${NEW_VER}_amd64.deb" "$STAGE/" 2>/dev/null || true
-  cp dist/latest-linux.yml "$STAGE/" 2>/dev/null || true
-  echo "==> artifacts staged in $STAGE:"
-  ls -la "$STAGE"
-else
-  echo "!! dist/termsprawl-$NEW_VER.AppImage not found (did dist run?)" >&2
-  exit 1
-fi
-
-# ---- 7. tag + push to all remotes ----
+# ---- 5. tag + push to all remotes (triggers the builder) ----
 echo "==> tag $TAG"
 git tag "$TAG"
 git push origin "$TAG"
 git push gitea "$TAG"
 git push github "$TAG"
 
-# ---- 8. write release notes (changelog from commit subjects) ----
-NOTES="$STAGE/RELEASE_NOTES.md"
-{
-  echo "# termsprawl $NEW_VER"
-  echo
-  echo "## Changelog"
-  git log --oneline "$(git describe --tags --abbrev=0 "$TAG^" 2>/dev/null || echo v0.0.0)..$TAG" | sed 's/^/- /'
-  echo
-  echo "## Install"
-  echo "Download the AppImage or .deb from the [Releases](https://github.com/dazeb/termsprawl/releases/tag/$TAG) page."
-} > "$NOTES"
-echo "==> wrote $NOTES"
+# ---- 6. dist + stage + publish (only with the explicit --local-dist hatch) ----
+# Default flow ends at the tag: the Gitea Actions builder (CT 109) picks up the
+# tag push and publishes to Gitea + GitHub itself.
+if [[ "$LOCAL_DIST" -eq 1 ]]; then
+  echo "==> --local-dist: pnpm run dist (local build; AppImageLauncher danger)"
+  pnpm run dist
 
-# ---- 9. create + verify GitHub release ----
-echo "==> gh release create $TAG"
-gh release create "$TAG" --repo dazeb/termsprawl \
-  --title "v$NEW_VER" \
-  --notes-file "$NOTES" \
-  "$STAGE/termsprawl-$NEW_VER.AppImage" \
-  "$STAGE/termsprawl_${NEW_VER}_amd64.deb" \
-  "$STAGE/latest-linux.yml"
-echo "==> verifying"
-gh release view "$TAG" --repo dazeb/termsprawl --json tagName,assets \
-  --jq '{tag: .tagName, assets: [.assets[].name]}'
+  STAGE="/tmp/termsprawl-release-$NEW_VER"
+  rm -rf "$STAGE"; mkdir -p "$STAGE"
+  if [[ -f "dist/termsprawl-$NEW_VER.AppImage" ]]; then
+    cp "dist/termsprawl-$NEW_VER.AppImage" "$STAGE/"
+    cp "dist/termsprawl_${NEW_VER}_amd64.deb" "$STAGE/" 2>/dev/null || true
+    cp dist/latest-linux.yml "$STAGE/" 2>/dev/null || true
+    echo "==> artifacts staged in $STAGE:"
+    ls -la "$STAGE"
+  else
+    echo "!! dist/termsprawl-$NEW_VER.AppImage not found (did dist run?)" >&2
+    exit 1
+  fi
+
+  # ---- 6. write release notes (changelog from commit subjects) ----
+  NOTES="$STAGE/RELEASE_NOTES.md"
+  {
+    echo "# termsprawl $NEW_VER"
+    echo
+    echo "## Changelog"
+    git log --oneline "$(git describe --tags --abbrev=0 "$TAG^" 2>/dev/null || echo v0.0.0)..$TAG" | sed 's/^/- /'
+    echo
+    echo "## Install"
+    echo "Download the AppImage or .deb from the [Releases](https://github.com/dazeb/termsprawl/releases/tag/$TAG) page."
+  } > "$NOTES"
+  echo "==> wrote $NOTES"
+
+  # ---- 7. create + verify GitHub release ----
+  echo "==> gh release create $TAG"
+  gh release create "$TAG" --repo dazeb/termsprawl \
+    --title "v$NEW_VER" \
+    --notes-file "$NOTES" \
+    "$STAGE/termsprawl-$NEW_VER.AppImage" \
+    "$STAGE/termsprawl_${NEW_VER}_amd64.deb" \
+    "$STAGE/latest-linux.yml"
+  echo "==> verifying"
+  gh release view "$TAG" --repo dazeb/termsprawl --json tagName,assets \
+    --jq '{tag: .tagName, assets: [.assets[].name]}'
+else
+  echo "==> builder flow: tag pushed — the Gitea Actions release job builds +"
+  echo "    publishes to Gitea and GitHub. Watch it, then verify the read-back:"
+  echo "    gh release view $TAG --repo dazeb/termsprawl --json tagName,assets --jq '{tag: .tagName, assets: [.assets[].name]}'"
+fi
 
 echo
-echo "==> DONE: termsprawl $TAG released. Next: bump + deploy the web site"
+echo "==> DONE: termsprawl $TAG. Next: bump + deploy the web site"
 echo "    (scripts/release-site.sh $NEW_VER)"
