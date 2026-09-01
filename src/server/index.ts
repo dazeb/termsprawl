@@ -173,15 +173,22 @@ export async function createApp(opts?: { auth?: AuthPolicy; onRequest?: (method:
       }
       if (!msg || typeof msg !== 'object') return
       if (msg.t === 'res' || !msg.method) return
-      // Space-sync hook: any mutating RPC over WS means the canvas changed.
-      if (opts?.onRequest && MUTATING_METHODS.has(msg.method)) opts.onRequest(msg.method)
+      const isMutating = Boolean(opts?.onRequest && MUTATING_METHODS.has(msg.method))
+      const markApplied = (): void => {
+        // Mark dirty AFTER the mutation is applied: the coalescing pusher
+        // snapshots live state, and a dirty mark on message ARRIVAL races
+        // the save — the push then carries stale nodes with nothing left to
+        // re-mark dirty (the e2e restart step caught exactly this).
+        if (isMutating) opts?.onRequest?.(msg.method as string)
+      }
       if (msg.t === 'send') {
-        void dispatch({ id: 0, method: msg.method, args: msg.args ?? [] })
+        void dispatch({ id: 0, method: msg.method, args: msg.args ?? [] }).then(markApplied)
         return
       }
       // t === 'req'
       const requestId = Number(msg.id ?? 0)
       void dispatch({ id: requestId, method: msg.method, args: msg.args ?? [] }).then((response) => {
+        markApplied()
         if (!response || socket.readyState !== WebSocket.OPEN) return
         socket.send(
           JSON.stringify({ t: 'res', id: response.id, ok: response.ok, result: response.result, error: response.error })

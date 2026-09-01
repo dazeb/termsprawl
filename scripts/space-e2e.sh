@@ -42,6 +42,14 @@ port=3199
 base="http://127.0.0.1:$port"
 content_dir="$scratch/content"
 fail() { echo "FAIL: $1"; exit 1; }
+# Dump the space's own boot/sync log on failure (docker mode only) — without
+# it a failed assertion leaves the container rm'd by the trap with no trace.
+dump_space_logs() {
+  if [ "${TS_E2E_SKIP_DOCKER:-0}" != "1" ]; then
+    echo "── space logs (last 40 lines) ──"
+    docker logs ts-space-e2e 2>&1 | tail -40 || true
+  fi
+}
 
 mint_sync_token() {
   python3 - "$secret" <<'PY'
@@ -84,6 +92,9 @@ const verify = (token) => {
 }
 fs.mkdirSync(dir, { recursive: true })
 const file = (login) => `${dir}/${login}.json`
+// Bind 0.0.0.0: docker-mode boots the space with TS_CLOUD_API pointing at the
+// bridge gateway (172.17.0.1:8787) — a 127.0.0.1 listener refuses those
+// connections and boot-restore silently never lands (curl exit 7).
 http.createServer((req, res) => {
   const claims = verify((req.headers.authorization ?? '').replace(/^Bearer\s+/i, ''))
   if (!claims) { res.writeHead(401).end(JSON.stringify({ error: { code: 'unauthorized' } })); return }
@@ -107,7 +118,7 @@ http.createServer((req, res) => {
     return
   }
   res.writeHead(404).end()
-}).listen(8787, '127.0.0.1', () => console.log('scratch cloud on :8787'))
+}).listen(8787, '0.0.0.0', () => console.log('scratch cloud on :8787 (0.0.0.0)'))
 EOF
 node "$scratch/cloud.mjs" "$secret" "$content_dir" &
 CLOUD_PID=$!
@@ -316,6 +327,17 @@ echo "     pty spawn OK ({id,pid} + live tmux session ts-t-e2e)"
 # The other half of the gate: a piped-shell command must be REFUSED.
 node "$scratch/ws-client.cjs" pty-refuse "$port" "$WS_TOKEN"
 echo "     pty refusal OK (curl|sh rejected by the preset gate)"
+
+# The restart below is only meaningful if the WS save has already been pushed
+# to the cloud — the sync pusher is asynchronous, and killing the container
+# before its first push would test the race, not persistence. Wait for it
+# (same poll pattern as step 7).
+for _ in $(seq 1 30); do
+  [ -f "$content_dir/e2ecat.json" ] && grep -q "n-ws-sticky" "$content_dir/e2ecat.json" 2>/dev/null && break
+  sleep 1
+done
+[ -f "$content_dir/e2ecat.json" ] && grep -q "n-ws-sticky" "$content_dir/e2ecat.json" 2>/dev/null \
+  || { dump_space_logs; fail "space never pushed the WS-saved snapshot before the restart"; }
 
 echo "── 6. restart the space; volume persistence must hold"
 if [ "${TS_E2E_SKIP_DOCKER:-0}" = "1" ]; then
