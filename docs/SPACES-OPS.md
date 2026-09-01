@@ -82,12 +82,17 @@ helper — installs are explicit, never automatic on import.
 
 ## Idle-stop and waking
 
-- v1 ships with wake-on-connect in the router; the idle-stop TIMER itself is a
-  v1.1 task (`docs/TODO: idle-stop sweeper`). Until it lands, containers run
-  until stopped manually or the box reboots — watch memory.
+- v1.1: the idle-stop sweeper runs inside BOTH the cloud API and the
+  space-router (`spaceManager.startSweeper()` — 10-minute interval): any
+  RUNNING space with no activity for 30 minutes is stopped. Activity =
+  `lastActiveAt`, touched by the cloud API's spaces routes AND throttled
+  (1/min/login) by the router on every proxied request/upgrade — an open-but-
+  idle canvas keeps its space alive; a forgotten one is reclaimed.
+  Legacy records without `lastActiveAt` are treated as active, never killed.
 - Wake path: request → router sees no running space → `ensureRunning` (30 s
   budget) → proxy. Timeout serves a retry page (`Starting your canvas…`,
-  meta-refresh 5 s).
+  meta-refresh 5 s). Swept spaces restart exactly this way — stopping is
+  always safe.
 
 ## Reconcile after reboot
 
@@ -103,8 +108,14 @@ reconcile (cloud API) or on first visit (router wake).
 - Space→cloud snapshots land in `DATA_DIR/spaces/content/<login>.json`
   (latest-per-login, atomic writes, 2 MB cap per payload).
 - DELETE /api/v1/spaces/mine stops the container and KEEPS the volume.
-  Grace policy: 7 days, then sweep. v1.1 TODO: the sweep job. Until then,
-  manual cleanup: `docker volume rm ts-space-<login>`.
+  Grace policy: 7 days, then the volume sweep reclaims it (v1.1: shipped —
+  the same `startSweeper()` timer as idle-stop; stopping a space stamps
+  `deletedAt`, the sweep removes `ts-space-<login>` past the window and logs
+  every removal). Stopping also stamps `deletedAt`, so an idle-swept space
+  left stopped for 7 days has its volume reclaimed too; any re-open clears
+  the stamp before the sweep can act. Manual cleanup is still possible:
+  `docker volume rm ts-space-<login>` (the sweep handles an already-gone
+  volume gracefully and clears the bookkeeping mark).
 
 ## Tokens and secrets (all in /opt/termsprawl-cloud/.env)
 
