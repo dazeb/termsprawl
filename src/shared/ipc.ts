@@ -60,10 +60,11 @@ export const IPC = {
   contextLinkAdd: 'context:add',
   contextLinkRemove: 'context:remove',
 
-  // Node links (Phase 18) — typed, persisted edges
+  // Node links (Phase 18)
   linksRun: 'links:run',
   linksMarkDirty: 'links:mark-dirty',
   linksUpdate: 'links:update',
+  linksList: 'links:list',
 
   // Managed accounts (Phase 7, 7.6)
   accountCreate: 'app:account-create',

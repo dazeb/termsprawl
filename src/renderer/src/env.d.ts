@@ -37,8 +37,10 @@ import type {
   WorkspaceBundleExportResult,
   WorkspaceBundleImportResult,
   BrowserCdpInfo,
-  BrowserNavigateResult
-} from '@shared/types'
+  BrowserNavigateResult,
+  NodeLink,
+  LinkRunResult
+  } from '@shared/types'
 import type { AgentStatusEvent } from '@shared/agent-status'
 import type { UpdateStatus } from '@shared/update-status'
 import type { ChatEvent } from '../../core/chat/types'
@@ -180,6 +182,12 @@ declare global {
         stop(nodeId: string): Promise<void>
         approve(nodeId: string, callId: string, decision: 'approve' | 'deny'): Promise<void>
         onEvent(nodeId: string, cb: (event: ChatEvent) => void): () => void
+      }
+      links: {
+        list(projectId: string): Promise<NodeLink[]>
+        run(linkId: string): Promise<LinkRunResult>
+        markDirty(sourceId: string): Promise<void>
+        update(projectId: string, links: NodeLink[]): Promise<number>
       }
       relay: {
         status(): Promise<{ state: string; error: string | null }>

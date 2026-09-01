@@ -44,6 +44,22 @@ export interface ExtractDeps {
   readFile(path: string): Promise<string | null>
 }
 
+/**
+ * Which link kinds may be created by dragging an edge between two NODES.
+ * Differs from LINK_TARGETS: a file-output link visually anchors to the
+ * nearest node (its title seeds the default filename) but really targets a
+ * file; a2a-peer links are created from the A2A send UI, not by node dragging.
+ */
+export function connectableLinkKinds(sourceKind: string, targetKind: string): LinkKind[] {
+  const out: LinkKind[] = []
+  const sources = LINK_SOURCES['file-output']
+  if (sources.includes(sourceKind)) {
+    out.push('file-output')
+    if (LINK_TARGETS['context-inject'].includes(targetKind)) out.push('context-inject')
+  }
+  return out
+}
+
 /** Human-readable error when a link is invalid, or null when valid. */
 export function validateLink(kind: LinkKind, sourceKind: string, targetKind: string): string | null {
   const sources = LINK_SOURCES[kind]

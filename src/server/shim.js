@@ -272,6 +272,15 @@
       approve: function (nodeId, callId, decision) { return invoke('chat:approve', [nodeId, callId, decision]) },
       onEvent: function (nodeId, cb) { return on('chat:event:' + nodeId, cb) }
     },
+
+    // Node links (Phase 18): the server runs the same core link engine via
+    // handlers.ts — real implementation, not a stub (parity with chat).
+    links: {
+      list: function (projectId) { return invoke('links:list', [projectId]) },
+      run: function (linkId) { return invoke('links:run', [linkId]) },
+      markDirty: function (sourceId) { return invoke('links:mark-dirty', [sourceId]) },
+      update: function (projectId, links) { return invoke('links:update', [projectId, links]) }
+    },
     // Relay seam (audit B7): the server routes relay:connect/disconnect/status
     // through the same RPC surface; frames stream on the relay:frame channel.
     relay: {

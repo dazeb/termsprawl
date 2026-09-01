@@ -2245,6 +2245,44 @@ html[data-theme='light'] .settings-nav-item:hover {
   font-size: 12px;
 }
 
+/* Node-link edges (Phase 18): a small kind chip at the edge midpoint. Kind
+   hues come from the muted palette; lime stays functional (selection only). */
+.nodelink-chip {
+  fill: #2a2a28;
+  stroke: #4a4a48;
+  stroke-width: 1;
+}
+
+.nodelink-chip.kind-file-output {
+  stroke: #8ab4f8;
+}
+
+.nodelink-chip.kind-context-inject {
+  stroke: #e8b96f;
+}
+
+.nodelink-chip.kind-a2a-peer {
+  stroke: #c792ea;
+}
+
+.nodelink-chip.selected {
+  stroke: var(--accent);
+  fill: rgba(198, 241, 53, 0.12);
+}
+
+.nodelink-chip-text {
+  fill: #9a9a94;
+  font-size: 9px;
+  font-family: var(--font-mono, 'Geist Mono', monospace);
+  pointer-events: none;
+  user-select: none;
+}
+
+.nodelink-chip.selected + .nodelink-chip-text,
+.nodelink-chip.selected ~ .nodelink-chip-text {
+  fill: var(--accent);
+}
+
 .history-bar {
   position: absolute;
   bottom: 16px;

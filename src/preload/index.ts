@@ -38,6 +38,8 @@ import type {
   CloudUser,
   WorkspaceBundleExportResult,
   WorkspaceBundleImportResult,
+  NodeLink,
+  LinkRunResult,
   BrowserCdpInfo,
   BrowserNavigateResult,
   ChatSettings
@@ -301,6 +303,15 @@ const api = {
         ipcRenderer.removeListener(channel, listener)
       }
     }
+  },
+
+  // Node links (Phase 18): persisted typed edges — list, run, edit, dirty-signal.
+  links: {
+    list: (projectId: string): Promise<NodeLink[]> => ipcRenderer.invoke(IPC.linksList, projectId),
+    run: (linkId: string): Promise<LinkRunResult> => ipcRenderer.invoke(IPC.linksRun, linkId),
+    markDirty: (sourceId: string): Promise<void> => ipcRenderer.invoke(IPC.linksMarkDirty, sourceId),
+    update: (projectId: string, links: NodeLink[]): Promise<number> =>
+      ipcRenderer.invoke(IPC.linksUpdate, projectId, links)
   },
 
   // Relay seam (Phase 11 Task 11.2, surfaced by audit B7): dial/disconnect the

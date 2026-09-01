@@ -5,7 +5,7 @@
 
 import type { Edge } from 'reactflow'
 import type { NodeLink } from '@shared/types'
-import { parseNodeLinks } from '../../../core/workspace-files'
+import { parseNodeLinks } from '@shared/node-links'
 
 /** Normalize a persisted links array (junk dropped) — core owns the rules. */
 export function deserializeLinks(raw: unknown): NodeLink[] {

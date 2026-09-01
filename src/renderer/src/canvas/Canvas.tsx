@@ -4,7 +4,6 @@ import ReactFlow, {
   BackgroundVariant,
   Controls,
   MiniMap,
-  addEdge,
   applyEdgeChanges,
   applyNodeChanges,
   useReactFlow
@@ -44,11 +43,14 @@ import {
 import type { OrganizeSnapshot } from '../state/workspace'
 import { agentIds, agentName, agentTitle } from '@shared/agents/config'
 import type { AgentId } from '@shared/agents/config'
-import type { ProjectRemote } from '@shared/types'
+import type { NodeLink, ProjectRemote } from '@shared/types'
+import { connectableLinkKinds, linkDefaultConfig } from '../../../core/links/registry'
 import { useHistory } from '../state/history'
 import { useProjects } from '../state/projects'
 import { useCanvasRequests } from '../state/canvas-requests'
 import { useBrowserHome } from '../state/browser-home'
+import { deserializeLinks, linksFromSerialized, removeLinksForNode, serializeLinks } from '../state/workspace-links'
+import { NodeLinkEdge } from './NodeLinkEdge'
 import type { SprawlNodeData, TerminalNodeData } from '../state/workspace'
 
 // Monaco-backed nodes load on first use (audit F7): the editor + diff bundles
@@ -80,6 +82,8 @@ const nodeTypes = {
   browser: BrowserNode,
   chat: ChatNode
 } as const
+
+const edgeTypes = { nodelink: NodeLinkEdge } as const
 
 // Canvas context: lets custom nodes update their own data and record undo
 // snapshots without polluting serialized node data with callbacks.
@@ -120,6 +124,9 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
 
   const [nodes, setNodes] = useState<Node<SprawlNodeData>[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
+  // Links are the persisted reality behind the edges (Phase 18): the project
+  // file stores NodeLink records; the `edges` state mirrors them for React Flow.
+  const linksRef = useRef<NodeLink[]>([])
   const [menu, setMenu] = useState<{ x: number; y: number; nodeId?: string } | null>(null)
   const [agentMenuOpen, setAgentMenuOpen] = useState(false)
   const [linkMenuOpen, setLinkMenuOpen] = useState(false)
@@ -181,6 +188,19 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
     const initial = deserializeNodes(serialized)
     setNodes(activeProjectId ? (initial.length > 0 ? initial : [createTerminalNode(cwd)]) : [])
     setEdges([])
+    linksRef.current = []
+    // Links load over IPC (project file) and rebuild the edges once they land.
+    if (activeProjectId) {
+      void window.termsprawl.links
+        .list(activeProjectId)
+        .then((links) => {
+          linksRef.current = deserializeLinks(links)
+          setEdges(linksFromSerialized(linksRef.current))
+        })
+        .catch(() => {
+          // No link support (old main) — canvas stays linkless, never breaks.
+        })
+    }
     // let React Flow settle before clearing the loading flag
     setTimeout(() => {
       loadingRef.current = false
@@ -191,6 +211,35 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
   // Undo/redo: debounced snapshots of the nodes array. Permanent terminal
   // closes invalidate that id in every snapshot so undo cannot revive it.
   const { push, undo, redo, invalidate, canUndo, canRedo } = useHistory(nodes, setNodes)
+
+  // --- Node links (Phase 18) ------------------------------------------------
+  // Declared before the removal handlers so delete cascades can call them.
+  /** Persist the current links (explicit-state; the engine reads these). */
+  const persistLinks = useCallback(
+    (projectId: string, links: NodeLink[]) => {
+      void window.termsprawl.links.update(projectId, serializeLinks(links)).catch(() => {})
+    },
+    []
+  )
+
+  /** Delete a link by id (edge delete key, edge context menu, inspector). */
+  const deleteLink = useCallback((linkId: string): void => {
+    linksRef.current = linksRef.current.filter((l) => l.id !== linkId)
+    if (activeProjectIdRef.current) persistLinks(activeProjectIdRef.current, linksRef.current)
+  }, [persistLinks])
+
+  /** Node delete cascade: drop every link touching the removed nodes. */
+  const cascadeLinksForNodes = useCallback((removedIds: string[]): void => {
+    if (removedIds.length === 0) return
+    const before = linksRef.current
+    let after = before
+    for (const id of removedIds) after = removeLinksForNode(after, id)
+    if (after.length !== before.length) {
+      linksRef.current = after
+      setEdges(linksFromSerialized(after))
+      if (activeProjectIdRef.current) persistLinks(activeProjectIdRef.current, after)
+    }
+  }, [persistLinks])
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -259,6 +308,7 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
           if (useProjects.getState().activeProjectId === originProjectId) {
             setNodes((current) => applyChanges(current, committed))
           }
+          cascadeLinksForNodes([...committed])
           if (failed.length > 0) {
             setCleanupError(`Could not commit terminal close: ${failed.join(', ')}`)
           } else if (cleanupPending.length > 0) {
@@ -269,15 +319,55 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
           setCleanupError(`Could not close terminal: ${error instanceof Error ? error.message : String(error)}`)
         })
     },
-    [activeProjectId, dropCachedNode, invalidate, nodes, selectedIds]
+    [activeProjectId, dropCachedNode, invalidate, nodes, selectedIds, cascadeLinksForNodes]
   )
+  // Create a link from a React Flow connection, validating kinds.
+  const createLinkFromConnection = useCallback(
+    (connection: Connection): void => {
+      const source = latestNodesRef.current.find((n) => n.id === connection.source)
+      const target = latestNodesRef.current.find((n) => n.id === connection.target)
+      if (!source || !target || !connection.source || !connection.target) return
+      const kinds = connectableLinkKinds(source.data.kind, target.data.kind)
+      if (kinds.length === 0) return
+      // One link per ordered pair; re-connecting updates the existing link.
+      const existing = linksRef.current.find((l) => l.source === connection.source && l.target === connection.target)
+      if (existing) {
+        existing.kind = kinds[0]
+        existing.config = linkDefaultConfig(kinds[0])
+        existing.auto = false
+        setEdges(linksFromSerialized([...linksRef.current]))
+        if (activeProjectIdRef.current) persistLinks(activeProjectIdRef.current, [...linksRef.current])
+        return
+      }
+      const link: NodeLink = {
+        id: `lk-${crypto.randomUUID().slice(0, 8)}`,
+        source: connection.source,
+        target: connection.target,
+        kind: kinds[0],
+        auto: false,
+        config: linkDefaultConfig(kinds[0]),
+        createdAt: Date.now()
+      }
+      linksRef.current = [...linksRef.current, link]
+      setEdges((eds) => [...eds, ...linksFromSerialized([link])])
+      if (activeProjectIdRef.current) persistLinks(activeProjectIdRef.current, linksRef.current)
+    },
+    [persistLinks]
+  )
+
   const onEdgesChange = useCallback(
-    (changes: EdgeChange[]) => setEdges((eds) => applyEdgeChanges(changes, eds)),
-    []
+    (changes: EdgeChange[]) => {
+      for (const change of changes) {
+        if (change.type === 'remove') deleteLink(change.id)
+      }
+      setEdges((eds) => applyEdgeChanges(changes, eds))
+    },
+    [deleteLink]
   )
+
   const onConnect = useCallback(
-    (connection: Connection) => setEdges((eds) => addEdge(connection, eds)),
-    []
+    (connection: Connection) => createLinkFromConnection(connection),
+    [createLinkFromConnection]
   )
 
 
@@ -299,6 +389,7 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
       if (!target) return
       if (target.type !== 'terminal') {
         setNodes((current) => removeNode(current, id))
+        cascadeLinksForNodes([id])
         push()
         return
       }
@@ -315,6 +406,7 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
           if (useProjects.getState().activeProjectId === originProjectId) {
             setNodes((current) => removeNode(current, id))
           }
+          cascadeLinksForNodes([id])
           if (result.cleanupPendingIds.length > 0) {
             setCleanupError(`Terminal closed; session cleanup will retry: ${id}`)
           }
@@ -323,7 +415,7 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
           setCleanupError(`Could not close terminal: ${error instanceof Error ? error.message : String(error)}`)
         })
     },
-    [activeProjectId, dropCachedNode, invalidate, nodes, push]
+    [activeProjectId, dropCachedNode, invalidate, nodes, push, cascadeLinksForNodes]
   )
   const canvasApi = useMemo(
     () => ({ updateNodeData, commit, closeNode }),
@@ -754,6 +846,7 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypesMemo}
+        edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}

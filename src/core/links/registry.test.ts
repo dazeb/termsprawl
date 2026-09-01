@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  connectableLinkKinds,
   extractContent,
   linkDefaultConfig,
   validateLink,
@@ -50,6 +51,23 @@ describe('validateLink', () => {
 
   it('rejects unknown link kinds', () => {
     expect(validateLink('nope' as never, 'sticky', 'file')).toMatch(/kind/)
+  })
+})
+
+describe('connectableLinkKinds', () => {
+  it('offers file-output from any linkable source to any node target', () => {
+    expect(connectableLinkKinds('terminal', 'sticky')).toEqual(['file-output'])
+    expect(connectableLinkKinds('sticky', 'browser')).toEqual(['file-output'])
+  })
+
+  it('offers context-inject when the target can receive context', () => {
+    expect(connectableLinkKinds('terminal', 'chat')).toEqual(['file-output', 'context-inject'])
+    expect(connectableLinkKinds('chat', 'terminal')).toEqual(['file-output', 'context-inject'])
+  })
+
+  it('offers nothing for non-linkable sources', () => {
+    expect(connectableLinkKinds('browser', 'chat')).toEqual([])
+    expect(connectableLinkKinds('group', 'terminal')).toEqual([])
   })
 })
 
