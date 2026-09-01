@@ -208,12 +208,19 @@ Releasing a version (the ritual):
 
 ```bash
 pnpm run typecheck && pnpm test          # gates first
-git commit -m "release: vX.Y.Z"          # bump package.json + README status
-git push origin main && git push github main
-git tag -a vX.Y.Z -m "vX.Y.Z"
-git push gitea vX.Y.Z                    # triggers CI → both releases publish
-git push github vX.Y.Z                   # same tag on GitHub (gh release create needs it)
+./scripts/check-originality.sh           # clean-room gate (local-only, see above)
+bash scripts/space-e2e.sh                # spaces e2e — seed→boot-restore→ws-drive→pty→restart→push
+bash scripts/github-import-e2e.sh        # github import e2e (real git host, token via env)
+scripts/release.sh X.Y.Z                 # bump → gates → push main → tag; the Gitea
+                                         # Actions builder (CT 109) builds + publishes
+                                         # to Gitea AND GitHub on the tag (see release.sh)
 ```
+
+Both e2e scripts are NOT in CI — the runner CT has no docker and the CI job
+never had them, which is how the broken pty gate reached production once.
+They are the manual pre-release gate: run them on the workstation (docker
+present) before pushing the tag. `space-e2e.sh` also runs without docker via
+`TS_E2E_SKIP_DOCKER=1` after `pnpm run build && pnpm run build:server`.
 
 Then bump `termsprawl-web` `APP_VERSION` + deploy (see termsprawl-web repo).
 GitHub Releases still feeds the app's auto-updater via `latest-linux.yml` —
