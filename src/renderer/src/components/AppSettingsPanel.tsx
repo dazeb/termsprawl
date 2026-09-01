@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { AgentAccount, A2APeer, ApiProviderConfig, AppSettings, CloudBackup, CloudDeviceStart, CloudSpace, CloudUser } from '@shared/types'
 import { AGENT_REGISTRY } from '@shared/agents/config'
 import { HelpBadge } from './HelpBadge'
+import { discoverAgentCard } from '../../../core/a2a/client'
 import { useCanvasRequests } from '../state/canvas-requests'
 import { useProjects } from '../state/projects'
 import { applyTheme } from '../state/theme'
@@ -192,7 +193,8 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
     agentPreset: 'standard',
     defaultPermission: 'workspaceWrite',
     enterBehavior: 'queue',
-    agentBrowserControl: false
+    agentBrowserControl: false,
+    agentA2aServer: false
   })
   const [permissionSupported, setPermissionSupported] = useState(false)
   const [newLabel, setNewLabel] = useState('')
@@ -213,6 +215,9 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
   // Drafts for the A2A + API add forms.
   const [peerLabel, setPeerLabel] = useState('')
   const [peerEndpoint, setPeerEndpoint] = useState('')
+  const [peerToken, setPeerToken] = useState('')
+  const [peerTestId, setPeerTestId] = useState<string | null>(null)
+  const [peerTestNote, setPeerTestNote] = useState<string | null>(null)
   const [providerName, setProviderName] = useState('')
   const [providerBaseUrl, setProviderBaseUrl] = useState('')
 
@@ -281,9 +286,32 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
     const label = peerLabel.trim()
     const endpoint = peerEndpoint.trim()
     if (!label || !endpoint) return
-    await update({ a2aPeers: [...(settings.a2aPeers ?? []), { id: crypto.randomUUID(), label, endpoint }] })
+    const token = peerToken.trim()
+    await update({
+      a2aPeers: [
+        ...(settings.a2aPeers ?? []),
+        { id: crypto.randomUUID(), label, endpoint, ...(token ? { token } : {}) }
+      ]
+    })
     setPeerLabel('')
     setPeerEndpoint('')
+    setPeerToken('')
+  }
+
+  const testPeer = async (peer: A2APeer): Promise<void> => {
+    setPeerTestId(peer.id)
+    setPeerTestNote('testing…')
+    const envToken = process.env[`TERMSPRAWL_A2A_PEER_TOKEN_${peer.id.toUpperCase().replace(/[^A-Z0-9]/g, '_')}`]
+    try {
+      const res = await discoverAgentCard(peer.endpoint, {
+        token: envToken || peer.token,
+        timeoutMs: 8000
+      })
+      if (res.ok) setPeerTestNote(`✓ ${res.card.name}`)
+      else setPeerTestNote(`✗ ${res.error}`)
+    } catch (err) {
+      setPeerTestNote(`✗ ${err instanceof Error ? err.message : String(err)}`)
+    }
   }
 
   const removePeer = async (id: string): Promise<void> => {
@@ -664,6 +692,24 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
 
                 <div className="settings-pref-row">
                   <div className="settings-pref-copy">
+                    <span className="settings-pref-label">Expose agent nodes to A2A peers</span>
+                    <span className="settings-pref-sub">
+                      Off (default): no A2A endpoint exists. On: your live agent terminals are listed
+                      as agents at a localhost-only endpoint — peers send tasks via the Google A2A
+                      protocol (token in userData/a2a-agent.json)
+                    </span>
+                  </div>
+                  <label className="app-settings-toggle">
+                    <input
+                      type="checkbox"
+                      checked={c.settings.agentA2aServer === true}
+                      onChange={(e) => void c.update({ agentA2aServer: e.target.checked })}
+                    />
+                  </label>
+                </div>
+
+                <div className="settings-pref-row">
+                  <div className="settings-pref-copy">
                     <span className="settings-pref-label">Search provider / browser home</span>
                     <span className="settings-pref-sub">
                       URL opened when a browser node or new tab starts — point this at
@@ -745,10 +791,15 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
             peers={c.settings.a2aPeers ?? []}
             peerLabel={peerLabel}
             peerEndpoint={peerEndpoint}
+            peerToken={peerToken}
             setPeerLabel={setPeerLabel}
             setPeerEndpoint={setPeerEndpoint}
+            setPeerToken={setPeerToken}
             addPeer={addPeer}
             removePeer={removePeer}
+            testPeer={testPeer}
+            peerTestId={peerTestId}
+            peerTestNote={peerTestNote}
           />
         )
       },
@@ -1111,21 +1162,40 @@ function AccountsSection(props: {
   )
 }
 
-function A2ASection(props: { peers: A2APeer[]; peerLabel: string; peerEndpoint: string; setPeerLabel: (v: string) => void; setPeerEndpoint: (v: string) => void; addPeer: () => Promise<void>; removePeer: (id: string) => Promise<void> }): React.JSX.Element {
-  const { peers, peerLabel, peerEndpoint, setPeerLabel, setPeerEndpoint, addPeer, removePeer } = props
+function A2ASection(props: {
+  peers: A2APeer[]
+  peerLabel: string
+  peerEndpoint: string
+  peerToken: string
+  setPeerLabel: (v: string) => void
+  setPeerEndpoint: (v: string) => void
+  setPeerToken: (v: string) => void
+  addPeer: () => Promise<void>
+  removePeer: (id: string) => Promise<void>
+  testPeer: (peer: A2APeer) => Promise<void>
+  peerTestId: string | null
+  peerTestNote: string | null
+}): React.JSX.Element {
+  const {
+    peers, peerLabel, peerEndpoint, peerToken, setPeerLabel, setPeerEndpoint, setPeerToken,
+    addPeer, removePeer, testPeer, peerTestId, peerTestNote
+  } = props
   return (
     <div className="settings-section">
-      <p className="app-settings-hint">Agent-to-agent peers you can route tasks to. Config only for now — orchestration is a later feature.</p>
+      <p className="app-settings-hint">Agent-to-agent peers you can route tasks to (canvas right-click → “A2A send to peer”). Peers speak the Google A2A protocol (JSON-RPC over HTTP).</p>
       {peers.map((p) => (
         <div key={p.id} className="account-row">
           <span className="account-label">{p.label}</span>
           <span className="account-id">{p.endpoint}</span>
+          <button className="account-login" title="discover the peer's agent card" onClick={() => void testPeer(p)}>test</button>
           <button className="account-delete" onClick={() => void removePeer(p.id)}>remove</button>
+          {peerTestId === p.id && peerTestNote && <span className="a2a-test-note">{peerTestNote}</span>}
         </div>
       ))}
       <div className="account-new">
         <input className="account-label-input" value={peerLabel} placeholder="peer label" onChange={(e) => setPeerLabel(e.target.value)} />
         <input className="account-label-input" value={peerEndpoint} placeholder="http://127.0.0.1:8787" onChange={(e) => setPeerEndpoint(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void addPeer() }} />
+        <input className="account-label-input" value={peerToken} placeholder="bearer token (optional)" onChange={(e) => setPeerToken(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void addPeer() }} />
         <button onClick={() => void addPeer()}>add peer</button>
       </div>
     </div>
