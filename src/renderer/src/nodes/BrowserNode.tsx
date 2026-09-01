@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { NodeProps } from 'reactflow'
 import { NodeResizer } from '@reactflow/node-resizer'
 import type { BrowserNodeData, BrowserTab } from '../state/workspace'
+import { LinkHandles } from './LinkHandles'
 import {
   activateBrowserTab,
   addBrowserTab,
@@ -333,6 +334,7 @@ export function BrowserNode({ id, data, selected }: NodeProps<BrowserNodeData>):
         maxWidth={BROWSER_NODE_MAX.width}
         maxHeight={BROWSER_NODE_MAX.height}
       />
+      <LinkHandles />
       <div className="browser-tabs">
         {tabs.map((t) => (
           <div

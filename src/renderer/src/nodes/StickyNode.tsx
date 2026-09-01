@@ -3,6 +3,7 @@ import { NodeResizer } from '@reactflow/node-resizer'
 import type { NodeProps } from 'reactflow'
 import { STICKY_COLORS, nodeTitle } from '../state/workspace'
 import { useCanvas } from '../canvas/Canvas'
+import { LinkHandles } from './LinkHandles'
 import type { StickyNodeData } from '../state/workspace'
 import { HelpBadge } from '../components/HelpBadge'
 
@@ -43,6 +44,7 @@ export function StickyNode({ id, data, selected }: NodeProps<StickyNodeData>): R
   return (
     <div className={`sticky-node sticky-${data.color}${data.collapsed ? ' collapsed' : ''}`}>
       <NodeResizer isVisible={selected} minWidth={120} minHeight={80} />
+      <LinkHandles />
       <div className="sticky-node-header">
         <button
           className="sticky-node-dot"

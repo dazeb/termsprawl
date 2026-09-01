@@ -371,6 +371,14 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
     [createLinkFromConnection]
   )
 
+  /** Live connect guard: only linkable source→target pairs accept a drag. */
+  const isValidConnection = useCallback((connection: Connection) => {
+    const source = latestNodesRef.current.find((n) => n.id === connection.source)
+    const target = latestNodesRef.current.find((n) => n.id === connection.target)
+    if (!source || !target || !connection.source || !connection.target) return false
+    return connectableLinkKinds(source.data.kind, target.data.kind).length > 0
+  }, [])
+
 
   // Custom-node updates (sticky/editor/diff): patch node data, optionally
   // record a history snapshot (e.g. collapse toggles, blur commits).
@@ -908,6 +916,7 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        isValidConnection={isValidConnection}
         onPaneContextMenu={onPaneContextMenu}
         onNodeContextMenu={onNodeContextMenu}
         onEdgeClick={onEdgeClick}

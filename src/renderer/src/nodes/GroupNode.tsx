@@ -3,6 +3,7 @@ import { NodeResizer } from '@reactflow/node-resizer'
 import type { NodeProps } from 'reactflow'
 import { nodeTitle } from '../state/workspace'
 import { useCanvas } from '../canvas/Canvas'
+import { LinkHandles } from './LinkHandles'
 import type { GroupNodeData } from '../state/workspace'
 import { HelpBadge } from '../components/HelpBadge'
 
@@ -32,6 +33,7 @@ export function GroupNode({ id, data, selected }: NodeProps<GroupNodeData>): Rea
   return (
     <div className="group-node">
       <NodeResizer isVisible={selected} minWidth={200} minHeight={130} />
+      <LinkHandles />
       <div
         className="group-label nodrag"
         onDoubleClick={(e) => {

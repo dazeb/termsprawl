@@ -3,6 +3,7 @@ import { NodeResizer } from '@reactflow/node-resizer'
 import type { NodeProps } from 'reactflow'
 import { nodeTitle } from '../state/workspace'
 import { useCanvas } from '../canvas/Canvas'
+import { LinkHandles } from './LinkHandles'
 import type { ChatNodeData } from '../state/workspace'
 import { HelpBadge } from '../components/HelpBadge'
 import type { ChatEvent, ChatToolCall } from '../../../core/chat/types'
@@ -316,6 +317,7 @@ export function ChatNode({ id, data, selected }: NodeProps<ChatNodeData>): React
   return (
     <div className="chat-node">
       <NodeResizer isVisible={selected} minWidth={280} minHeight={220} />
+      <LinkHandles />
       <div className="chat-node-header">
         <span className="chat-node-title">{nodeTitle(data)}</span>
         <span className="chat-node-chip">{data.model ?? 'no model'}</span>

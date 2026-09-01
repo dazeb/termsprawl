@@ -2283,6 +2283,32 @@ html[data-theme='light'] .settings-nav-item:hover {
   fill: var(--accent);
 }
 
+/* Link handles (Phase 18): hidden until the node is hovered or selected, or
+   while an edge is being dragged (React Flow adds .connectingfrom/.connectingto
+   on the pane). Tiny 6px dots at the vertical midpoints. */
+.link-handle {
+  width: 6px;
+  height: 6px;
+  border: 1px solid #4a4a48;
+  background: #2a2a28;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+
+.react-flow__node:hover .link-handle,
+.react-flow__node.selected .link-handle,
+.react-flow.dragging .link-handle,
+.connectingfrom .link-handle,
+.connectingto .link-handle {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.link-handle:hover {
+  border-color: var(--accent);
+}
+
 /* Link inspector (Phase 18) — popover family, anchored bottom-right. */
 .link-inspector {
   position: absolute;

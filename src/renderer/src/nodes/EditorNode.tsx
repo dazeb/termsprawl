@@ -4,6 +4,7 @@ import type { NodeProps } from 'reactflow'
 import Editor from '@monaco-editor/react'
 import type { editor as MonacoEditor } from 'monaco-editor'
 import '../monaco'
+import { LinkHandles } from './LinkHandles'
 import { monaco, detectLanguage } from '../monaco'
 import { nodeTitle } from '../state/workspace'
 import { useCanvas } from '../canvas/Canvas'
@@ -103,6 +104,7 @@ export function EditorNode({ id, data, selected }: NodeProps<EditorNodeData>): R
   return (
     <div className="editor-node">
       <NodeResizer isVisible={selected} minWidth={240} minHeight={160} />
+      <LinkHandles />
       <div className="editor-node-header">
         <span className="editor-node-title" title={data.path ?? undefined}>
           {nodeTitle(data)}

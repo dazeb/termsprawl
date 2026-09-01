@@ -4,6 +4,7 @@ import type { NodeProps } from 'reactflow'
 import { DiffEditor } from '@monaco-editor/react'
 import type { editor as MonacoEditor } from 'monaco-editor'
 import { nodeTitle } from '../state/workspace'
+import { LinkHandles } from './LinkHandles'
 import { detectLanguage } from '../monaco'
 import { useCanvas } from '../canvas/Canvas'
 import type { DiffNodeData } from '../state/workspace'
@@ -65,6 +66,7 @@ export function DiffNode({ id, data, selected }: NodeProps<DiffNodeData>): React
   return (
     <div className="diff-node">
       <NodeResizer isVisible={selected} minWidth={260} minHeight={180} />
+      <LinkHandles />
       <div className="diff-node-header">
         <span className="diff-node-title" title={data.path ?? undefined}>
           {nodeTitle(data)}

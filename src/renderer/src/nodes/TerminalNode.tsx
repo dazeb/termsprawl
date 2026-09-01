@@ -3,6 +3,7 @@ import { NodeResizer } from '@reactflow/node-resizer'
 import type { Node, NodeProps } from 'reactflow'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { LinkHandles } from './LinkHandles'
 import '@xterm/xterm/css/xterm.css'
 import type { TerminalNodeData } from '../state/workspace'
 import type { ProjectRemote } from '@shared/types'
@@ -207,6 +208,7 @@ export function TerminalNode({ id, data, selected }: NodeProps<TerminalNodeData>
   return (
     <div className="terminal-node">
       <NodeResizer isVisible={selected} minWidth={240} minHeight={140} />
+      <LinkHandles />
       <div className="terminal-node-header">
         <span className="terminal-node-dot" />
         {editingTitle ? (
