@@ -32,6 +32,8 @@ import { projectChatTools } from '../core/chat/project-tools'
 import { resolveFileScope } from '../core/project-scope'
 import { createRelayRuntime, type RelayRuntime } from './relay'
 import { WorkspaceStore } from '../core/workspace-store'
+import { LinkService } from './links/service'
+import type { NodeLink } from '../shared/types'
 import type { ProjectMeta } from '../core/workspace-files'
 import { loadProjectFile } from '../core/workspace-files'
 import { buildProjectPushPayload, snapshotCurrentProject, uniqueOnlineSnapshotName, type SnapshotWorkspace } from '../core/space-snapshots'
@@ -140,6 +142,12 @@ protocol.registerSchemesAsPrivileged([
 const platform: CorePlatform = {
   userDataPath: app.getPath('userData'),
   broadcast(channel: string, payload: unknown): void {
+    // Node links (Phase 18): every PTY byte flows through here — tap terminal
+    // activity so the link scheduler can debounce auto runs. linkService is
+    // constructed below; broadcast only fires once sessions exist.
+    if (channel.startsWith('pty:data:')) {
+      linkService.notePtyActivity(channel.slice('pty:data:'.length))
+    }
     for (const win of BrowserWindow.getAllWindows()) {
       win.webContents.send(channel, payload)
     }
@@ -148,6 +156,26 @@ const platform: CorePlatform = {
 
 const ptyManager = new PtyManager(platform)
 const workspaceStore = new WorkspaceStore(platform)
+
+// Node links (Phase 18): persisted typed edges + the auto-run scheduler.
+const linkService = new LinkService({
+  allLinks: () => workspaceStore.allLinks(),
+  findLink: (id) => workspaceStore.findLink(id),
+  projectOfNode: (nodeId) => {
+    for (const project of workspaceStore.snapshot().index.projects) {
+      const nodes = workspaceStore.snapshot().projects[project.id] ?? []
+      if (nodes.some((n) => n.id === nodeId)) return { id: project.id, cwd: project.cwd }
+    }
+    return null
+  },
+  capturePane: (id) => ptyManager.capturePane(id),
+  ptyWrite: (id, data) => ptyManager.write(id, data),
+  chatBroadcast: (nodeId, event) => platform.broadcast(`chat:event:${nodeId}`, event),
+  nodesOfProject: (projectId) => (workspaceStore.snapshot().projects[projectId] ?? []) as unknown as Array<Record<string, unknown>>,
+  recordLinkRun: (projectId, linkId, at, ok, summary) =>
+    workspaceStore.recordLinkRun(projectId, linkId, at, ok, summary),
+  userDataPath: platform.userDataPath
+})
 const updateBridge = createUpdateBridge({
   isPackaged: app.isPackaged,
   autoDownload: appSettings.current.autoDownloadUpdates,
@@ -417,6 +445,27 @@ function registerWorkspaceIpc(): void {
   ipcMain.handle(IPC.workspaceSaveNodes, (_event, id: string, nodes: SerializedNode[]) =>
     workspaceStore.saveNodes(id, nodes)
   )
+
+  // Node links (Phase 18)
+  ipcMain.handle(IPC.linksList, (_event, projectId: string): NodeLink[] => {
+    if (typeof projectId !== 'string') return []
+    const project = workspaceStore.snapshot().index.projects.find((p) => p.id === projectId)
+    if (!project) return []
+    return loadProjectFile(platform.userDataPath, project)?.links ?? []
+  })
+  ipcMain.handle(IPC.linksRun, (_event, linkId: string) => {
+    if (typeof linkId !== 'string') return { ok: false, summary: 'bad request' }
+    return linkService.runById(linkId)
+  })
+  ipcMain.handle(IPC.linksMarkDirty, (_event, sourceId: string) => {
+    if (typeof sourceId === 'string') linkService.markDirty(sourceId)
+  })
+  ipcMain.handle(IPC.linksUpdate, (_event, projectId: string, links: NodeLink[]): number => {
+    if (typeof projectId !== 'string' || !Array.isArray(links)) return 0
+    const rev = workspaceStore.saveLinks(projectId, links)
+    linkService.linksChanged()
+    return rev
+  })
   ipcMain.handle(IPC.projectAdd, (_event, name: string, cwd: string | null, remote?: ProjectRemote): ProjectMeta => {
     // Dedupe only local folder projects (a remote project has cwd null, so any
     // remote + any path is its own identity). Two remote projects differ by
@@ -1393,6 +1442,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   ptyManager.killAll()
+  linkService.dispose()
   telegramBot?.stop()
   void agentServer?.close()
   void cdpFacade?.close()

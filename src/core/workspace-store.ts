@@ -292,6 +292,38 @@ export class WorkspaceStore {
     return this.saveNodes(id, nodes, links)
   }
 
+  /** Every persisted link across all projects (scheduler mirror). */
+  allLinks(): NodeLink[] {
+    const out: NodeLink[] = []
+    for (const project of this.index.projects) {
+      out.push(...(loadProjectFile(this.platform.userDataPath, project)?.links ?? []))
+    }
+    return out
+  }
+
+  /** Locate a link by id across projects. */
+  findLink(linkId: string): { link: NodeLink; projectId: string } | null {
+    for (const project of this.index.projects) {
+      const link = loadProjectFile(this.platform.userDataPath, project)?.links?.find((l) => l.id === linkId)
+      if (link) return { link, projectId: project.id }
+    }
+    return null
+  }
+
+  /** Best-effort lastRun status write for one link. */
+  recordLinkRun(projectId: string, linkId: string, at: number, ok: boolean, summary: string): void {
+    const project = this.index.projects.find((p) => p.id === projectId)
+    if (!project) return
+    const links = loadProjectFile(this.platform.userDataPath, project)?.links ?? []
+    if (!links.some((l) => l.id === linkId)) return
+    const next = links.map((l) => (l.id === linkId ? { ...l, lastRun: { at, ok, summary } } : l))
+    try {
+      this.saveLinks(projectId, next)
+    } catch {
+      // status is cosmetic — never fail a run over it
+    }
+  }
+
   /** Whether a folder already has a project file (adoption path). */
   hasFolderProject(cwd: string): boolean {
     return folderHasProject(cwd)

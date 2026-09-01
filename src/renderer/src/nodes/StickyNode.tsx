@@ -14,6 +14,16 @@ export function StickyNode({ id, data, selected }: NodeProps<StickyNodeData>): R
   const { updateNodeData, commit, closeNode } = useCanvas()
   const blurTimer = useRef<number | null>(null)
 
+  // Node links (Phase 18): tell main this source's content changed so auto
+  // links re-run after the quiescence gap. Debounced here (typing fires fast).
+  const dirtyTimer = useRef<number | null>(null)
+  const markLinksDirty = (): void => {
+    if (dirtyTimer.current) window.clearTimeout(dirtyTimer.current)
+    dirtyTimer.current = window.setTimeout(() => {
+      void window.termsprawl.links.markDirty(id).catch(() => {})
+    }, 800)
+  }
+
   const cycleColor = (): void => {
     const next = STICKY_COLORS[(STICKY_COLORS.indexOf(data.color) + 1) % STICKY_COLORS.length]
     updateNodeData(id, { color: next }, true)
@@ -71,7 +81,10 @@ export function StickyNode({ id, data, selected }: NodeProps<StickyNodeData>): R
           className="nodrag nowheel"
           value={data.text}
           placeholder="Write a note…"
-          onChange={(e) => updateNodeData(id, { text: e.target.value }, false)}
+          onChange={(e) => {
+            updateNodeData(id, { text: e.target.value }, false)
+            markLinksDirty()
+          }}
           onBlur={commitOnBlur}
           spellCheck={false}
         />

@@ -78,7 +78,9 @@ export function EditorNode({ id, data, selected }: NodeProps<EditorNodeData>): R
     }
     setSaved(content)
     setStatus(null)
-  }, [content, data.path, data.remote, kind])
+    // Node links (Phase 18): a save is a content change — schedule auto links.
+    void window.termsprawl.links.markDirty(id).catch(() => {})
+  }, [content, data.path, data.remote, id, kind])
 
   saveRef.current = save
 

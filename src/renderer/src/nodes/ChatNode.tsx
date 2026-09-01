@@ -109,6 +109,15 @@ export function ChatNode({ id, data, selected }: NodeProps<ChatNodeData>): React
               )
             }
           })
+        } else if (ev.kind === 'context-added') {
+          // A node link (Phase 18) injected context. Commit it straight to node
+          // data (no streaming assistant involved) so it persists with history.
+          if (!next.some((m) => m.id === ev.messageId)) {
+            next = [...next, { id: ev.messageId, role: ev.role, content: ev.content, ts: Date.now() }]
+            commitMessages(next, false)
+            // The conversation changed — schedule auto links sourcing this node.
+            void window.termsprawl.links.markDirty(id).catch(() => {})
+          }
         } else if (ev.kind === 'done') {
           const stopped = ev.reason === 'stopped'
           const mid = streamingMsgId.current

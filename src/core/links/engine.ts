@@ -25,10 +25,13 @@ export interface LinkEngineDeps {
   mkdirp(path: string): Promise<void>
   /** Resolve + validate a link output path against the project root. Throws on escape. */
   resolveOutputPath(projectRoot: string, relPath: string): string
-  /** Context-inject → chat: append a message to the conversation. */
-  chatAppend(nodeId: string, message: { role: 'user'; content: string }): Promise<void>
-  /** Context-inject → chat: push a UI event so an open ChatNode re-renders. */
-  chatBroadcast(nodeId: string, event: { kind: 'context-added'; sourceTitle: string }): Promise<void>
+  /**
+   * Context-inject → chat: append the message to the node's live transcript
+   * and re-render. The conversation lives in renderer node data (React Flow is
+   * the single source of truth), so this rides the chat event push channel —
+   * one call, not a data write + a separate UI event.
+   */
+  chatInject(nodeId: string, message: { role: 'user'; content: string }, sourceTitle: string): Promise<void>
   /** Context-inject → agent terminal: write into the live PTY. */
   ptyWrite(nodeId: string, data: string): Promise<void>
   /**
@@ -112,8 +115,7 @@ export async function runLink(
         if (cfg.kind !== 'context-inject') return { ok: false, summary: 'unknown link kind' }
         if (input.targetKind === 'chat') {
           const content = cfg.wrapper ? `[context from ${input.source.title}]\n${input.source.text}` : input.source.text
-          await deps.chatAppend(link.target, { role: 'user', content })
-          await deps.chatBroadcast(link.target, { kind: 'context-added', sourceTitle: input.source.title })
+          await deps.chatInject(link.target, { role: 'user', content }, input.source.title)
           return { ok: true, summary: `injected into chat ${link.target}` }
         }
         if (input.targetKind === 'terminal') {

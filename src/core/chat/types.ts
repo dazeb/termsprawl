@@ -41,6 +41,9 @@ export type ChatEvent =
   /** Emitted when a tool call EXECUTES (approved + run), with its outcome —
    * the stream itself never carries results. */
   | { kind: 'toolResult'; call: ChatToolCall }
+  /** A node link (Phase 18) injected context into this conversation. The node
+   * commits the message through the canvas (React Flow owns live node data). */
+  | { kind: 'context-added'; messageId: string; role: 'user'; content: string; sourceTitle: string }
   | { kind: 'done'; reason: 'end_turn' | 'stopped' | 'error' | 'max_iterations' }
 
 export class ChatError extends Error {

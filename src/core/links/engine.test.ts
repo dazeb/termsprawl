@@ -23,21 +23,19 @@ interface DepCalls {
   writes: Array<{ path: string; content: string }>
   appends: Array<{ path: string; content: string }>
   mkdirs: string[]
-  chatAppends: Array<{ nodeId: string; message: { role: string; content: string } }>
-  broadcasts: Array<{ nodeId: string; event: { kind: string; sourceTitle: string } }>
+  chatInjects: Array<{ nodeId: string; message: { role: string; content: string }; sourceTitle: string }>
   ptyWrites: Array<{ nodeId: string; data: string }>
   a2aSends: Array<{ peerId: string; text: string; opts: { deliverReply: boolean } }>
 }
 
 function deps(overrides: Partial<LinkEngineDeps> = {}): { d: LinkEngineDeps; c: DepCalls } {
-  const c: DepCalls = { writes: [], appends: [], mkdirs: [], chatAppends: [], broadcasts: [], ptyWrites: [], a2aSends: [] }
+  const c: DepCalls = { writes: [], appends: [], mkdirs: [], chatInjects: [], ptyWrites: [], a2aSends: [] }
   const d: LinkEngineDeps = {
     writeFile: async (path, content) => void c.writes.push({ path, content }),
     appendFile: async (path, content) => void c.appends.push({ path, content }),
     mkdirp: async (path) => void c.mkdirs.push(path),
     resolveOutputPath: (_root, rel) => `/project/${rel}`,
-    chatAppend: async (nodeId, message) => void c.chatAppends.push({ nodeId, message }),
-    chatBroadcast: async (nodeId, event) => void c.broadcasts.push({ nodeId, event }),
+    chatInject: async (nodeId, message, sourceTitle) => void c.chatInjects.push({ nodeId, message, sourceTitle }),
     ptyWrite: async (nodeId, data) => void c.ptyWrites.push({ nodeId, data }),
     a2aSend: async (peerId, text, opts) => {
       c.a2aSends.push({ peerId, text, opts })
@@ -57,7 +55,7 @@ describe('runLink — empty source', () => {
     const out = await runLink(link(), { source: { kind: 'empty' }, targetKind: 'file', targetData: {}, projectRoot: '/project' }, d)
     expect(out).toEqual({ ok: false, summary: 'source is empty' })
     expect(c.writes).toHaveLength(0)
-    expect(c.chatAppends).toHaveLength(0)
+    expect(c.chatInjects).toHaveLength(0)
     expect(c.ptyWrites).toHaveLength(0)
     expect(c.a2aSends).toHaveLength(0)
   })
@@ -126,21 +124,20 @@ describe('runLink — context-inject → chat', () => {
     config: { kind: 'context-inject', wrapper: true, pastePointer: true }
   })
 
-  it('appends a wrapped user message and broadcasts context-added', async () => {
+  it('injects a wrapped user message with the source title', async () => {
     const { d, c } = deps()
     const out = await runLink(chatLink, { source: text, targetKind: 'chat', targetData: {}, projectRoot: '/project' }, d)
     expect(out).toEqual({ ok: true, summary: 'injected into chat chat-9' })
-    expect(c.chatAppends).toEqual([
-      { nodeId: 'chat-9', message: { role: 'user', content: '[context from build box]\nhello world' } }
+    expect(c.chatInjects).toEqual([
+      { nodeId: 'chat-9', message: { role: 'user', content: '[context from build box]\nhello world' }, sourceTitle: 'build box' }
     ])
-    expect(c.broadcasts).toEqual([{ nodeId: 'chat-9', event: { kind: 'context-added', sourceTitle: 'build box' } }])
   })
 
   it('skips the wrapper when disabled', async () => {
     const { d, c } = deps()
     const l = link({ kind: 'context-inject', target: 'chat-9', config: { kind: 'context-inject', wrapper: false, pastePointer: true } })
     await runLink(l, { source: text, targetKind: 'chat', targetData: {}, projectRoot: '/project' }, d)
-    expect(c.chatAppends[0].message.content).toBe('hello world')
+    expect(c.chatInjects[0].message.content).toBe('hello world')
   })
 })
 
@@ -216,7 +213,7 @@ describe('runLink — defensive', () => {
   })
 
   it('survives an unexpected injector crash', async () => {
-    const { d } = deps({ chatAppend: async () => { throw new Error('ipc gone') } })
+    const { d } = deps({ chatInject: async () => { throw new Error('ipc gone') } })
     const l = link({ kind: 'context-inject', target: 'c', config: { kind: 'context-inject', wrapper: true, pastePointer: true } })
     const out = await runLink(l, { source: text, targetKind: 'chat', targetData: {}, projectRoot: '/project' }, d)
     expect(out.ok).toBe(false)
