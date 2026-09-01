@@ -545,3 +545,38 @@ export type ContextLinkListResult =
 export type ContextLinkWriteResult =
   | { ok: true }
   | { ok: false; error: ContextLinkError }
+
+// Node links (Phase 18): typed, persisted edges. A link runs a data-flow
+// pipeline — extract content from the source node, then inject it into the
+// target (a file, a chat conversation, an agent terminal, or an A2A peer).
+// Links persist in the project file (ProjectFile.links) and render as
+// React Flow edges; the engine lives in src/core/links (Electron-free).
+
+/** The semantics of a node link — what happens when it runs. */
+export type LinkKind = 'file-output' | 'context-inject' | 'a2a-peer'
+
+/** Per-kind link options (discriminated on `kind`). */
+export type LinkConfig =
+  | { kind: 'file-output'; path: string; mode: 'overwrite' | 'append'; header: boolean }
+  | { kind: 'context-inject'; wrapper: boolean; pastePointer: boolean }
+  | { kind: 'a2a-peer'; message: 'last-output' | 'full-capture'; deliverReply: boolean }
+
+/** A persisted, typed edge between two nodes (or a node and an A2A peer). */
+export interface NodeLink {
+  id: string
+  source: string
+  target: string
+  kind: LinkKind
+  /** Re-run when the source content changes; false = manual run only. */
+  auto: boolean
+  config: LinkConfig
+  createdAt: number
+  /** Last run result (UI status only — the engine never reads this). */
+  lastRun?: { at: number; ok: boolean; summary: string }
+}
+
+/** Result of running one link through the engine. */
+export interface LinkRunResult {
+  ok: boolean
+  summary: string
+}
