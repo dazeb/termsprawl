@@ -88,7 +88,10 @@ export const AGENT_REGISTRY: Record<AgentId, AgentConfig> = {
     command: 'gemini',
     enabled: true,
     capabilities: {
-      hooks: true,
+      // Honesty flag: no hook normalizer exists for this CLI (hook-server
+      // NORMALIZERS maps claude only), so the UI must not offer status
+      // badges. Flip to true only together with a normalizer + installer.
+      hooks: false,
       resume: true,
       subagents: true,
       recurring: false,
@@ -106,7 +109,9 @@ export const AGENT_REGISTRY: Record<AgentId, AgentConfig> = {
     command: 'grok',
     enabled: true,
     capabilities: {
-      hooks: true,
+      // Honesty flag: no hook normalizer exists for this CLI (hook-server
+      // NORMALIZERS maps claude only) — see the gemini note above.
+      hooks: false,
       resume: true,
       subagents: true,
       recurring: true,

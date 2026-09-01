@@ -55,4 +55,22 @@ describe('agent registry', () => {
     expect(agentCommand('grok')).toBe('grok')
     expect(agentName('grok')).toBe('Grok')
   })
+
+  // Capability honesty: hooks:true may only be declared for CLIs the hook
+  // server can actually normalize (and the installer can actually install
+  // for). The registry once claimed hooks for codex/gemini/grok while
+  // NORMALIZERS mapped claude only — the UI offered status badges no CLI
+  // could deliver. This test is the tripwire: flipping a flag back to true
+  // REQUIRES landing its normalizer + hook installer in the same change.
+  it('claims hooks only for CLIs with a real normalizer in the hook server', () => {
+    // Keep in sync with hook-server.ts NORMALIZERS (claude only today). A
+    // literal, not an import: src/core is outside tsconfig.web's project, and
+    // the tripwire only needs to force a same-change update here.
+    const normalizers: Record<string, boolean> = { claude: true }
+    for (const id of agentIds()) {
+      const claims = AGENT_REGISTRY[id].capabilities.hooks
+      const supported = normalizers[id] === true
+      expect(claims, `${id} hooks:${claims} but normalizer:${supported}`).toBe(supported)
+    }
+  })
 })
