@@ -965,6 +965,27 @@ html[data-theme='light'] .settings-nav-item:hover {
   background-position: right 10px center;
 }
 
+/* The dropdown list itself is an OS popup — force it dark in both themes or
+   the GTK highlight color (purple on this host) paints it. Chromium honors
+   option/background/color when the select is themed; also color-scheme so
+   scrollbars/checkbox glyph rendering stay dark. */
+.settings-content,
+.settings-content select,
+.settings-content option {
+  color-scheme: dark;
+}
+
+html[data-theme='light'] .settings-content,
+html[data-theme='light'] .settings-content select,
+html[data-theme='light'] .settings-content option {
+  color-scheme: light;
+}
+
+.settings-content option {
+  background: var(--panel);
+  color: var(--fg);
+}
+
 /* Buttons: two roles, one size. .settings-btn = neutral action;
    .settings-btn.accent = primary (lime outline — the app's functional
    signal). 13px Geist, 32px tall, comfortable hit targets. */
