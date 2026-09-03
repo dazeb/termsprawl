@@ -97,11 +97,18 @@ export class WorkspaceStore {
     }
   }
 
-  /** Merge new per-project settings into the index and persist. */
+  /** Merge new per-project settings into the index and persist.
+   * Undefined-valued patch keys REMOVE their key (matching what
+   * JSON.stringify persists) and an emptied settings object collapses to
+   * undefined — so in-memory state always equals what a relaunch loads. */
   updateSettings(id: string, patch: ProjectSettings): void {
     const project = this.index.projects.find((p) => p.id === id)
     if (!project) return
-    project.settings = { ...(project.settings ?? {}), ...patch }
+    const merged: Record<string, unknown> = { ...(project.settings ?? {}), ...patch }
+    for (const key of Object.keys(merged)) {
+      if (merged[key] === undefined) delete merged[key]
+    }
+    project.settings = Object.keys(merged).length > 0 ? (merged as ProjectSettings) : undefined
     this.persistIndex()
   }
 

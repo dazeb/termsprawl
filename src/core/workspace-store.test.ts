@@ -356,6 +356,25 @@ describe('WorkspaceStore', () => {
     )
   })
 
+  it('updateSettings with accent:undefined removes the override (JSON undefined-key semantics)', () => {
+    const project = store.addProject('reset', null)
+    store.updateSettings(project.id, { accent: '#861dbf' })
+    expect(store.snapshot().index.projects.find((p) => p.id === project.id)?.settings?.accent).toBe(
+      '#861dbf'
+    )
+    // The renderer's reset-accent button sends { accent: undefined }.
+    store.updateSettings(project.id, { accent: undefined })
+    const meta = store.snapshot().index.projects.find((p) => p.id === project.id)
+    // The key must be GONE (not undefined-valued): the renderer treats a
+    // missing key as "no override" and repaints --accent with the default.
+    expect(meta?.settings?.accent).toBeUndefined()
+    expect('accent' in (meta?.settings ?? {})).toBe(false)
+    // And it stays gone across a relaunch.
+    const store2 = new WorkspaceStore(platform)
+    const reloaded = store2.snapshot().index.projects.find((p) => p.id === project.id)
+    expect('accent' in (reloaded?.settings ?? {})).toBe(false)
+  })
+
   it('rename persists the project name across relaunch', () => {
     const project = store.addProject('old-name', null)
     store.renameProject(project.id, 'new-name')

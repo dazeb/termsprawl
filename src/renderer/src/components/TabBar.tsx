@@ -337,6 +337,15 @@ export function TabBar(): React.JSX.Element {
               onChange={(e) => void updateSettings(settingsProject.id, { accent: e.target.value })}
             />
           </label>
+          {settingsProject.settings?.accent && (
+            <button
+              className="project-settings-reset-accent"
+              onClick={() => void updateSettings(settingsProject.id, { accent: undefined })}
+              title="Remove this project's accent override and return to the default lime"
+            >
+              reset accent to default
+            </button>
+          )}
           <div className="project-settings-cwd" title={settingsProject.cwd ?? 'no folder'}>
             {settingsProject.cwd ?? 'no folder'}
           </div>

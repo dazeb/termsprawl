@@ -199,9 +199,21 @@ export const useProjects = create<ProjectsState>((set, get) => ({
   async updateSettings(id: string, patch: ProjectSettings) {
     await window.termsprawl.workspace.updateSettings(id, patch)
     set((s) => ({
-      projects: s.projects.map((p) =>
-        p.id === id ? { ...p, settings: { ...(p.settings ?? {}), ...patch } } : p
-      )
+      projects: s.projects.map((p) => {
+        if (p.id !== id) return p
+        // Mirror the disk semantics: JSON.stringify drops undefined values, so
+        // a patch like { accent: undefined } REMOVES the key on disk. Drop it
+        // from the store copy too, and collapse an empty settings object back
+        // to undefined — otherwise the renderer cache keeps a stale override
+        // the file no longer has (this exact split-brain caused the purple
+        // accent that survived until relaunch).
+        const next: Record<string, unknown> = { ...(p.settings ?? {}), ...patch }
+        for (const k of Object.keys(next)) {
+          if (next[k] === undefined) delete next[k]
+        }
+        const settings = Object.keys(next).length > 0 ? (next as ProjectSettings) : undefined
+        return { ...p, settings }
+      })
     }))
   },
 
