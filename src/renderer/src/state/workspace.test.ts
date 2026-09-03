@@ -718,6 +718,34 @@ describe('organize layouts', () => {
     expect(positions[nodes[1].id].x).toBe(0)
   })
 
+  it('flat honors a custom origin and row width (organize inside the current view)', () => {
+    const nodes = [createTerminalNode(), createTerminalNode()]
+    // A viewport whose top-left sits at flow (3000, -1200) and spans 1600 flow
+    // px wide: windows anchor there and both fit on one row inside the view
+    // (720 + 32 + 720 = 1472 ≤ 1600).
+    const { positions } = layoutFlat(nodes, { x: 3000, y: -1200 }, 1600)
+    expect(positions[nodes[0].id]).toEqual({ x: 3000, y: -1200 })
+    expect(positions[nodes[1].id]).toEqual({ x: 3752, y: -1200 })
+  })
+
+  it('flat wraps inside a narrow custom view, anchored at its origin', () => {
+    const nodes = [createTerminalNode(), createTerminalNode()]
+    // Same view but 800 flow px wide → the second window wraps below, still
+    // left-aligned to the view origin.
+    const { positions } = layoutFlat(nodes, { x: 3000, y: -1200 }, 800)
+    expect(positions[nodes[0].id]).toEqual({ x: 3000, y: -1200 })
+    expect(positions[nodes[1].id].y).toBeGreaterThan(positions[nodes[0].id].y)
+    expect(positions[nodes[1].id].x).toBe(3000)
+  })
+
+  it('flat with an undefined row width falls back to the default budget', () => {
+    const nodes = [createTerminalNode(), createTerminalNode()]
+    const { positions } = layoutFlat(nodes, { x: 0, y: 0 }, undefined)
+    // Default max row width (5200) fits two 720-wide windows on one row.
+    expect(positions[nodes[1].id].y).toBe(positions[nodes[0].id].y)
+    expect(positions[nodes[1].id].x).toBe(720 + 32)
+  })
+
   it('restore replays the snapshot positions exactly and consumes it', () => {
     const nodes = mk()
     const original = nodes.map((n) => ({ ...n.position }))

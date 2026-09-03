@@ -676,25 +676,40 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
     setMenu(null)
   }, [menu, closeNode])
 
-  // Organize layouts (toolbar button → canvas request): cascade / flat /
-  // restore. Cascade and flat take a snapshot of the current positions first;
-  // restore replays it. The BASE snapshot (before the first layout of an
-  // organize session) is the one restore keeps — organize → flat → restore
-  // returns you to how the windows were before you started, not to the
-  // intermediate cascade. A new layout after a restore starts a fresh session.
+  // Organize layouts (toolbar button → canvas request): the button is a single
+  // click that CYCLES cascade → flat → restore. Cascade and flat take a
+  // snapshot of the current positions first; restore replays it. The BASE
+  // snapshot (before the first layout of an organize session) is the one
+  // restore keeps — organize → flat → restore returns you to how the windows
+  // were before you started, not to the intermediate cascade. A new layout
+  // after a restore starts a fresh session.
   // ONE undo entry per action — the layout is a single setNodes + push. The
   // origin anchors the layout near the top-left of the current content so it
   // lands in view, and the viewport refits so the result is visible.
   const organizeSnapshotRef = useRef<OrganizeSnapshot | null>(null)
+  const organizeCycleRef = useRef(0)
   const organize = useCallback(
     (mode: 'cascade' | 'flat' | 'restore') => {
       const current = latestNodesRef.current
       if (current.length === 0) return
-      // Origin: top-left of the union bounds — organized layouts appear where
-      // the content already is.
+      // Default origin: top-left of the union bounds — organized layouts
+      // appear where the content already is.
       const xs = current.map((n) => n.position.x)
       const ys = current.map((n) => n.position.y)
-      const origin = { x: Math.min(...xs), y: Math.min(...ys) }
+      let origin = { x: Math.min(...xs), y: Math.min(...ys) }
+      // Flat organizes INSIDE the current view: anchor at the viewport's
+      // top-left (flow coords) and wrap rows at the viewport's flow width, so
+      // every window lands in what the user is looking at right now.
+      let flatRowWidth: number | undefined
+      if (mode === 'flat' && wrapperRef.current) {
+        const topLeft = screenToFlowPosition({ x: 0, y: 0 })
+        const bottomRight = screenToFlowPosition({
+          x: wrapperRef.current.clientWidth,
+          y: wrapperRef.current.clientHeight
+        })
+        origin = topLeft
+        flatRowWidth = bottomRight.x - topLeft.x
+      }
 
       if (mode === 'restore') {
         const snap = organizeSnapshotRef.current
@@ -706,20 +721,31 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
         // Keep the FIRST snapshot of the session as the restore base.
         if (!organizeSnapshotRef.current) {
           organizeSnapshotRef.current =
-            mode === 'cascade' ? layoutCascade(current, origin).snapshot : layoutFlat(current, origin).snapshot
+            mode === 'cascade' ? layoutCascade(current, origin).snapshot : layoutFlat(current, origin, flatRowWidth).snapshot
         }
-        const layout = mode === 'cascade' ? layoutCascade(current, origin) : layoutFlat(current, origin)
+        const layout =
+          mode === 'cascade' ? layoutCascade(current, origin) : layoutFlat(current, origin, flatRowWidth)
         setNodes((nds) => applyLayoutPositions(nds, layout.positions))
       }
       push()
       // Frame the new layout: fitView a beat after React Flow applies the
-      // positions (same settle pattern as the project-load path).
+      // positions (same settle pattern as the project-load path). minZoom is
+      // lowered below the wheel-zoom floor so even a large multi-row flat
+      // layout always fits the viewport — the canvas itself is unbounded.
       setTimeout(() => {
-        void fitView({ padding: 0.15, duration: 200 })
+        void fitView({ padding: 0.15, duration: 200, minZoom: 0.1 })
       }, 50)
     },
-    [push, fitView]
+    [push, fitView, screenToFlowPosition]
   )
+
+  // One click on the toolbar button = advance to the next layout in the cycle.
+  const organizeNext = useCallback(() => {
+    const cycle: Array<'cascade' | 'flat' | 'restore'> = ['cascade', 'flat', 'restore']
+    const mode = cycle[organizeCycleRef.current % cycle.length]
+    organizeCycleRef.current += 1
+    organize(mode)
+  }, [organize])
 
   // Agent-node actions (Phase 7, Task 7.4). An agent node is a terminal whose
   // command launches a CLI (claude/codex/gemini/grok/druk). Branching pushes
@@ -763,10 +789,10 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
       // projects store — the activeProjectId effect above hydrates them.
       useProjects.getState().select(spawnRequest.projectId)
     } else if (spawnRequest.kind === 'organize') {
-      organize(spawnRequest.mode)
+      organizeNext()
     }
     useCanvasRequests.getState().consume()
-  }, [spawnRequest, cwd, appendOnTop, push, organize])
+  }, [spawnRequest, cwd, appendOnTop, push, organizeNext])
 
   // An external agent (via the loopback agent-control server) can ask the app to
   // open a browser node; route it through the same one-shot spawn store so the

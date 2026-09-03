@@ -593,7 +593,8 @@ export function deserializeNodes(serialized: SerializedNode[]): Node<SprawlNodeD
 /** How layouts are ordered: window nodes in selection order (or z-order when
  * nothing is selected), then stickies. Groups are never moved (their children
  * move with them via React Flow's parent extent); child nodes are skipped —
- * repositioning a parented child fights the group frame. */
+ * repositioning a parented child fights the group frame. The toolbar button
+ * is single-click and CYCLES through the modes (cascade → flat → restore). */
 export type OrganizeMode = 'cascade' | 'flat' | 'restore'
 
 const ORGANIZE_GAP = 32
