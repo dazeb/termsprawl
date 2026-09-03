@@ -7,10 +7,11 @@
 // web-dashboard "Back up now" request (backup_requested_at) by running
 // backupNow() — the honest end-to-end path, since the web never holds the
 // workspace content itself.
-import { shell } from 'electron'
+import { shell, app } from 'electron'
 import { CloudClient, CloudError, spaceOpenUrl } from '../core/cloud'
 import { cloneRepo } from '../core/github-clone'
 import { basename, join } from 'node:path'
+import { chmodSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import type { CloudBackup, CloudDevicePoll, CloudDeviceStart, CloudGithubRepo, CloudSpace, CloudUser, WorkspaceSnapshot } from '../shared/types'
 import type { SpaceSnapshotPayload } from '../core/space-sync'
@@ -64,12 +65,32 @@ const POLL_INTERVAL_MS = 30_000
 export function createCloudRuntime(opts: CloudRuntimeOptions): CloudRuntime {
   // The session cookie is held here, in the main process. The renderer sandbox
   // never reads it; every cloud request to /api/v1/* is credentialed with it.
-  let cookie: string | null = null
+  //
+  // Persistence: the cookie is mirrored to <userData>/cloud-session (0600) so
+  // sign-in survives an app restart. Without this, every relaunch forgot the
+  // GitHub-backed sign-in and forced the device flow again, even though the
+  // server session is valid for 7 days. Cleared on sign-out. Kept OUT of the
+  // renderer and out of project files — the file lives next to other app
+  // secrets (agent accounts, tmux sockets) under userData.
+  const sessionFile = join(app.getPath('userData'), 'cloud-session')
+  let cookie: string | null = existsSync(sessionFile)
+    ? (readFileSync(sessionFile, 'utf8').trim() || null)
+    : null
   const client = new CloudClient({
     apiBase: opts.apiBase,
     fetchFn: opts.fetchFn ?? globalThis.fetch,
     keepCookie: (c) => {
       cookie = c || null
+      try {
+        if (cookie) {
+          writeFileSync(sessionFile, cookie, { mode: 0o600 })
+          chmodSync(sessionFile, 0o600)
+        } else {
+          rmSync(sessionFile, { force: true })
+        }
+      } catch {
+        // settings dir not writable — in-memory session still works this run
+      }
     },
     getCookie: () => cookie,
   })
