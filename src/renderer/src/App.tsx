@@ -10,6 +10,7 @@ import { OrganizeButton } from './components/OrganizeButton'
 import { HelpBadge } from './components/HelpBadge'
 import { isResizeObserverNoise } from './ro-noise'
 import { useProjects } from './state/projects'
+import { resolveAccent } from './state/accent'
 import { applyTheme } from './state/theme'
 import { useBrowserHome } from './state/browser-home'
 import type { AppSettings } from '@shared/types'
@@ -69,7 +70,16 @@ export function App(): React.JSX.Element {
   }, [])
 
   return (
-    <div className="shell" style={activeAccent ? ({ ['--accent']: activeAccent } as React.CSSProperties) : undefined}>
+    <div
+      className="shell"
+      // resolveAccent is the never-purple guard: a legacy/imported purple (or
+      // any non-hex junk) resolves to undefined and the default lime applies.
+      style={
+        resolveAccent(activeAccent)
+          ? ({ ['--accent']: resolveAccent(activeAccent) } as React.CSSProperties)
+          : undefined
+      }
+    >
       <div className="toolbar">
         <span className="brand">
           termsprawl

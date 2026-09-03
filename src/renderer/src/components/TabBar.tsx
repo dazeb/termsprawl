@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useProjects } from '../state/projects'
 import { projectNameFromPath } from '../state/workspace'
+import { ACCENT_PRESETS, DEFAULT_ACCENT, resolveAccent } from '../state/accent'
 import { normalizeRemote, remoteLabel } from '@shared/remote-project'
 import type { CloudGithubFailure, CloudGithubRepo } from '@shared/types'
 import { HelpBadge } from './HelpBadge'
@@ -329,15 +330,41 @@ export function TabBar(): React.JSX.Element {
               }}
             />
           </label>
-          <label className="project-settings-field">
-            accent
-            <input
-              type="color"
-              value={settingsProject.settings?.accent ?? '#c6f135'}
-              onChange={(e) => void updateSettings(settingsProject.id, { accent: e.target.value })}
-            />
-          </label>
-          {settingsProject.settings?.accent && (
+          <div className="project-settings-field">
+            <span className="project-settings-label">accent</span>
+            <div className="accent-swatches" role="radiogroup" aria-label="accent color">
+              {ACCENT_PRESETS.map((preset, i) => {
+                const current = resolveAccent(settingsProject.settings?.accent)
+                const active = current ? current.toLowerCase() === preset.toLowerCase() : false
+                return (
+                  <button
+                    key={preset}
+                    type="button"
+                    className={`accent-swatch${active ? ' active' : ''}`}
+                    style={{ background: preset }}
+                    title={preset}
+                    aria-label={`accent ${preset}`}
+                    aria-checked={active}
+                    role="radio"
+                    onClick={() => {
+                      // The brand lime IS the default — picking it clears the
+                      // override instead of storing a redundant copy.
+                      void updateSettings(
+                        settingsProject.id,
+                        preset.toLowerCase() === DEFAULT_ACCENT ? { accent: undefined } : { accent: preset }
+                      )
+                    }}
+                  />
+                )
+              })}
+            </div>
+            {settingsProject.settings?.accent && !resolveAccent(settingsProject.settings?.accent) && (
+              <div className="project-settings-cwd" style={{ marginBottom: 4 }}>
+                stored accent is not allowed — pick a swatch or reset
+              </div>
+            )}
+          </div>
+          {settingsProject.settings?.accent && resolveAccent(settingsProject.settings?.accent) && (
             <button
               className="project-settings-reset-accent"
               onClick={() => void updateSettings(settingsProject.id, { accent: undefined })}

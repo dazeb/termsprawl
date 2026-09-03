@@ -486,6 +486,41 @@ body {
   border-color: var(--accent);
 }
 
+.project-settings-label {
+  font-size: 10px;
+  color: #9a9a94;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Curated accent swatches — the only way to set a project accent (no
+   free-color input; purple is unreachable by construction). */
+.accent-swatches {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 4px 0 8px;
+}
+
+.accent-swatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  cursor: pointer;
+  outline-offset: 2px;
+}
+
+.accent-swatch.active {
+  outline: 2px solid var(--fg);
+  outline-offset: 1px;
+}
+
+.accent-swatch:hover {
+  transform: scale(1.12);
+}
+
 .project-settings-done {
   background: none;
   border: 1px solid var(--border);
