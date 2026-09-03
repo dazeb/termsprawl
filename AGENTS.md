@@ -152,6 +152,49 @@ lime handles, thin lime lines, opacity-faded) plus a subtle selected outline on
 `.react-flow__node.selected > div` — both appear only when the node is
 selected. Keep the handles subtle; do not add per-node handle classes.
 
+## Project family — sibling repos (work on all of them together)
+
+termsprawl is not one repo. Three repos make up the product, all siblings under
+`/mnt/nvme1/workspace/projects/` (same layout under `/home/dazeb/workspace/`).
+When a task touches the product, check whether the siblings need matching
+changes IN THE SAME TASK — do not leave them for a later session.
+
+| Repo | Path | What it is | Remotes | Live at |
+|---|---|---|---|---|
+| **termsprawl** | `termsprawl/` | The app (Electron + React + tmux). This repo. | origin (hermes-box), github, gitea | downloads via GitHub Releases |
+| **termsprawl-web** | `termsprawl-web/` | Marketing site + download hub (Vite + React + Tailwind v4). Carries `APP_VERSION` in `src/lib/site.ts`. | origin (github), gitea | https://termsprawl.com |
+| **termsprawl-docs** | `termsprawl-docs/` | Documentation site (Fumadocs on React Router/Vite; MDX in `content/docs/`). Content reflects REAL, shipped behaviour only. | origin (github), gitea | https://docs.termsprawl.com |
+
+Each repo has its own AGENTS.md + PLAN.md — read them before working there.
+
+Cross-repo rules (mandatory, not suggestions):
+
+1. **Feature → docs in the same change.** Adding or changing a user-visible
+   feature in the app means updating `termsprawl-docs/content/docs/` in the
+   same task (how-to, reference page, or shortcut list — whichever it touches).
+   Docs document shipped behaviour; a shipped undocumented feature is an
+   incomplete feature.
+2. **Release → site + docs versions.** `scripts/release.sh X.Y.Z` (app) is
+   followed by `scripts/release-site.sh X.Y.Z` (bumps web `APP_VERSION`,
+   deploys, verifies). If the release changed user-facing behaviour, also
+   check the docs site needs a content update and deploy it
+   (`termsprawl-docs` has its own build/deploy flow — see its README/AGENTS.md).
+3. **Feature → web marketing when it's a headline.** A marquee feature (new
+   node kind, agent capability, big UX change) may warrant a feature blurb on
+   termsprawl.com. Decide at release time; don't let the site drift stale.
+4. **UI/brand consistency.** All three share the design language: monochrome
+   black surfaces, lime as functional signal only, Geist/Geist Mono stack,
+   dot-grid motif, sentence-case copy. Keep new UI in any repo consistent
+   (note: web uses lime `#02af3e` for the site; the app's accent is `#c6f135`).
+5. **Version strings live in each repo** — app `package.json`, web
+   `src/lib/site.ts` `APP_VERSION`, docs has no version. Never hardcode a
+   version elsewhere.
+6. **Checkouts:** work in the sibling folder for that repo; never edit web or
+   docs files from the app repo. The `/home/dazeb/workspace/projects/` copies
+   and `/mnt/nvme1/...` copies are the same repos at different mount points —
+   pick one path root per session and stay on it (paths differ per checkout;
+   see each repo's git status first).
+
 ## Remote & parallel-agent workflow (worktrees)
 
 The repo has a real remote so agents can work in parallel without clobbering
