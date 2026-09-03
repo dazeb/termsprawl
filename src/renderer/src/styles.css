@@ -965,23 +965,31 @@ html[data-theme='light'] .settings-nav-item:hover {
   background-position: right 10px center;
 }
 
-/* The dropdown list itself is an OS popup — force it dark in both themes or
-   the GTK highlight color (purple on this host) paints it. Chromium honors
-   option/background/color when the select is themed; also color-scheme so
-   scrollbars/checkbox glyph rendering stay dark. */
-.settings-content,
-.settings-content select,
-.settings-content option {
+/* Native widget theming — GLOBAL, not scoped to one panel. A `<select>`'s
+   dropdown list is an OS popup: unthemed, the GTK highlight color (purple on
+   this host) paints it. Chromium honors option background/color and
+   color-scheme when set, so force the app palette app-wide. History: 0.18.2
+   scoped this to .settings-content only and the same purple leaked back
+   through every other select (e.g. the canvas link inspector). color-scheme
+   also keeps scrollbars and checkbox glyphs on-theme. */
+:root,
+:root select,
+:root option {
   color-scheme: dark;
 }
 
-html[data-theme='light'] .settings-content,
-html[data-theme='light'] .settings-content select,
-html[data-theme='light'] .settings-content option {
+:root option {
+  background: var(--panel);
+  color: var(--fg);
+}
+
+html[data-theme='light'],
+html[data-theme='light'] select,
+html[data-theme='light'] option {
   color-scheme: light;
 }
 
-.settings-content option {
+html[data-theme='light'] option {
   background: var(--panel);
   color: var(--fg);
 }

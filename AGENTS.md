@@ -341,6 +341,18 @@ not shed its license. Therefore:
 ## Conventions
 
 - English everywhere: code comments, UI strings, identifiers.
+- **Never use purple — ever.** No purple/violet hues in any CSS, in any repo
+  of the project family: not as accent, selection, highlight, focus ring,
+  scrollbar, or chart color. The palette is monochrome black surfaces with
+  lime (`#c6f135` in-app, `#02af3e` on the sites) as the only functional
+  signal. Two ways purple sneaks in — both treated as bugs: (1) someone
+  writes a purple value; (2) NATIVE OS widgets (`<select>` popups,
+  scrollbars, checkboxes) leak the host GTK theme's accent, which is purple
+  on the dev box. Defense for (2): keep the GLOBAL `color-scheme` + `option`
+  theming rules in `src/renderer/src/styles.css` covering the whole app —
+  never scope them to one panel (a scoped rule caused the 0.18.2 → 0.19
+  purple regression). If purple shows up anywhere, re-theme it to the app
+  palette immediately.
 - Path aliases: `@shared/*` (both tsconfigs), `@renderer/*` (web tsconfig).
 - Dark UI: black surfaces, lime (`#c6f135`) only as functional signal,
   Geist/Geist Mono stack, dot-grid canvas.
