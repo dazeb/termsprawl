@@ -16,7 +16,6 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   a2aPeers: [],
   apiProviders: [],
   theme: 'system',
-  language: 'en',
   agentPreset: 'standard',
   defaultPermission: 'workspaceWrite',
   enterBehavior: 'queue',
@@ -181,7 +180,6 @@ export function normalizeAppSettings(raw: unknown): AppSettings {
     a2aPeers,
     apiProviders,
     theme: obj.theme === 'light' || obj.theme === 'dark' || obj.theme === 'system' ? obj.theme : 'system',
-    language: typeof obj.language === 'string' && obj.language.length > 0 ? obj.language : 'en',
     agentPreset:
       typeof obj.agentPreset === 'string' && obj.agentPreset.length > 0 ? obj.agentPreset : 'standard',
     defaultPermission:

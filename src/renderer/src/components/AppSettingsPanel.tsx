@@ -191,7 +191,6 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
     a2aPeers: [],
     apiProviders: [],
     theme: 'system',
-    language: 'en',
     agentPreset: 'standard',
     defaultPermission: 'workspaceWrite',
     enterBehavior: 'queue',

@@ -42,7 +42,6 @@ describe('app-settings', () => {
       a2aPeers: [],
       apiProviders: [],
       theme: 'system' as const,
-      language: 'en',
       agentPreset: 'standard',
       defaultPermission: 'workspaceWrite',
       enterBehavior: 'queue',
