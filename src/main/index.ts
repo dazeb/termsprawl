@@ -30,7 +30,7 @@ import { createTelegramBot, type TelegramBot } from './telegram/bot'
 import { createChatRuntime, type ChatRuntime } from '../core/chat/runtime'
 import { projectChatTools } from '../core/chat/project-tools'
 import { resolveFileScope } from '../core/project-scope'
-import { createRelayRuntime, type RelayRuntime } from './relay'
+import { createRelayRuntime, type PtyHost, type RelayRuntime } from './relay'
 import { WorkspaceStore } from '../core/workspace-store'
 import { LinkService } from '../core/links/service'
 import type { NodeLink } from '../shared/types'
@@ -141,6 +141,12 @@ protocol.registerSchemesAsPrivileged([
   }
 ])
 
+// Main-side subscriptions to live PTY output for the relay host bridge. Every
+// terminal byte reaches the renderer through platform.broadcast on a
+// `pty:data:<id>` channel; the relay runtime subscribes here so a paired peer
+// can be served the same stream without duplicating data paths.
+const ptyRelayTaps = new Map<string, Set<(data: string) => void>>()
+
 // The Electron implementation of the core's platform seam.
 const platform: CorePlatform = {
   userDataPath: app.getPath('userData'),
@@ -149,7 +155,13 @@ const platform: CorePlatform = {
     // activity so the link scheduler can debounce auto runs. linkService is
     // constructed below; broadcast only fires once sessions exist.
     if (channel.startsWith('pty:data:')) {
-      linkService.notePtyActivity(channel.slice('pty:data:'.length))
+      const id = channel.slice('pty:data:'.length)
+      linkService.notePtyActivity(id)
+      const taps = ptyRelayTaps.get(id)
+      if (taps && taps.size > 0) {
+        const data = String(payload)
+        for (const cb of taps) cb(data)
+      }
     }
     for (const win of BrowserWindow.getAllWindows()) {
       win.webContents.send(channel, payload)
@@ -464,6 +476,43 @@ function registerChatIpc(): void {
   })
 }
 
+// Live-terminal surface for the relay HOST bridge. list() reports the
+// terminals that are actually alive (present in the workspace store AND owned
+// by a live PTY session); titles come from the stored terminal node data and
+// fall back to the terminal id. onData taps the same platform.broadcast stream
+// every terminal byte already flows through, so the relay serves exactly what
+// the local renderer sees.
+const relayPtyHost: PtyHost = {
+  list: () => {
+    const snap = workspaceStore.snapshot()
+    const terms: Array<{ id: string; title: string }> = []
+    for (const project of snap.index.projects) {
+      const nodes = snap.projects[project.id] ?? []
+      for (const node of nodes) {
+        if (node.data?.kind !== 'terminal') continue
+        if (!ptyManager.has(node.id)) continue
+        const raw = node.data?.title
+        terms.push({ id: node.id, title: typeof raw === 'string' && raw.length > 0 ? raw : node.id })
+      }
+    }
+    return terms
+  },
+  onData: (id, cb) => {
+    let set = ptyRelayTaps.get(id)
+    if (!set) {
+      set = new Set()
+      ptyRelayTaps.set(id, set)
+    }
+    set.add(cb)
+    return () => {
+      set.delete(cb)
+      if (set.size === 0) ptyRelayTaps.delete(id)
+    }
+  },
+  write: (id, data) => ptyManager.write(id, data),
+  resize: (id, cols, rows) => ptyManager.resize(id, cols, rows)
+}
+
 // Relay seam (Phase 11 Task 11.2) — nothing dials the relay unless asked.
 const relayRuntime: RelayRuntime = createRelayRuntime({
   resolveTarget: () => {
@@ -477,6 +526,7 @@ const relayRuntime: RelayRuntime = createRelayRuntime({
     }
   },
   broadcast: (channel, payload) => platform.broadcast(channel, payload),
+  ptyHost: relayPtyHost,
   log: (msg) => console.log(`[relay] ${msg}`)
 })
 

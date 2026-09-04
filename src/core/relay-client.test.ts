@@ -74,7 +74,8 @@ function makeHubSocketFactory(): {
       send: (data) => wire(who, data),
       close: () => {},
       onMessage: (cb) => listeners[who].push(cb),
-      onError: () => {}
+      onError: () => {},
+      onClose: () => {}
     }
     sockets[who] = sock
     return sock
@@ -138,6 +139,50 @@ describe('relay fingerprint (peer identity for the pairing UI)', () => {
   })
 })
 
+describe('relay client close seam', () => {
+  it('fires onClose subscribers when the underlying socket closes', async () => {
+    const closeCbs: Array<() => void> = []
+    const factory: RelaySocketFactory = async () => {
+      const sock: RelaySocket = {
+        send: () => {},
+        close: () => {},
+        onMessage: () => {},
+        onError: () => {},
+        onClose: (cb) => {
+          closeCbs.push(cb)
+        }
+      }
+      return sock
+    }
+    const c = await createRelayClient({ relayUrl: 'ws://x', role: 'host', socketFactory: factory })
+    let fired = 0
+    c.onClose(() => fired++)
+    expect(fired).toBe(0)
+    closeCbs.forEach((cb) => cb())
+    expect(fired).toBe(1)
+  })
+
+  it('a socket close clears the subscriber list (fires each subscriber once)', async () => {
+    const closeCbs: Array<() => void> = []
+    const factory: RelaySocketFactory = async () => {
+      const sock: RelaySocket = {
+        send: () => {},
+        close: () => {},
+        onMessage: () => {},
+        onError: () => {},
+        onClose: (cb) => closeCbs.push(cb)
+      }
+      return sock
+    }
+    const c = await createRelayClient({ relayUrl: 'ws://x', role: 'host', socketFactory: factory })
+    let count = 0
+    c.onClose(() => count++)
+    c.onClose(() => count++)
+    closeCbs.forEach((cb) => cb())
+    expect(count).toBe(2)
+  })
+})
+
 describe('relay client protocol (in-memory hub)', () => {
   it('pairs host+client, exchanges pub keys, and round-trips a sealed frame', async () => {
     const { factory } = makeHubSocketFactory()
@@ -197,7 +242,8 @@ describe('relay client protocol (in-memory hub)', () => {
         onMessage: (cb) => {
           msgCb = cb
         },
-        onError: () => {}
+        onError: () => {},
+        onClose: () => {}
       }
       return sock
     }
@@ -219,7 +265,8 @@ describe('relay client protocol (in-memory hub)', () => {
         onMessage: (cb) => {
           msgCb = cb
         },
-        onError: () => {}
+        onError: () => {},
+        onClose: () => {}
       }
       return sock
     }
@@ -241,7 +288,8 @@ describe('relay client protocol (in-memory hub)', () => {
         onMessage: (cb) => {
           msgCb = cb
         },
-        onError: () => {}
+        onError: () => {},
+        onClose: () => {}
       }
       sockets.push(sock)
       return sock

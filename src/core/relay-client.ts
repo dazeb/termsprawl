@@ -103,6 +103,8 @@ export interface RelaySocket {
   close(): void
   onMessage(cb: (data: string) => void): void
   onError(cb: (err: Error) => void): void
+  /** Register a callback fired when the underlying socket closes. */
+  onClose(cb: () => void): void
 }
 
 export type RelaySocketFactory = (url: string) => Promise<RelaySocket>
@@ -135,6 +137,8 @@ export interface RelayClient {
   /** Seal + send an envelope to a peer id. senderId comes from the pairing. */
   sendFrame(pairing: RelayPairing, to: string, plaintext: string): void
   onFrame(cb: (pairing: RelayPairing, from: string, plaintext: string) => void): void
+  /** Fired when the underlying socket closes (peer gone / transport down). */
+  onClose(cb: () => void): void
   close(): void
 }
 
@@ -174,6 +178,10 @@ export async function createRelayClient(opts: RelayClientOptions): Promise<Relay
   const keypair = generateRelayKeypair()
   const ws = await opts.socketFactory(opts.relayUrl)
   let pairing: RelayPairing | null = null
+  const closeHandlers: Array<() => void> = []
+  ws.onClose(() => {
+    for (const cb of closeHandlers.splice(0)) cb()
+  })
 
   const client: RelayClient = {
     keypair,
@@ -244,6 +252,10 @@ export async function createRelayClient(opts: RelayClientOptions): Promise<Relay
           opts.log?.(`relay: dropped undecryptable frame from ${from}: ${(e as Error).message}`)
         }
       })
+    },
+
+    onClose(cb: () => void): void {
+      closeHandlers.push(cb)
     },
 
     close(): void {
