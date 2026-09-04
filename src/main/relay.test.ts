@@ -466,6 +466,30 @@ describe('relay runtime client role', () => {
     harness.fireClose()
   })
 
+  it('delivers a relay-term out frame >2000 chars intact (no truncation)', async () => {
+    const harness = makeHarness({ role: 'host', login: 'h-host' })
+    const rt = createRelayRuntime({
+      resolveTarget: () => ({ url: 'ws://relay.test', role: 'client' as const, invite: 'INV' }),
+      broadcast: () => {},
+      socketFactory: harness.factory,
+      log: vi.fn()
+    })
+    await rt.connect()
+    const seen: Array<{ from: string; text: string }> = []
+    rt.setFrameListener((f) => seen.push(f))
+    // Bursty terminal output (cat of a large file, a long build log) rides a
+    // relay-term 'out' frame whose serialized JSON routinely exceeds 2000
+    // chars (the coalescer allows up to 32 KiB per frame). Truncating the
+    // payload mid-JSON used to make the renderer drop the WHOLE frame. The
+    // listener must receive the frame's text exactly as it arrived.
+    const big = 'x'.repeat(4096)
+    harness.deliver({ v: 1, k: 'out', term: 'term1', data: big })
+    expect(seen).toEqual([
+      { from: 'host:h-host', text: JSON.stringify({ v: 1, k: 'out', term: 'term1', data: big }) }
+    ])
+    harness.fireClose()
+  })
+
   it('sendTermFrame (paired client) seals an E2E envelope to host:<peerLogin>', async () => {
     const harness = makeHarness({ role: 'host', login: 'h-host' })
     const rt = createRelayRuntime({

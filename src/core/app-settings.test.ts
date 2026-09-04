@@ -284,4 +284,69 @@ describe('app-settings', () => {
     const s3 = normalizeAppSettings({ chat: { keys: [{ providerId: 'ok', key: 'sk-live' }] } })
     expect(s3.chat).toEqual({ keys: [{ providerId: 'ok', key: 'sk-live' }] })
   })
+
+  it('relay is absent by default and when no url is configured', () => {
+    expect('relay' in DEFAULT_APP_SETTINGS).toBe(false)
+    expect('relay' in normalizeAppSettings({})).toBe(false)
+    expect('relay' in normalizeAppSettings({ relay: {} })).toBe(false)
+    expect('relay' in normalizeAppSettings({ relay: { role: 'client', invite: 'x' } })).toBe(false)
+    expect('relay' in normalizeAppSettings({ relay: { url: '   ' } })).toBe(false)
+    expect('relay' in normalizeAppSettings({ relay: { url: 42 } })).toBe(false)
+  })
+
+  it('normalizes a full relay config and drops empty/invalid fields', () => {
+    const s = normalizeAppSettings({
+      relay: {
+        url: '  wss://relay.example  ',
+        invite: 'INV123',
+        trustedFingerprint: 'abcd',
+        role: 'client',
+        junk: 'dropped'
+      }
+    })
+    expect(s.relay).toEqual({
+      url: 'wss://relay.example',
+      role: 'client',
+      invite: 'INV123',
+      trustedFingerprint: 'abcd'
+    })
+    expect(JSON.stringify(s.relay)).not.toContain('dropped')
+  })
+
+  it('relay role defaults to host when present but unspecified; empty strings dropped', () => {
+    const s = normalizeAppSettings({
+      relay: { url: 'wss://relay.example', invite: '', trustedFingerprint: '', role: 'wat' }
+    })
+    expect(s.relay).toEqual({ url: 'wss://relay.example', role: 'host' })
+  })
+
+  it('relay settings round-trip through disk (11.2)', () => {
+    const dir = scratch()
+    saveAppSettings(dir, {
+      relay: {
+        url: 'wss://relay.example',
+        role: 'client',
+        invite: 'INV',
+        trustedFingerprint: 'deadbeef'
+      }
+    })
+    const loaded = loadAppSettings(dir)
+    expect(loaded.relay).toEqual({
+      url: 'wss://relay.example',
+      role: 'client',
+      invite: 'INV',
+      trustedFingerprint: 'deadbeef'
+    })
+    // resolveTarget() reads appSettings.current.relay — this is the key the
+    // Settings->Relay UI's saveRelay() depends on surviving normalize on save.
+    const raw = JSON.parse(readFileSync(join(dir, 'settings.json'), 'utf8')) as {
+      relay?: { url?: string; role?: string; invite?: string; trustedFingerprint?: string }
+    }
+    expect(raw.relay).toEqual({
+      url: 'wss://relay.example',
+      role: 'client',
+      invite: 'INV',
+      trustedFingerprint: 'deadbeef'
+    })
+  })
 })

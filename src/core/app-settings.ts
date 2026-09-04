@@ -110,6 +110,26 @@ function normalizeChat(raw: unknown): ChatSettings | undefined {
   return Object.keys(out).length > 0 ? out : undefined
 }
 
+/** Relay service settings (11.2): the URL to dial + role + pairing invite and
+ * confirmed fingerprint. The Settings→Relay UI persists these via
+ * saveAppSettings, and resolveTarget() dials appSettings.current.relay, so
+ * normalize MUST carry the key through or every save/load silently drops it.
+ * Returns undefined when no relay is configured (url absent/invalid), keeping
+ * a settings.json without relay clean. */
+function normalizeRelay(raw: unknown): AppSettings['relay'] | undefined {
+  const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  const out: NonNullable<AppSettings['relay']> = {}
+  if (typeof obj.url === 'string' && obj.url.trim().length > 0) out.url = obj.url.trim()
+  // No valid url → nothing to dial; treat the relay as unconfigured.
+  if (!out.url) return undefined
+  out.role = obj.role === 'host' || obj.role === 'client' ? obj.role : 'host'
+  if (typeof obj.invite === 'string' && obj.invite.length > 0) out.invite = obj.invite
+  if (typeof obj.trustedFingerprint === 'string' && obj.trustedFingerprint.length > 0) {
+    out.trustedFingerprint = obj.trustedFingerprint
+  }
+  return out
+}
+
 export function normalizeAppSettings(raw: unknown): AppSettings {
   const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
   const accounts = Array.isArray(obj.accounts)
@@ -198,6 +218,7 @@ export function normalizeAppSettings(raw: unknown): AppSettings {
       : {}),
     telegram: normalizeTelegram(obj.telegram),
     ...(normalizeChat(obj.chat) ? { chat: normalizeChat(obj.chat) } : {}),
+    ...(normalizeRelay(obj.relay) ? { relay: normalizeRelay(obj.relay) } : {}),
     ...(typeof obj.browserHomeUrl === 'string' && obj.browserHomeUrl.trim().length > 0
       ? { browserHomeUrl: obj.browserHomeUrl.trim() }
       : {})

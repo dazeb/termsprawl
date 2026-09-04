@@ -230,8 +230,11 @@ export function createRelayRuntime(deps: RelayRuntimeDeps): RelayRuntime {
             // Terminal frames over the tunnel are surfaced on a channel ONLY
             // while someone is listening (audit B7 — a dead channel pushing
             // decrypted plaintext every frame is just waste). In host role we
-            // never forward; inbound frames are served locally.
-            frameListener?.({ from, text: text.slice(0, 2000) })
+            // never forward; inbound frames are served locally. The text is
+            // relay-term JSON and is delivered whole — a >2000-char payload
+            // (bursty output coalesced up to 32 KiB) must not be sliced, or
+            // truncation would drop the whole frame downstream.
+            frameListener?.({ from, text })
             return
           }
           handleHostInbound(p, text)
