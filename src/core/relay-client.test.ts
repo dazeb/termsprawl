@@ -6,6 +6,7 @@
 //    the real relay's message shapes (and a live cross-check against the REAL
 //    hub runs in scripts/verify — here we keep it dependency-free).
 import { describe, it, expect } from 'vitest'
+import { createHash } from 'node:crypto'
 import {
   generateRelayKeypair,
   deriveRelayKey,
@@ -13,9 +14,17 @@ import {
   openRelay,
   hashRelayToken,
   createRelayClient,
+  relayFingerprint,
   type RelaySocket,
   type RelaySocketFactory
 } from './relay-client'
+
+// A fingerprint for the same raw bytes, computed inline so the expectation is
+// self-consistent with the implementation rather than a hard-coded constant.
+function expectedFingerprint(raw: Buffer): string {
+  const digest = createHash('sha256').update(raw).digest().subarray(0, 16)
+  return digest.toString('hex').match(/.{1,4}/g)!.join(' ')
+}
 
 // --- in-memory hub mirroring the real relay protocol ---
 
@@ -101,6 +110,31 @@ describe('relay client crypto (interop with the relay service format)', () => {
 
   it('hashes tokens the way the relay stores them', () => {
     expect(hashRelayToken('gho_test')).toHaveLength(64)
+  })
+})
+
+describe('relay fingerprint (peer identity for the pairing UI)', () => {
+  it('is deterministic for a known input', () => {
+    const raw = Buffer.alloc(32, 7) // 32 bytes of 0x07 — a fixed 32-byte key
+    expect(relayFingerprint(raw.toString('base64'))).toBe(expectedFingerprint(raw))
+  })
+
+  it('renders as 8 space-separated lowercase hex pairs (2 bytes each)', () => {
+    const fp = relayFingerprint(generateRelayKeypair().publicKey)
+    expect(fp).toMatch(/^[0-9a-f]{4}( [0-9a-f]{4}){7}$/)
+  })
+
+  it('differs for two different 32-byte keys', () => {
+    const a = Buffer.alloc(32, 1)
+    const b = Buffer.alloc(32, 2)
+    expect(relayFingerprint(a.toString('base64'))).not.toBe(relayFingerprint(b.toString('base64')))
+  })
+
+  it('throws on invalid input', () => {
+    expect(() => relayFingerprint('')).toThrow('invalid relay public key')
+    expect(() => relayFingerprint('!!!')).toThrow('invalid relay public key')
+    // valid base64 but not a 32-byte key
+    expect(() => relayFingerprint('abc')).toThrow('invalid relay public key')
   })
 })
 

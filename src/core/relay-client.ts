@@ -80,6 +80,20 @@ export function hashRelayToken(raw: string): string {
   return createHash('sha256').update(raw, 'utf8').digest('hex')
 }
 
+// A short human-readable identity for a peer's X25519 public key: the first
+// 16 bytes of its SHA-256, rendered as 8 space-separated lowercase hex pairs.
+// Good enough to eyeball-match a pairing in the UI without exposing the key.
+export function relayFingerprint(peerPubB64: string): string {
+  const re = /^[A-Za-z0-9+/]+={0,2}$/
+  if (!peerPubB64 || !re.test(peerPubB64)) throw new Error('invalid relay public key')
+  const raw = Buffer.from(peerPubB64, 'base64')
+  if (raw.length !== 32) throw new Error('invalid relay public key')
+  const digest = createHash('sha256').update(raw).digest().subarray(0, 16)
+  const pairs: string[] = []
+  for (let i = 0; i < digest.length; i += 2) pairs.push(digest.subarray(i, i + 2).toString('hex'))
+  return pairs.join(' ')
+}
+
 // ---------------------------------------------------------------------------
 // WebSocket seam (injectable)
 // ---------------------------------------------------------------------------
