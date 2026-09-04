@@ -184,11 +184,11 @@
           title.textContent = 'New folder project'
           title.style.cssText = 'font-weight:600;margin-bottom:8px'
           var hint = document.createElement('div')
-          hint.textContent = 'Directory on the server host where this project\u2019s terminals will run.'
+          hint.textContent = 'Existing folder on this server where this project\u2019s terminals will run (hosted spaces: /data \u2014 your own machine is not reachable from here).'
           hint.style.cssText = 'color:#8a8a8a;margin-bottom:10px;font-size:12px'
           var input = document.createElement('input')
           input.type = 'text'
-          input.placeholder = '/home/user/project'
+          input.placeholder = '/data/my-project'
           input.style.cssText = 'width:100%;background:#161619;border:1px solid #333;border-radius:6px;color:#e6e6e6;padding:8px 10px;box-sizing:border-box'
           var row = document.createElement('div')
           row.style.cssText = 'margin-top:12px;display:flex;gap:8px;justify-content:flex-end'

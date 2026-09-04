@@ -15,6 +15,7 @@ import {
   readFileSync,
   renameSync,
   rmSync,
+  statSync,
   writeFileSync
 } from 'node:fs'
 import { dirname, join, basename } from 'node:path'
@@ -221,7 +222,13 @@ export function saveProjectFile(
   }
   const contents = JSON.stringify(file, null, 2)
   if (project.cwd) {
-    mkdirSync(join(project.cwd, PROJECT_FILE_DIR), { recursive: true })
+    try {
+      mkdirSync(join(project.cwd, PROJECT_FILE_DIR), { recursive: true })
+    } catch (e) {
+      // Raw errno errors (EACCES on a root-owned path, EROFS on a read-only
+      // mount) are meaningless in the UI — say WHERE the write failed.
+      throw new Error(`Cannot save the project into ${project.cwd}: ${(e as Error).message}`)
+    }
     atomicWriteFile(folderProjectPath(project.cwd), contents)
   } else {
     const path = inlineProjectPath(userDataPath, project.id)
@@ -234,6 +241,34 @@ export function saveProjectFile(
 /** True when a folder already carries a project file (adoption). */
 export function folderHasProject(cwd: string): boolean {
   return existsSync(folderProjectPath(cwd))
+}
+
+/** Validate a folder-project root BEFORE the project is added. Desktop picks
+ * folders with a native dialog (they always exist); the browser/server flow
+ * accepts a typed path, so a bogus or unwritable directory would otherwise
+ * only explode later with a raw EACCES on the first node save. Fail here with
+ * a message the user can act on instead. Idempotent: also creates the
+ * .termsprawl dir so the follow-up save cannot hit the same wall. */
+export function ensureFolderProjectRoot(cwd: string): void {
+  let st: ReturnType<typeof statSync>
+  try {
+    st = statSync(cwd)
+  } catch {
+    throw new Error(
+      `No such folder: ${cwd}. A folder project opens an EXISTING directory on this server — ` +
+        'create it first (in a hosted space, under the space\u2019s /data storage).'
+    )
+  }
+  if (!st.isDirectory()) throw new Error(`Not a folder: ${cwd}`)
+  try {
+    mkdirSync(join(cwd, PROJECT_FILE_DIR), { recursive: true })
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code
+    throw new Error(
+      `Cannot write into ${cwd} (${code === 'EROFS' ? 'read-only file system' : 'permission denied'}). ` +
+        'In a hosted space only /data is writable \u2014 your own machine\u2019s folders are not visible there.'
+    )
+  }
 }
 
 export interface StagedProjectFileRemoval {

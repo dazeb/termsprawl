@@ -36,7 +36,7 @@ import { WorkspaceStore } from '../core/workspace-store'
 import { LinkService } from '../core/links/service'
 import type { NodeLink } from '../shared/types'
 import type { ProjectMeta } from '../core/workspace-files'
-import { loadProjectFile } from '../core/workspace-files'
+import { ensureFolderProjectRoot, loadProjectFile } from '../core/workspace-files'
 import { buildProjectPushPayload, snapshotCurrentProject, uniqueOnlineSnapshotName, type SnapshotWorkspace } from '../core/space-snapshots'
 import { applyBundlePlan, buildBundle, isValidBundle, terminalIdsIn, type WorkspaceBundle } from '../core/workspace-bundle'
 import { deleteProjectAndDestroyTerminals } from '../core/project-deletion'
@@ -662,6 +662,9 @@ function registerWorkspaceIpc(): void {
     if (cwd) {
       const existing = workspaceStore.snapshot().index.projects.find((p) => p.cwd === cwd)
       if (existing) return existing // folder already has a project — dedupe
+      // The browser/server flow accepts a typed path; validate it exists and
+      // is writable NOW (a raw EACCES would otherwise surface on first save).
+      ensureFolderProjectRoot(cwd)
     }
     return workspaceStore.addProject(name, cwd, remote)
   })

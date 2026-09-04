@@ -29,7 +29,7 @@ import { resolveGitScope, resolveFileScope, resolvePtyScope } from '../core/proj
 import { importGitHubRepo } from '../core/github-import'
 import { LinkService } from '../core/links/service'
 import { sendText } from '../core/a2a/client'
-import { loadProjectFile } from '../core/workspace-files'
+import { loadProjectFile, ensureFolderProjectRoot } from '../core/workspace-files'
 import type { NodeLink } from '../shared/types'
 import type { RpcHandler } from './rpc'
 import type { CorePlatform } from '../core/platform'
@@ -211,6 +211,10 @@ export function buildHandlers(platform: CorePlatform): Record<string, RpcHandler
       if (cwd) {
         const existing = workspaceStore.snapshot().index.projects.find((p) => p.cwd === cwd)
         if (existing) return existing
+        // Browser flow accepts a typed path — validate it exists and is
+        // writable NOW so the user sees an actionable error instead of a raw
+        // EACCES from the first node save.
+        ensureFolderProjectRoot(String(cwd))
       }
       return workspaceStore.addProject(String(name), (cwd as string | null) ?? null, remote as ProjectRemote | undefined)
     },
