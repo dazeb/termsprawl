@@ -351,6 +351,10 @@ export interface AppSettings {
   /** Invert the mousewheel canvas zoom direction. Default (false): scroll up
    * zooms in. True: scroll up zooms out. */
   invertWheelZoom?: boolean
+  /** ISO timestamp when the first-run onboarding was dismissed. Absent =
+   * the guide has not been finished/shown yet (show it on next launch with
+   * no projects). */
+  onboardedAt?: string
   /** Browser home page for new browser nodes + new tabs (14.1). Unset =
    * the app default (DuckDuckGo). */
   browserHomeUrl?: string

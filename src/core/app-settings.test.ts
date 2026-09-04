@@ -65,6 +65,38 @@ describe('app-settings', () => {
     expect(normalizeAppSettings({}).agentBrowserControl).toBe(false)
   })
 
+  it('defaults onboardedAt to ABSENT (first run not yet finished)', () => {
+    expect('onboardedAt' in DEFAULT_APP_SETTINGS).toBe(false)
+    expect('onboardedAt' in normalizeAppSettings({})).toBe(false)
+    expect('onboardedAt' in loadAppSettings(scratch())).toBe(false)
+  })
+
+  it('round-trips onboardedAt through disk', () => {
+    const dir = scratch()
+    const at = '2026-09-04T07:00:00.000Z'
+    saveAppSettings(dir, { onboardedAt: at })
+    expect(loadAppSettings(dir).onboardedAt).toBe(at)
+    const raw = JSON.parse(readFileSync(join(dir, 'settings.json'), 'utf8')) as { onboardedAt?: string }
+    expect(raw.onboardedAt).toBe(at)
+  })
+
+  it('normalizes garbage onboardedAt to absent (number/object/empty string)', () => {
+    for (const junk of [42, {}, '', '   ', null, []]) {
+      const out = normalizeAppSettings({ onboardedAt: junk })
+      expect('onboardedAt' in out).toBe(false)
+    }
+  })
+
+  it('clearing onboardedAt removes the key from disk (re-run onboarding)', () => {
+    const dir = scratch()
+    saveAppSettings(dir, { onboardedAt: '2026-09-04T07:00:00.000Z' })
+    // saveAppSettings merges; an explicit undefined patch must drop the key.
+    const cleared = saveAppSettings(dir, { onboardedAt: undefined })
+    expect('onboardedAt' in cleared).toBe(false)
+    const raw = JSON.parse(readFileSync(join(dir, 'settings.json'), 'utf8')) as Record<string, unknown>
+    expect('onboardedAt' in raw).toBe(false)
+  })
+
   it('round-trips agent browser control through disk', () => {
     const dir = scratch()
     const saved = saveAppSettings(dir, { agentBrowserControl: true })

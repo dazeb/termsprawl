@@ -193,6 +193,11 @@ export function normalizeAppSettings(raw: unknown): AppSettings {
     agentBrowserControl: obj.agentBrowserControl === true,
     agentA2aServer: obj.agentA2aServer === true,
     invertWheelZoom: obj.invertWheelZoom === true,
+    // First-run marker: only a non-empty trimmed string counts; anything else
+    // (absent, junk, whitespace) keeps the key absent so onboarding can show.
+    ...(typeof obj.onboardedAt === 'string' && obj.onboardedAt.trim().length > 0
+      ? { onboardedAt: obj.onboardedAt.trim() }
+      : {}),
     telegram: normalizeTelegram(obj.telegram),
     ...(normalizeChat(obj.chat) ? { chat: normalizeChat(obj.chat) } : {}),
     ...(typeof obj.browserHomeUrl === 'string' && obj.browserHomeUrl.trim().length > 0
