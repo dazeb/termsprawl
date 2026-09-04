@@ -329,6 +329,7 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
       const source = latestNodesRef.current.find((n) => n.id === connection.source)
       const target = latestNodesRef.current.find((n) => n.id === connection.target)
       if (!source || !target || !connection.source || !connection.target) return
+      if (connection.source === connection.target) return // no self-links (vanish on reload)
       const kinds = connectableLinkKinds(source.data.kind, target.data.kind)
       if (kinds.length === 0) return
       // One link per ordered pair; re-connecting updates the existing link.
@@ -372,11 +373,15 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
     [createLinkFromConnection]
   )
 
-  /** Live connect guard: only linkable source→target pairs accept a drag. */
+  /** Live connect guard: only linkable source→target pairs accept a drag.
+   * Self-connections are refused — parseNodeLink drops them on load, so
+   * accepting them here would create a link that silently vanishes on
+   * restart. */
   const isValidConnection = useCallback((connection: Connection) => {
+    if (!connection.source || !connection.target || connection.source === connection.target) return false
     const source = latestNodesRef.current.find((n) => n.id === connection.source)
     const target = latestNodesRef.current.find((n) => n.id === connection.target)
-    if (!source || !target || !connection.source || !connection.target) return false
+    if (!source || !target) return false
     return connectableLinkKinds(source.data.kind, target.data.kind).length > 0
   }, [])
 
@@ -395,7 +400,11 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
   const commit = useCallback(() => push(), [push])
   const closeNode = useCallback(
     (id: string) => {
-      const target = nodes.find((node) => node.id === id)
+      // Read through latestNodesRef, NOT the `nodes` dep: closeNode lands in
+      // the canvas context consumed by every node component, and a `nodes`
+      // dependency would re-create it (and canvasApi) on every drag frame,
+      // re-rendering the whole canvas while nothing but position changed.
+      const target = latestNodesRef.current.find((node) => node.id === id)
       if (!target) return
       if (target.type !== 'terminal') {
         setNodes((current) => removeNode(current, id))
@@ -425,7 +434,7 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
           setCleanupError(`Could not close terminal: ${error instanceof Error ? error.message : String(error)}`)
         })
     },
-    [activeProjectId, dropCachedNode, invalidate, nodes, push, cascadeLinksForNodes]
+    [activeProjectId, dropCachedNode, invalidate, push, cascadeLinksForNodes]
   )
   const canvasApi = useMemo(
     () => ({ updateNodeData, commit, closeNode }),
@@ -926,14 +935,16 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
       if (loadingRef.current || !activeProjectIdRef.current) return
       void saveProjectNodes(activeProjectIdRef.current, serializeNodes(latestNodesRef.current))
     }
+    const onVisibility = (): void => {
+      if (document.visibilityState === 'hidden') flush()
+    }
     window.addEventListener('beforeunload', flush)
     window.addEventListener('pagehide', flush)
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') flush()
-    })
+    document.addEventListener('visibilitychange', onVisibility)
     return () => {
       window.removeEventListener('beforeunload', flush)
       window.removeEventListener('pagehide', flush)
+      document.removeEventListener('visibilitychange', onVisibility)
     }
   }, [saveProjectNodes])
 
