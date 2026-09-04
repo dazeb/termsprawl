@@ -368,7 +368,14 @@ export interface AppSettings {
   chat?: ChatSettings
   /** Relay service (11.2): the URL to dial + role. Nothing connects unless
    * the user asks (relay:connect IPC). */
-  relay?: { url?: string; role?: 'host' | 'client'; invite?: string }
+  relay?: {
+    url?: string
+    role?: 'host' | 'client'
+    invite?: string
+    /** A confirmed peer identity the user has trusted after eyeballing the
+     * fingerprint (the pairing UI persists it). Local machine only. */
+    trustedFingerprint?: string
+  }
 }
 
 /** Telegram bot settings (Phase 11 Task 11.3). */

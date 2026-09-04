@@ -130,6 +130,8 @@ export interface RelayPairing {
 export interface RelayClient {
   readonly keypair: RelayKeypair
   connect(): Promise<RelayPairing>
+  /** Ask the relay to mint a fresh single-use invite code (host role). */ 
+  mintInvite(): Promise<string>
   /** Seal + send an envelope to a peer id. senderId comes from the pairing. */
   sendFrame(pairing: RelayPairing, to: string, plaintext: string): void
   onFrame(cb: (pairing: RelayPairing, from: string, plaintext: string) => void): void
@@ -209,6 +211,14 @@ export async function createRelayClient(opts: RelayClientOptions): Promise<Relay
       }
       opts.log?.(`relay paired (role=${opts.role}, peer=${pairing.peerLogin ?? 'none'})`)
       return pairing
+    },
+
+    async mintInvite(): Promise<string> {
+      ws.send(JSON.stringify({ t: 'invite-create' }))
+      const res = await waitFor(ws, (m) => m.t === 'invite' || m.t === 'error')
+      if (res.t === 'error') throw new Error(`relay invite failed: ${res.code ?? 'unknown'}`)
+      if (!res.code) throw new Error('relay invite failed: missing code')
+      return res.code
     },
 
     sendFrame(p: RelayPairing, to: string, plaintext: string): void {

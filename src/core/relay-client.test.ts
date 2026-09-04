@@ -184,6 +184,50 @@ describe('relay client protocol (in-memory hub)', () => {
     expect(replies).toEqual(['ack'])
   })
 
+  it('mints an invite code after connecting (role client acks on empty peers)', async () => {
+    const factory: RelaySocketFactory = async () => {
+      let msgCb: ((d: string) => void) | null = null
+      const sock: RelaySocket = {
+        send: (data) => {
+          const msg = JSON.parse(data)
+          if (msg.t === 'hello') queueMicrotask(() => msgCb?.(JSON.stringify({ t: 'peers', peer: null })))
+          if (msg.t === 'invite-create') queueMicrotask(() => msgCb?.(JSON.stringify({ t: 'invite', code: 'ABCD1234' })))
+        },
+        close: () => {},
+        onMessage: (cb) => {
+          msgCb = cb
+        },
+        onError: () => {}
+      }
+      return sock
+    }
+    const c = await createRelayClient({ relayUrl: 'ws://x', role: 'client', invite: 'inv', socketFactory: factory })
+    await c.connect()
+    await expect(c.mintInvite()).resolves.toBe('ABCD1234')
+  })
+
+  it('rejects mint with the relay code when the hub answers an error frame', async () => {
+    const factory: RelaySocketFactory = async () => {
+      let msgCb: ((d: string) => void) | null = null
+      const sock: RelaySocket = {
+        send: (data) => {
+          const msg = JSON.parse(data)
+          if (msg.t === 'hello') queueMicrotask(() => msgCb?.(JSON.stringify({ t: 'peers', peer: null })))
+          if (msg.t === 'invite-create') queueMicrotask(() => msgCb?.(JSON.stringify({ t: 'error', code: 'QUOTA' })))
+        },
+        close: () => {},
+        onMessage: (cb) => {
+          msgCb = cb
+        },
+        onError: () => {}
+      }
+      return sock
+    }
+    const c = await createRelayClient({ relayUrl: 'ws://x', role: 'client', invite: 'inv', socketFactory: factory })
+    await c.connect()
+    await expect(c.mintInvite()).rejects.toThrow('relay invite failed: QUOTA')
+  })
+
   it('surfaces a typed error when pairing fails', async () => {
     const sockets: RelaySocket[] = []
     const factory: RelaySocketFactory = async () => {

@@ -145,6 +145,7 @@ export const IPC = {
   relayConnect: 'relay:connect',
   relayDisconnect: 'relay:disconnect',
   relayStatus: 'relay:status',
+  relayMint: 'relay:mint',
   // Frames flow only while the renderer holds an onFrame subscriber (audit B7).
   relayFrameSubscribe: 'relay:frame:subscribe',
   relayFrameUnsubscribe: 'relay:frame:unsubscribe'

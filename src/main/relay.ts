@@ -6,7 +6,7 @@
 // Clean-room: written fresh for termsprawl; nothing copied from the fork or
 // any other project.
 
-import { createRelayClient, type RelayClient, type RelayPairing } from '../core/relay-client'
+import { createRelayClient, relayFingerprint, type RelayClient, type RelayPairing } from '../core/relay-client'
 import type { RelaySocket, RelaySocketFactory } from '../core/relay-client'
 
 export interface RelayRuntimeDeps {
@@ -20,10 +20,20 @@ export interface RelayRuntimeDeps {
 
 export type RelayState = 'disconnected' | 'connecting' | 'paired' | 'error'
 
+export interface RelayPairingInfo {
+  peerLogin: string | null
+  peerPub: string | null
+  selfId: string
+  /** Human-readable 8-group fingerprint of peerPub, for eyeball confirmation. */
+  fingerprint: string | null
+}
+
 export interface RelayRuntime {
   state(): RelayState
   lastError(): string | null
-  connect(): Promise<{ ok: boolean; error?: string; pairing?: { peerLogin: string | null; selfId: string } }>
+  connect(): Promise<{ ok: boolean; error?: string; pairing?: RelayPairingInfo }>
+  /** Ask the live paired client to mint a fresh invite code (host role). */
+  mintInvite(): Promise<{ ok: boolean; code?: string; error?: string }>
   disconnect(): void
   /** Frame subscription (audit B7): relay:frame previously broadcast decrypted
    * plaintext on every frame with no listener — a dead channel still pushing
@@ -90,11 +100,27 @@ export function createRelayRuntime(deps: RelayRuntimeDeps): RelayRuntime {
         pairing = await client.connect()
         setState('paired')
         deps.log?.(`relay paired with ${pairing.peerLogin ?? 'unknown peer'}`)
-        return { ok: true, pairing: { peerLogin: pairing.peerLogin, selfId: pairing.selfId } }
+        const info: RelayPairingInfo = {
+          peerLogin: pairing.peerLogin,
+          peerPub: pairing.peerPub,
+          selfId: pairing.selfId,
+          fingerprint: pairing.peerPub ? relayFingerprint(pairing.peerPub) : null
+        }
+        return { ok: true, pairing: info }
       } catch (e) {
         error = (e as Error).message ?? String(e)
         setState('error')
         return { ok: false, error }
+      }
+    },
+
+    async mintInvite(): Promise<{ ok: boolean; code?: string; error?: string }> {
+      if (state !== 'paired' || !client) return { ok: false, error: 'not paired' }
+      try {
+        const code = await client.mintInvite()
+        return { ok: true, code }
+      } catch (e) {
+        return { ok: false, error: (e as Error).message ?? String(e) }
       }
     },
 

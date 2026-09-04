@@ -486,6 +486,7 @@ function registerRelayIpc(): void {
   ipcMain.handle(IPC.relayDisconnect, () => {
     relayRuntime.disconnect()
   })
+  ipcMain.handle(IPC.relayMint, () => relayRuntime.mintInvite())
   // Decrypted frames only leave the runtime while the renderer listens.
   ipcMain.on(IPC.relayFrameSubscribe, () => {
     relayRuntime.setFrameListener((frame) => platform.broadcast('relay:frame', frame))

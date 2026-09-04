@@ -327,8 +327,10 @@ const api = {
   relay: {
     status: (): Promise<{ state: string; error: string | null }> =>
       ipcRenderer.invoke(IPC.relayStatus),
-    connect: (): Promise<{ ok: boolean; error?: string; pairing?: { peerLogin: string | null; selfId: string } }> =>
+    connect: (): Promise<{ ok: boolean; error?: string; pairing?: { peerLogin: string | null; peerPub: string | null; selfId: string; fingerprint: string | null } }> =>
       ipcRenderer.invoke(IPC.relayConnect),
+    mintInvite: (): Promise<{ ok: boolean; code?: string; error?: string }> =>
+      ipcRenderer.invoke(IPC.relayMint),
     disconnect: (): Promise<void> => ipcRenderer.invoke(IPC.relayDisconnect),
     onStatus: (cb: (status: { state: string; error: string | null }) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, status: { state: string; error: string | null }): void => cb(status)

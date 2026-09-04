@@ -194,7 +194,12 @@ declare global {
       }
       relay: {
         status(): Promise<{ state: string; error: string | null }>
-        connect(): Promise<{ ok: boolean; error?: string; pairing?: { peerLogin: string | null; selfId: string } }>
+        connect(): Promise<{
+          ok: boolean
+          error?: string
+          pairing?: { peerLogin: string | null; peerPub: string | null; selfId: string; fingerprint: string | null }
+        }>
+        mintInvite(): Promise<{ ok: boolean; code?: string; error?: string }>
         disconnect(): Promise<void>
         onStatus(cb: (status: { state: string; error: string | null }) => void): () => void
         onFrame(cb: (frame: { from: string; text: string }) => void): () => void
