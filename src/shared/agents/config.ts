@@ -66,7 +66,7 @@ export const AGENT_REGISTRY: Record<AgentId, AgentConfig> = {
     command: 'codex',
     enabled: true,
     capabilities: {
-      hooks: false,
+      hooks: true,
       resume: true,
       subagents: true,
       recurring: false,

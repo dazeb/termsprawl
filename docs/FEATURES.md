@@ -54,8 +54,9 @@ macOS-specific features are in scope, ever.
   OpenRouter, LM Studio, llama.cpp, Ollama) + Anthropic, hand-rolled SSE,
   zero new deps. Cost table with per-model price overrides.
 - History persists in node data (byte-capped serialization keeps project
-  files git-shareable). Tool loop with an approval gate is wired in core;
-  permission-card UI + cost USD chip are follow-ups.
+  files git-shareable). Tool loop with an approval gate wired in core;
+  approve/deny permission cards render in ChatNode (deny feedback = the
+  tool result shows "denied by user"). Cost USD chip in the node footer.
 
 ## 6. Source control
 
