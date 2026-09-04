@@ -6,7 +6,9 @@ export type AgentSessionKind = 'session' | 'subagent' | 'recurring'
 
 export interface AgentStatusEvent {
   sessionId: string
-  status: AgentStatus
+  /** Absent on lifecycle-only events (codex SessionStart/End, SubagentStart,
+   * Pre/PostCompact): the session pinged but the badge should not churn. */
+  status?: AgentStatus
   kind: AgentSessionKind
   tool?: string
   /** Path to the agent's transcript file (Claude: *.jsonl). Lets main read

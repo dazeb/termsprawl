@@ -48,6 +48,7 @@ import { clampWindowBounds, desiredUiZoom, FALLBACK_WORK_AREA } from './window-m
 import type { CloudBackup, CloudDevicePoll, CloudDeviceStart, CloudGithubFailure, CloudGithubImportResult, CloudGithubReposResult, CloudSpace, CloudSpacePullEmpty, CloudSpacePullResult, CloudSpacePushResult, CloudUser, WorkspaceBundleExportResult, WorkspaceBundleImportResult } from '../shared/types'
 import { HookServer } from '../core/hook-server'
 import { claudeSettingsPath, installClaudeHooks } from './agents/hook-installer'
+import { codexConfigPath, installCodexHooks } from '../core/codex-hook-installer'
 import { SessionNameTracker } from '../core/session-name'
 import { agentSessionNameChannel } from '../shared/ipc'
 import { browserRuntime, ensureBrowserDebugPort } from './browser/runtime'
@@ -249,6 +250,9 @@ const hookServer = new HookServer((event) => {
   }
 
   const prev = prevStatus.get(event.sessionId)
+  // Lifecycle-only events (no status — codex session pings) still sync the
+  // session name but never touch the badge or notify.
+  if (event.status === undefined) return
   prevStatus.set(event.sessionId, event.status)
 
   const focused = BrowserWindow.getFocusedWindow()?.isFocused() ?? false
@@ -1533,6 +1537,13 @@ void app.whenReady().then(async () => {
   installClaudeHooks(claudeSettingsPath(homedir()), hookServer.url, hookServer.secret)
   } catch (err) {
     console.error('[hooks] install failed:', err)
+  }
+  // Codex (0.149+): command-type hooks in config.toml relay events to the
+  // same loopback server (/hook/codex). Same secret; merge-only installer.
+  try {
+    installCodexHooks(codexConfigPath(homedir()), hookServer.url, hookServer.secret)
+  } catch (err) {
+    console.error('[hooks] codex install failed:', err)
   }
 
   // 13.3/13.4 — the agent-control surface is OPT-IN (settings → General →

@@ -7,13 +7,14 @@
 import { createServer, type IncomingMessage, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { randomBytes } from 'node:crypto'
-import { normalizeClaudeHook, type AgentStatusEvent } from './agent-status'
+import { normalizeClaudeHook, normalizeCodexHook, type AgentStatusEvent } from './agent-status'
 
 export type HookListener = (event: AgentStatusEvent) => void
 
 /** Agent id → normalizer. Claude is supported today; add gemini/custom here. */
 const NORMALIZERS: Record<string, (body: unknown) => AgentStatusEvent | null> = {
-  claude: normalizeClaudeHook
+  claude: normalizeClaudeHook,
+  codex: normalizeCodexHook
 }
 
 export class HookServer {

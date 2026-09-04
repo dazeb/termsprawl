@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeClaudeHook } from './agent-status'
+import { normalizeClaudeHook, normalizeCodexHook } from './agent-status'
 import { shouldNotify } from '../shared/agent-status'
 
 // Claude Code posts URL-hook payloads containing hook_event_name + session_id.
@@ -97,6 +97,66 @@ describe('normalizeClaudeHook', () => {
     expect(normalizeClaudeHook({ hook_event_name: 'SomethingNew' })).toBeNull()
     expect(normalizeClaudeHook({})).toBeNull()
     expect(normalizeClaudeHook(null)).toBeNull()
+  })
+})
+
+describe('normalizeCodexHook', () => {
+  // Codex CLI (0.149+) fires command-type hooks with the SAME payload
+  // vocabulary as Claude (hook_event_name, session_id, transcript_path,
+  // tool_name) — verified against the codex 0.149.1 binary's hook engine.
+  // Event set differs slightly: SessionStart/SessionEnd/SubagentStart exist;
+  // Notification does not (codex has RequestUserInput/PermissionRequest).
+
+  it('maps PreToolUse to working with the tool name', () => {
+    const event = normalizeCodexHook({
+      hook_event_name: 'PreToolUse',
+      session_id: 'cx-1',
+      tool_name: 'shell',
+      cwd: '/repo',
+      transcript_path: '/tmp/cx.json'
+    })
+    expect(event).toEqual({
+      sessionId: 'cx-1',
+      status: 'working',
+      kind: 'session',
+      tool: 'shell',
+      transcriptPath: '/tmp/cx.json',
+      ts: expect.any(Number)
+    })
+  })
+
+  it('maps PostToolUse and UserPromptSubmit to working', () => {
+    expect(normalizeCodexHook({ hook_event_name: 'PostToolUse', session_id: 'cx-1' })?.status).toBe('working')
+    expect(normalizeCodexHook({ hook_event_name: 'UserPromptSubmit', session_id: 'cx-1' })?.status).toBe('working')
+  })
+
+  it('maps PermissionRequest to blocked', () => {
+    const event = normalizeCodexHook({ hook_event_name: 'PermissionRequest', session_id: 'cx-1' })
+    expect(event?.status).toBe('blocked')
+  })
+
+  it('maps Stop to done', () => {
+    expect(normalizeCodexHook({ hook_event_name: 'Stop', session_id: 'cx-1' })?.status).toBe('done')
+  })
+
+  it('maps SubagentStop to done with kind subagent', () => {
+    const event = normalizeCodexHook({ hook_event_name: 'SubagentStop', session_id: 'cx-1', subagent_id: 'sub-1' })
+    expect(event?.status).toBe('done')
+    expect(event?.kind).toBe('subagent')
+  })
+
+  it('session lifecycle events are recognized but carry no status (no badge churn)', () => {
+    for (const name of ['SessionStart', 'SessionEnd', 'SubagentStart', 'PreCompact', 'PostCompact']) {
+      const event = normalizeCodexHook({ hook_event_name: name, session_id: 'cx-1' })
+      expect(event, name).not.toBeNull()
+      expect(event?.status, name).toBeUndefined()
+    }
+  })
+
+  it('returns null for unknown payloads and missing session ids', () => {
+    expect(normalizeCodexHook({ hook_event_name: 'SomethingNew', session_id: 'cx' })).toBeNull()
+    expect(normalizeCodexHook({ hook_event_name: 'Stop' })).toBeNull()
+    expect(normalizeCodexHook(null)).toBeNull()
   })
 })
 

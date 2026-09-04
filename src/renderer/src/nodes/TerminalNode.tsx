@@ -68,6 +68,9 @@ export function TerminalNode({ id, data, selected }: NodeProps<TerminalNodeData>
     const ids = resumed ? [id, resumed] : [id]
     const offs = ids.map((sid) =>
       window.termsprawl.agent.onStatus(sid, (event) => {
+        // Lifecycle-only events (status absent — codex session pings) do not
+        // touch the badge; the session is alive but nothing changed.
+        if (event.status === undefined) return
         setAgentStatus(sid, event.status)
       })
     )
