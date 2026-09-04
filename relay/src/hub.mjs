@@ -6,7 +6,7 @@
 // never sees plaintext.
 import { WebSocketServer } from 'ws'
 
-import { StoreError, redeemInvite, isInviteActive } from './store.mjs'
+import { StoreError, createInvite, redeemInvite, isInviteActive } from './store.mjs'
 import { hashToken } from './github-auth.mjs'
 
 const OFFLINE_QUEUE_CAP = 100
@@ -84,7 +84,7 @@ export function createHub({ store, requireAuth = true, devAuth = false } = {}) {
         if (!session) return // hello failed; error already sent + socket closed
         return
       }
-      try { routeFrame(session, msg) } catch (err) {
+      try { routeFrame(session, ws, msg) } catch (err) {
         if (err instanceof HubError) send(ws, { t: 'error', code: err.code })
       }
     })
@@ -201,9 +201,21 @@ export function createHub({ store, requireAuth = true, devAuth = false } = {}) {
 
   // ----------------------------------------------------------------- routing
 
-  function routeFrame(session, msg) {
+  function routeFrame(session, ws, msg) {
     if (msg.t === 'frame' || msg.t === 'direct-offer') {
       deliver(session, msg)
+      return
+    }
+    if (msg.t === 'invite-create') {
+      // hosts only: mint an invite for their own account.
+      if (session.kind !== 'host') return sendErrorAndClose(ws, 'AUTH')
+      try {
+        const invite = createInvite(store, session.login)
+        send(ws, { t: 'invite', code: invite.code })
+      } catch (err) {
+        if (err instanceof StoreError) return send(ws, { t: 'error', code: err.code })
+        throw err
+      }
       return
     }
     throw new HubError('BADFRAME')

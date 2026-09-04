@@ -395,6 +395,90 @@ describe('metrics', () => {
   })
 })
 
+describe('invite minting over the hub socket', () => {
+  it('host mint: hello → invite-create → { t: invite, code }, stored for the host login', async () => {
+    const ctx = await startHub()
+    try {
+      const host = await dial(ctx.url)
+      host.send(JSON.stringify({ t: 'hello', role: 'host', login: 'octo', token: '', pub: generateKeyPair().publicKey }))
+      expect((await recv(host)).t).toBe('peers')
+
+      host.send(JSON.stringify({ t: 'invite-create' }))
+      const reply = await recv(host)
+      expect(reply.t).toBe('invite')
+      expect(typeof reply.code).toBe('string')
+      expect(reply.code).toHaveLength(8)
+
+      // the minted invite is persisted for this host's session login
+      const stored = store.invites.find((inv) => inv.code === reply.code)
+      expect(stored).toBeTruthy()
+      expect(stored.hostLogin).toBe('dev-octo') // devAuth prefixes the session login
+      host.close()
+    } finally { await ctx.close() }
+  })
+
+  it('a client-role socket minting invites gets AUTH and no new invite', async () => {
+    const ctx = await startHub()
+    try {
+      const { client } = await pairHostAndClient(ctx) // mints + redeems one invite
+      const before = store.invites.length
+      client.send(JSON.stringify({ t: 'invite-create' }))
+      const reply = await recv(client)
+      expect(reply.t).toBe('error')
+      expect(reply.code).toBe('AUTH')
+      expect(reply).not.toHaveProperty('invite')
+      expect(store.invites.length).toBe(before) // nothing minted
+      client.close()
+    } finally { await ctx.close() }
+  })
+
+  it('enforces the active-invite quota: QUOTA error frame on the next mint', async () => {
+    const ctx = await startHub()
+    try {
+      const host = await dial(ctx.url)
+      host.send(JSON.stringify({ t: 'hello', role: 'host', login: 'octo', token: '', pub: generateKeyPair().publicKey }))
+      expect((await recv(host)).t).toBe('peers')
+
+      for (let i = 0; i < 5; i++) { // DEFAULT_ACTIVE_INVITE_QUOTA
+        host.send(JSON.stringify({ t: 'invite-create' }))
+        expect((await recv(host)).t).toBe('invite')
+      }
+
+      host.send(JSON.stringify({ t: 'invite-create' }))
+      const err = await recv(host)
+      expect(err.t).toBe('error')
+      expect(err.code).toBe('QUOTA')
+      host.close()
+    } finally { await ctx.close() }
+  })
+
+  it('a socket-minted code redeems end-to-end (client hello pairs)', async () => {
+    const ctx = await startHub()
+    try {
+      const host = await dial(ctx.url)
+      const hostKeys = generateKeyPair()
+      host.send(JSON.stringify({ t: 'hello', role: 'host', login: 'octo', token: '', pub: hostKeys.publicKey }))
+      expect((await recv(host)).t).toBe('peers')
+
+      host.send(JSON.stringify({ t: 'invite-create' }))
+      const minted = await recv(host)
+      expect(minted.t).toBe('invite')
+
+      const client = await dial(ctx.url)
+      const clientKeys = generateKeyPair()
+      client.send(JSON.stringify({ t: 'hello', role: 'client', invite: minted.code, login: 'phone', pub: clientKeys.publicKey }))
+
+      const toHost = await recv(host)
+      const toClient = await recv(client)
+      expect(toHost.t).toBe('peers')
+      expect(toHost.peer).toEqual({ login: 'phone', pub: clientKeys.publicKey })
+      expect(toClient.t).toBe('peers')
+      expect(toClient.peer.login).toBe('dev-octo')
+      host.close(); client.close()
+    } finally { await ctx.close() }
+  })
+})
+
 // tiny helper so the metrics test can seal without threading keys through
 import { deriveSharedKey as _dsk } from './crypto.mjs'
 function clientKeyOf() {
