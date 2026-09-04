@@ -1143,6 +1143,77 @@ html[data-theme='light'] .settings-content .settings-btn.accent:hover {
   color: var(--muted);
 }
 
+/* Right-side action group for a pref row that needs more than one control
+   (Relay connection + invite rows). */
+.settings-pref-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Relay pairing confirm / invite code surfaces (A4). Lime (--accent) is the
+   ONLY highlight; red (#e06c75) is reserved for the key-mismatch hard
+   warning, where the peer must re-trust explicitly. */
+.relay-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.relay-card-title {
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--fg);
+}
+.relay-card-sub {
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.relay-card .relay-fp {
+  font-family: 'Geist Mono', 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--fg);
+  word-break: break-all;
+}
+.relay-card .relay-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.relay-card.danger {
+  background: rgba(224, 108, 117, 0.06);
+  border-color: #e06c75;
+}
+.relay-card.danger .relay-card-title {
+  color: #e06c75;
+}
+.relay-error {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #e06c75;
+}
+.relay-invite-code {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-family: 'Geist Mono', 'JetBrains Mono', monospace;
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  color: var(--fg);
+}
+
+
 /* Grouped section (e.g. Appearance) — a titled block, not a divider row. */
 .settings-group {
   padding: 12px 0;

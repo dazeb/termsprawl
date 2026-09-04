@@ -6,6 +6,7 @@ import { discoverAgentCard } from '../../../core/a2a/client'
 import { useCanvasRequests } from '../state/canvas-requests'
 import { useProjects } from '../state/projects'
 import { applyTheme } from '../state/theme'
+import { trustState, type TrustState } from './relay-trust'
 
 interface AppSettingsPanelProps {
   onClose: () => void
@@ -1365,6 +1366,7 @@ function TelegramSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
 function RelaySection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
   const { settings, update } = ctx
   const relay = settings.relay ?? { role: 'host' as const }
+  const isHost = relay.role !== 'client'
   const [draft, setDraft] = useState<{ url: string; invite: string }>({
     url: relay.url ?? '',
     invite: relay.invite ?? ''
@@ -1374,6 +1376,17 @@ function RelaySection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
     error: null
   })
   const [busy, setBusy] = useState(false)
+  const [pairing, setPairing] = useState<{
+    peerLogin: string | null
+    fingerprint: string
+    decision: TrustState
+  } | null>(null)
+  const [mint, setMint] = useState<{ busy: boolean; code: string | null; error: string | null }>({
+    busy: false,
+    code: null,
+    error: null
+  })
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -1389,33 +1402,112 @@ function RelaySection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
     }
   }, [])
 
-  const saveRelay = (patch: { url?: string; role?: 'host' | 'client'; invite?: string }): void => {
+  const trusted = relay.trustedFingerprint
+  const paired = conn.state === 'paired'
+  const deciding = pairing !== null
+
+  const saveRelay = (patch: {
+    url?: string
+    role?: 'host' | 'client'
+    invite?: string
+    /** string = set, null = clear, undefined = leave as-is. */
+    trusted?: string | null
+  }): void => {
     void update({
       relay: {
         url: patch.url !== undefined ? patch.url : (relay.url ?? ''),
         role: patch.role ?? (relay.role === 'client' ? 'client' : 'host'),
-        invite: patch.invite !== undefined ? patch.invite : relay.invite
+        invite: patch.invite !== undefined ? patch.invite : relay.invite,
+        trustedFingerprint:
+          patch.trusted !== undefined ? patch.trusted ?? undefined : relay.trustedFingerprint
       }
     })
   }
 
+  /** Tear down any session and clear the ephemeral surfaces (invite code,
+   * confirm card, copy flag) that only make sense while connected. */
+  const teardown = (): void => {
+    void window.termsprawl.relay.disconnect()
+    setConn({ state: 'disconnected', error: null })
+    setPairing(null)
+    setCopied(false)
+    setMint({ busy: false, code: null, error: null })
+  }
+
   const connect = async (): Promise<void> => {
     setBusy(true)
+    setCopied(false)
+    setMint({ busy: false, code: null, error: null })
     try {
       const res = await window.termsprawl.relay.connect()
-      if (!res.ok) setConn({ state: 'error', error: res.error ?? 'connect failed' })
+      if (!res.ok) {
+        setConn({ state: 'error', error: res.error ?? 'connect failed' })
+        return
+      }
+      // The runtime pairs automatically; a peer key is only surfaced once a
+      // peer is actually present. Gate trust on the user's explicit confirm.
+      const p = res.pairing
+      if (p?.fingerprint) {
+        const decision = trustState(relay.trustedFingerprint, p.fingerprint)
+        if (decision === 'confirm' || decision === 'mismatch') {
+          setPairing({ peerLogin: p.peerLogin, fingerprint: p.fingerprint, decision })
+        }
+      }
     } finally {
       setBusy(false)
     }
   }
 
+  const trustPeer = (): void => {
+    if (!pairing) return
+    // Persist the freshly eyeballed fingerprint — trust survives restarts.
+    void saveRelay({ trusted: pairing.fingerprint })
+    setPairing(null)
+  }
+
+  const forget = (): void => {
+    teardown()
+    void saveRelay({ trusted: null })
+  }
+
+  const mintInvite = async (): Promise<void> => {
+    if (mint.busy) return
+    setMint({ busy: true, code: null, error: null })
+    setCopied(false)
+    try {
+      const res = await window.termsprawl.relay.mintInvite()
+      if (res.ok && res.code) setMint({ busy: false, code: res.code, error: null })
+      else setMint({ busy: false, code: null, error: res.error ?? 'could not mint an invite' })
+    } catch (e) {
+      setMint({ busy: false, code: null, error: e instanceof Error ? e.message : 'could not mint an invite' })
+    }
+  }
+
+  const copyInvite = async (code: string): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(code)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1600)
+    } catch {
+      setMint((m) => ({ ...m, error: 'could not copy the invite code' }))
+    }
+  }
+
+  /** A short preview of a stored fingerprint for labels ("…last groups"). */
+  const shortFp = (fp: string): string => {
+    const groups = fp.trim().split(/\s+/).filter(Boolean)
+    return groups.length > 2 ? `…${groups.slice(-2).join(' ')}` : fp
+  }
+
+  const peerName = pairing?.peerLogin ?? 'peer'
+
   return (
     <div className="settings-section">
       <p className="app-settings-hint">
-        Pair two termsprawl instances through the E2E-encrypted relay: the host dials in
-        with role host, the peer joins with an invite code (role client). Traffic is
-        end-to-end encrypted — the relay only routes ciphertext. Nothing dials until you
-        press connect.
+        Pair two termsprawl instances through the E2E-encrypted relay. A host mints a
+        single-use invite once the peers are paired; the other instance joins with that
+        code as a client. Traffic is end-to-end encrypted — the relay only routes
+        ciphertext. Both sides confirm the peer&apos;s key fingerprint before trusting it.
       </p>
 
       <div className="settings-pref-row">
@@ -1451,50 +1543,127 @@ function RelaySection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
         </select>
       </div>
 
-      <div className="settings-pref-row">
-        <div className="settings-pref-copy">
-          <span className="settings-pref-label">Invite code</span>
-          <span className="settings-pref-sub">
-            {relay.invite ? `an invite is set (${relay.invite.slice(-4)})` : 'client role: paste the invite from the host'}
-          </span>
+      {isHost ? (
+        <>
+          <div className="settings-pref-row">
+            <div className="settings-pref-copy">
+              <span className="settings-pref-label">Invite a peer</span>
+              <span className="settings-pref-sub">
+                {paired && !deciding
+                  ? 'pairing ready — generate a single-use invite to share'
+                  : paired && deciding
+                    ? 'confirm the peer’s fingerprint above before inviting'
+                    : 'a peer must pair with this host before an invite can be minted'}
+              </span>
+            </div>
+            <div className="settings-pref-actions">
+              <button
+                className="settings-btn accent"
+                disabled={!paired || deciding || mint.busy || busy}
+                onClick={() => void mintInvite()}
+              >
+                {mint.busy ? 'Generating…' : 'Generate invite'}
+              </button>
+            </div>
+          </div>
+          {mint.error && <p className="relay-error">{mint.error}</p>}
+          {mint.code && (
+            <>
+              <div className="relay-invite-code">
+                <span>{mint.code}</span>
+                <button className="settings-btn" onClick={() => void copyInvite(mint.code as string)}>
+                  {copied ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+              <p className="app-settings-hint">Single-use, expires in 7 days. Share it out of band with the peer.</p>
+            </>
+          )}
+        </>
+      ) : (
+        <div className="settings-pref-row">
+          <div className="settings-pref-copy">
+            <span className="settings-pref-label">Invite code</span>
+            <span className="settings-pref-sub">
+              {relay.invite ? `an invite is set (${relay.invite.slice(-4)})` : 'paste the invite code the host shared'}
+            </span>
+          </div>
+          <input
+            type="password"
+            className="settings-text-input"
+            placeholder={relay.invite ? '••••••••' : 'invite code'}
+            spellCheck={false}
+            value={draft.invite}
+            onChange={(e) => setDraft((d) => ({ ...d, invite: e.target.value }))}
+            onBlur={() => {
+              if (draft.invite.trim() !== (relay.invite ?? '')) void saveRelay({ invite: draft.invite.trim() })
+            }}
+          />
         </div>
-        <input
-          type="password"
-          className="settings-text-input"
-          placeholder={relay.invite ? '••••••••' : 'invite code'}
-          spellCheck={false}
-          value={draft.invite}
-          onChange={(e) => setDraft((d) => ({ ...d, invite: e.target.value }))}
-          onBlur={() => {
-            if (draft.invite.trim() !== (relay.invite ?? '')) void saveRelay({ invite: draft.invite.trim() })
-          }}
-        />
-      </div>
+      )}
+
+      {pairing && pairing.decision === 'confirm' && (
+        <div className="relay-card">
+          <span className="relay-card-title">Confirm this peer</span>
+          <span className="relay-card-sub">
+            {peerName} — fingerprint:
+          </span>
+          <span className="relay-fp">{pairing.fingerprint}</span>
+          <div className="relay-actions">
+            <button className="settings-btn" onClick={teardown}>
+              Disconnect
+            </button>
+            <button className="settings-btn accent" onClick={trustPeer}>
+              Trust this peer
+            </button>
+          </div>
+        </div>
+      )}
+
+      {pairing && pairing.decision === 'mismatch' && (
+        <div className="relay-card danger">
+          <span className="relay-card-title">Peer key changed — not trusted</span>
+          <span className="relay-card-sub">
+            {peerName} now presents a different key than the fingerprint this machine
+            trusted ({trusted ? shortFp(trusted) : 'none'}). You may be talking to a
+            different machine. Re-trust only if you are certain.
+          </span>
+          <span className="relay-fp">{pairing.fingerprint}</span>
+          <div className="relay-actions">
+            <button className="settings-btn danger" onClick={teardown}>
+              Disconnect
+            </button>
+            <button className="settings-btn accent" onClick={trustPeer}>
+              Trust this peer
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="settings-pref-row">
         <div className="settings-pref-copy">
           <span className="settings-pref-label">Connection</span>
           <span className="settings-pref-sub">
             {conn.state}
+            {paired && trusted ? ` — trusted peer (${shortFp(trusted)})` : ''}
             {conn.error ? ` — ${conn.error}` : ''}
           </span>
         </div>
-        {conn.state === 'paired' || conn.state === 'connecting' ? (
-          <button
-            className="settings-btn accent"
-            disabled={busy}
-            onClick={() => {
-              void window.termsprawl.relay.disconnect()
-              setConn({ state: 'disconnected', error: null })
-            }}
-          >
-            disconnect
-          </button>
-        ) : (
-          <button className="settings-btn accent" disabled={busy || !relay.url} onClick={() => void connect()}>
-            connect
-          </button>
-        )}
+        <div className="settings-pref-actions">
+          {trusted && (
+            <button className="settings-btn danger" onClick={forget} title="Forget the trusted peer and disconnect">
+              Forget
+            </button>
+          )}
+          {paired || conn.state === 'connecting' ? (
+            <button className="settings-btn accent" disabled={busy} onClick={teardown}>
+              Disconnect
+            </button>
+          ) : (
+            <button className="settings-btn accent" disabled={busy || !relay.url} onClick={() => void connect()}>
+              Connect
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )
