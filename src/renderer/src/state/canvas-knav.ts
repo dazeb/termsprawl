@@ -17,7 +17,9 @@ export interface NavNode {
 }
 
 /** Reading order: y asc, then x asc, then id asc (stable, deterministic).
- * Group frames and parented children are excluded. Input is not mutated. */
+ * Group frames and parented children are excluded. Input is not mutated.
+ * Generic on the node type so callers pass richer node objects (reactflow
+ * `Node`) through unchanged without re-wrapping the result. */
 export function NAV_ORDER<T extends NavNode>(nodes: T[]): T[] {
   return nodes
     .filter((n) => n.type !== 'group' && !n.parentId)
@@ -25,7 +27,7 @@ export function NAV_ORDER<T extends NavNode>(nodes: T[]): T[] {
     .sort((a, b) => {
       if (a.position.y !== b.position.y) return a.position.y - b.position.y
       if (a.position.x !== b.position.x) return a.position.x - b.position.x
-      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+      return a.id.localeCompare(b.id)
     })
 }
 
