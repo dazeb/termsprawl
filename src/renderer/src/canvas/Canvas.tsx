@@ -46,6 +46,7 @@ import type { AgentId } from '@shared/agents/config'
 import type { NodeLink, ProjectRemote } from '@shared/types'
 import { connectableLinkKinds, linkDefaultConfig } from '../../../core/links/registry'
 import { useHistory } from '../state/history'
+import { nextSelection } from '../state/canvas-knav'
 import { useProjects } from '../state/projects'
 import { useCanvasRequests } from '../state/canvas-requests'
 import { useBrowserHome } from '../state/browser-home'
@@ -956,6 +957,80 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [undo, redo])
+
+  // Keyboard navigation (Task 1.2): Tab cycles node focus in reading order;
+  // arrows nudge the selected node (Shift = 10px steps) or pan when nothing
+  // is selected. Skipped while an input/textarea or a terminal (xterm owns
+  // its keys) has focus. Nudges ride applyNodeChanges so undo + persistence
+  // stay intact.
+  const keyguardHit = (target: EventTarget | null): boolean => {
+    if (!(target instanceof HTMLElement)) return false
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return true
+    return target.closest('.xterm') !== null
+  }
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.ctrlKey || event.metaKey || event.altKey) return
+      if (keyguardHit(event.target)) return
+      const currentId = selectedIds.length === 1 ? selectedIds[0] : null
+
+      if (event.key === 'Tab') {
+        event.preventDefault()
+        const next = nextSelection(latestNodesRef.current, currentId, event.shiftKey ? -1 : 1)
+        if (!next) return
+        setNodes((nds) =>
+          nds.map((n) => ({ ...n, selected: n.id === next }))
+        )
+        // Keep the moved-to node on screen: fit to it, capped at 100% zoom so
+        // a small node doesn't blow up the view.
+        void fitView({ nodes: [{ id: next }], maxZoom: 1, duration: 200, padding: 0.3 })
+        return
+      }
+
+      const deltas: Record<string, { x: number; y: number }> = {
+        ArrowLeft: { x: -1, y: 0 },
+        ArrowRight: { x: 1, y: 0 },
+        ArrowUp: { x: 0, y: -1 },
+        ArrowDown: { x: 0, y: 1 }
+      }
+      const delta = deltas[event.key]
+      if (!delta) return
+      event.preventDefault()
+      const step = event.shiftKey ? 10 : 1
+
+      if (currentId) {
+        // Nudge the selected node (position changes go through the normal
+        // change pipeline: history + persistence work unchanged).
+        setNodes((nds) =>
+          applyNodeChanges(
+            [
+              {
+                id: currentId,
+                type: 'position',
+                position: {
+                  x: (nds.find((n) => n.id === currentId)?.position.x ?? 0) + delta.x * step,
+                  y: (nds.find((n) => n.id === currentId)?.position.y ?? 0) + delta.y * step
+                },
+                dragging: false
+              }
+            ],
+            nds
+          )
+        )
+        return
+      }
+
+      // Nothing selected: pan the viewport by 10% of the window.
+      const vp = getViewport()
+      setViewport({
+        ...vp,
+        x: vp.x - delta.x * window.innerWidth * 0.1,
+        y: vp.y - delta.y * window.innerHeight * 0.1
+      })
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [selectedIds, setNodes, fitView, getViewport, setViewport])
 
   const nodeTypesMemo = useMemo(() => nodeTypes, [])
 
