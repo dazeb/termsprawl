@@ -1984,6 +1984,16 @@ html[data-theme='light'] .settings-content .settings-btn.accent:hover {
  * node itself must not draw a second outline. (Legacy: an outline used to be
  * applied here — removed because it doubled the border.) */
 
+/* Keyboard focus (Task 1.2): Tab-driven node selection needs a VISIBLE focus
+ * cue that doesn't depend on the mouse. Reuse the same subtle accent style
+ * as the resizer chrome — a thin accent outline on the node wrapper only
+ * while it carries real DOM focus (:focus-visible), so mouse selection shows
+ * no extra ring. Never purple (AGENTS rule). */
+.react-flow__node:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .browser-tab {
   display: flex;
   align-items: center;
