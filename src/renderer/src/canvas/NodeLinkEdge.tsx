@@ -1,6 +1,8 @@
 // Custom edge for node links (Phase 18): standard bezier with a small kind
 // chip at the midpoint (file / ctx / a2a) and a lime highlight when selected.
-import { BaseEdge, getBezierPath, type EdgeProps } from 'reactflow'
+// Task 2.3: an optional user-facing NAME renders as a DOM overlay via
+// EdgeLabelRenderer (stays readable at any zoom, unlike SVG-in-canvas text).
+import { BaseEdge, EdgeLabelRenderer, getBezierPath, type EdgeProps } from 'reactflow'
 
 const KIND_LABEL: Record<string, string> = {
   'file-output': 'file',
@@ -19,6 +21,7 @@ export function NodeLinkEdge(props: EdgeProps): React.JSX.Element {
     targetPosition
   })
   const kind = typeof data?.kind === 'string' ? data.kind : ''
+  const name = typeof data?.label === 'string' && data.label.trim().length > 0 ? data.label : null
   return (
     <>
       <BaseEdge
@@ -29,6 +32,18 @@ export function NodeLinkEdge(props: EdgeProps): React.JSX.Element {
           strokeWidth: selected ? 2 : 1.5
         }}
       />
+      <EdgeLabelRenderer>
+        {name && (
+          <div
+            className={`nodelink-label-dom${selected ? ' selected' : ''}`}
+            style={{
+              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`
+            }}
+          >
+            {name}
+          </div>
+        )}
+      </EdgeLabelRenderer>
       <g className="nodelink-label" transform={`translate(${labelX},${labelY})`}>
         <rect
           x={-16}

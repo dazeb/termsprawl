@@ -11,7 +11,7 @@ export interface LinkInspectorProps {
   sourceKind: string
   /** Target node kind ('a2a-peer' for peer links). */
   targetKind: string
-  onChange(patch: Partial<Pick<NodeLink, 'kind' | 'auto' | 'config'>>): void
+  onChange(patch: Partial<Pick<NodeLink, 'kind' | 'auto' | 'config' | 'label'>>): void
   onRun(): void
   onDelete(): void
   onClose(): void
@@ -40,6 +40,20 @@ export function LinkInspector(props: LinkInspectorProps): React.JSX.Element {
           ×
         </button>
       </div>
+
+      <label className="link-inspector-field">
+        <span>label (optional)</span>
+        <input
+          type="text"
+          value={link.label ?? ''}
+          placeholder="name this link"
+          maxLength={60}
+          onChange={(e) => {
+            const label = e.target.value.trim().slice(0, 60)
+            onChange({ label: label.length > 0 ? label : undefined })
+          }}
+        />
+      </label>
 
       <label className="link-inspector-field">
         <span>behavior</span>

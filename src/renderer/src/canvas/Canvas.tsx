@@ -600,17 +600,25 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
     return () => window.removeEventListener('keydown', onKey)
   }, [inspectedLinkId])
   const updateLink = useCallback(
-    (linkId: string, patch: Partial<Pick<NodeLink, 'kind' | 'auto' | 'config'>>): void => {
-      linksRef.current = linksRef.current.map((l) =>
-        l.id === linkId
-          ? {
-              ...l,
-              ...(patch.kind !== undefined ? { kind: patch.kind } : {}),
-              ...(patch.auto !== undefined ? { auto: patch.auto } : {}),
-              ...(patch.config !== undefined ? { config: patch.config } : {})
-            }
-          : l
-      )
+    (linkId: string, patch: Partial<Pick<NodeLink, 'kind' | 'auto' | 'config' | 'label'>>): void => {
+      linksRef.current = linksRef.current.map((l) => {
+        if (l.id !== linkId) return l
+        const next: NodeLink = {
+          ...l,
+          ...(patch.kind !== undefined ? { kind: patch.kind } : {}),
+          ...(patch.auto !== undefined ? { auto: patch.auto } : {}),
+          ...(patch.config !== undefined ? { config: patch.config } : {})
+        }
+        // label: undefined is a MEANINGFUL clear (remove the name) — unlike
+        // kind/auto/config where undefined means "not in this patch". Drop
+        // the key entirely so memory matches what serializeLinks writes.
+        if (patch.label !== undefined) {
+          next.label = patch.label
+        } else if ('label' in next) {
+          delete next.label
+        }
+        return next
+      })
       setEdges(linksFromSerialized(linksRef.current))
       if (activeProjectIdRef.current) persistLinks(activeProjectIdRef.current, linksRef.current)
     },

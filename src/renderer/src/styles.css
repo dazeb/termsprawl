@@ -2472,6 +2472,33 @@ html[data-theme='light'] .settings-content .settings-btn.accent:hover {
   fill: var(--accent);
 }
 
+/* Node-link NAME (Task 2.3): the user-facing edge label, rendered as a DOM
+   overlay (EdgeLabelRenderer) so it stays readable at every zoom level.
+   Position comes from inline transform (React Flow sets the coords). */
+.nodelink-label-dom {
+  position: absolute;
+  z-index: 1;
+  max-width: 220px;
+  padding: 2px 8px;
+  border-radius: 9px;
+  background: #2a2a28;
+  border: 1px solid #4a4a48;
+  color: #d8d8d4;
+  font-family: 'Geist Mono', 'JetBrains Mono', monospace;
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: all;
+  user-select: none;
+}
+
+.nodelink-label-dom.selected {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(198, 241, 53, 0.08);
+}
+
 /* Link handles (Phase 18): hidden until the node is hovered or selected, or
    while an edge is being dragged (React Flow adds .connectingfrom/.connectingto
    on the pane). Tiny 6px dots at the vertical midpoints. */
