@@ -111,7 +111,8 @@ describe('WorkspaceStore', () => {
       kind: 'file-output',
       auto: true,
       config: { kind: 'file-output', path: 'out/n.md', mode: 'append', header: false },
-      createdAt: 42
+      createdAt: 42,
+      label: 'ship logs to notes'
     }
 
     // Explicit link save lands in the file.
@@ -124,6 +125,13 @@ describe('WorkspaceStore', () => {
     const links = reloaded.linksFor(project.id)
     expect(links).toHaveLength(1)
     expect(links[0]).toEqual(link)
+    // The label survives the REAL disk round-trip (parse whitelist keeps it).
+    expect(links[0].label).toBe('ship logs to notes')
+    // And the raw file has no "label":undefined junk for label-less links.
+    store.saveLinks(project.id, [{ ...link, id: 'lk-2', label: undefined }])
+    const noLabel = store.linksFor(project.id).find((l) => l.id === 'lk-2')
+    expect(noLabel).toBeDefined()
+    expect('label' in (noLabel ?? {})).toBe(false)
 
     // Saving an empty array is an explicit clear.
     store.saveLinks(project.id, [])

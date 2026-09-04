@@ -578,6 +578,8 @@ export interface NodeLink {
   auto: boolean
   config: LinkConfig
   createdAt: number
+  /** Optional user-facing name shown on the edge; ≤60 chars. */
+  label?: string
   /** Last run result (UI status only — the engine never reads this). */
   lastRun?: { at: number; ok: boolean; summary: string }
 }

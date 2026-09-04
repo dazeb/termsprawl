@@ -14,12 +14,18 @@ export function deserializeLinks(raw: unknown): NodeLink[] {
 
 /**
  * Serialize live links for the project file: a plain JSON-safe copy with the
- * transient lastRun dropped (a stale result from a previous app run is noise).
+ * transient lastRun dropped (a stale result from a previous app run is noise)
+ * and undefined-valued optional fields (label) removed so the in-memory copy
+ * matches what JSON.stringify puts on disk.
  */
 export function serializeLinks(links: NodeLink[]): NodeLink[] {
   return links.map((l) => {
-    const { lastRun: _dropped, ...rest } = l
-    return { ...rest }
+    const { lastRun: _dropped, label, ...rest } = l
+    const out: NodeLink = { ...rest }
+    if (typeof label === 'string' && label.trim().length > 0) {
+      out.label = label.trim().slice(0, 60)
+    }
+    return out
   })
 }
 

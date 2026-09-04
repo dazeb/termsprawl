@@ -61,6 +61,12 @@ export function parseNodeLink(raw: unknown): NodeLink | null {
     config: raw.config as NodeLink['config'],
     createdAt
   }
+  // Optional user-facing name (edge labels): a non-empty string survives;
+  // anything else (absent, junk, empty after trim) keeps the key absent.
+  if (typeof raw.label === 'string') {
+    const label = raw.label.trim().slice(0, 60)
+    if (label.length > 0) link.label = label
+  }
   const lr = raw.lastRun
   if (isRecord(lr) && typeof lr.at === 'number' && typeof lr.ok === 'boolean' && typeof lr.summary === 'string') {
     link.lastRun = { at: lr.at, ok: lr.ok, summary: lr.summary }

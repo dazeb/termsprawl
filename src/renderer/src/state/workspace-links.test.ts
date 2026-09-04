@@ -26,6 +26,17 @@ describe('serializeLinks', () => {
     expect(out).toEqual([link()])
     expect(out[0].lastRun).toBeUndefined()
   })
+
+  it('keeps an explicit label', () => {
+    const out = serializeLinks([link({ label: 'ship logs to notes' })])
+    expect(out[0].label).toBe('ship logs to notes')
+  })
+
+  it('keeps the label key ABSENT when undefined (no "label":undefined on disk)', () => {
+    const out = serializeLinks([link({ label: undefined })])
+    expect('label' in out[0]).toBe(false)
+    expect(JSON.stringify(out[0])).not.toContain('label')
+  })
 })
 
 describe('deserializeLinks', () => {
@@ -59,6 +70,20 @@ describe('deserializeLinks', () => {
     ])
     expect(out).toHaveLength(2)
     expect(out[0].config).toEqual({ kind: 'context-inject', wrapper: false, pastePointer: true })
+  })
+
+  it('round-trips a label through the parse whitelist', () => {
+    const persisted = [{ id: 'a', source: 's', target: 't', kind: 'file-output', auto: false, createdAt: 1, config: { kind: 'file-output', path: '', mode: 'overwrite', header: true }, label: 'my named link' }]
+    const out = deserializeLinks(persisted)
+    expect(out).toHaveLength(1)
+    expect(out[0].label).toBe('my named link')
+  })
+
+  it('drops a non-string label (junk tolerated, link kept)', () => {
+    const persisted = [{ id: 'a', source: 's', target: 't', kind: 'file-output', auto: false, createdAt: 1, config: { kind: 'file-output', path: '', mode: 'overwrite', header: true }, label: 42 }]
+    const out = deserializeLinks(persisted)
+    expect(out).toHaveLength(1)
+    expect('label' in out[0]).toBe(false)
   })
 })
 
