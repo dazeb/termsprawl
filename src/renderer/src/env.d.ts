@@ -201,6 +201,8 @@ declare global {
         }>
         mintInvite(): Promise<{ ok: boolean; code?: string; error?: string }>
         disconnect(): Promise<void>
+        /** Send a serialized relay-term frame (client → host). */
+        sendFrame(frame: string): Promise<{ ok: boolean; error?: string }>
         onStatus(cb: (status: { state: string; error: string | null }) => void): () => void
         onFrame(cb: (frame: { from: string; text: string }) => void): () => void
       }

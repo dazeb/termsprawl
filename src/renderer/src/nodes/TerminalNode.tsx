@@ -8,6 +8,7 @@ import '@xterm/xterm/css/xterm.css'
 import type { TerminalNodeData } from '../state/workspace'
 import type { ProjectRemote } from '@shared/types'
 import { resumedSessionId } from '../state/workspace'
+import { parseRelayTermFrame, type RelayTermFrame } from '../../../core/relay-term'
 import { useCanvas } from '../canvas/Canvas'
 import { useAgentStatuses } from '../state/agents'
 import { useProjects } from '../state/projects'
@@ -56,6 +57,11 @@ export function TerminalNode({ id, data, selected }: NodeProps<TerminalNodeData>
   const [agentHint, setAgentHint] = useState(false)
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState(data.title)
+  // B3 — a remote relay terminal (data.relayTerm set) mirrors a HOST terminal
+  // over the tunnel instead of spawning a local pty.
+  const isRemote = typeof data.relayTerm === 'string' && (data.relayTerm as string).length > 0
+  const [relayStatus, setRelayStatus] = useState<string>('disconnected')
+  const attachedRef = useRef(false)
 
   // Agent nodes (spawned with a command) subscribe to hook status. Only claude
   // pins session-id = node id today; others never receive events (fail-open).
@@ -134,6 +140,46 @@ export function TerminalNode({ id, data, selected }: NodeProps<TerminalNodeData>
     fit.fit()
     let active = true
 
+    // Remote relay terminal (B3): mirrors a HOST terminal over the tunnel — no
+    // local pty session is created. Output arrives as relay-term 'out' frames
+    // (filtered to THIS host term id), keystrokes go back as 'in', resizes as
+    // 'resized' (only once actually attached). Attach/detach is driven by the
+    // relay-status effect below so it follows pairing (and re-attaches on a
+    // reconnect); nothing is sent here.
+    if (isRemote) {
+      const termId = data.relayTerm as string
+      const offFrame = window.termsprawl.relay.onFrame((frame) => {
+        if (!active) return
+        const parsed = parseRelayTermFrame(frame.text)
+        if (!parsed || parsed.k !== 'out' || parsed.term !== termId) return
+        term.write(parsed.data)
+      })
+      const disposeInput = term.onData((chunk) => {
+        void window.termsprawl.relay.sendFrame(JSON.stringify({ v: 1, k: 'in', term: termId, data: chunk }))
+      })
+      const disposeResize = term.onResize(({ cols, rows }) => {
+        // Skip pre-attach resizes (the attach effect sends the authoritative
+        // initial size once the node is actually mirrored to the host pty).
+        if (!attachedRef.current) return
+        void window.termsprawl.relay.sendFrame(
+          JSON.stringify({ v: 1, k: 'resized', term: termId, cols, rows } satisfies RelayTermFrame)
+        )
+      })
+      termRef.current = term
+      fitRef.current = fit
+      return () => {
+        active = false
+        offFrame()
+        disposeInput.dispose()
+        disposeResize.dispose()
+        termRef.current = null
+        fitRef.current = null
+        term.write('', () => {
+          requestAnimationFrame(() => requestAnimationFrame(() => term.dispose()))
+        })
+      }
+    }
+
     // Subscribe to output BEFORE creating the session so no early data is lost.
     const offData = window.termsprawl.pty.onData(id, (chunk) => {
       if (active) term.write(chunk)
@@ -194,17 +240,59 @@ export function TerminalNode({ id, data, selected }: NodeProps<TerminalNodeData>
         requestAnimationFrame(() => requestAnimationFrame(() => term.dispose()))
       })
     }
-  }, [id, data.cwd, data.command])
+  }, [id, data.cwd, data.command, isRemote, data.relayTerm])
+
+  // Remote relay node (B3): follow the local relay connection so we can show a
+  // clear "waiting for relay peer" state and (re)attach once actually paired.
+  // Only meaningful for remote nodes; local terminals ignore relay status.
+  useEffect(() => {
+    if (!isRemote) return
+    let alive = true
+    const sync = (status: { state: string; error: string | null }): void => {
+      if (!alive) return
+      setRelayStatus(status.state)
+    }
+    void window.termsprawl.relay.status().then(sync).catch(() => {})
+    const off = window.termsprawl.relay.onStatus(sync)
+    return () => {
+      alive = false
+      off()
+    }
+  }, [isRemote])
+
+  // Attach/detach lifecycle: attach the node to the host terminal once we are
+  // paired, send our initial terminal size, and detach on unmount or when the
+  // link drops. Re-runs whenever pairing changes → a reconnect re-attaches.
+  useEffect(() => {
+    if (!isRemote || relayStatus !== 'paired') return
+    const termId = data.relayTerm as string
+    const send = (frame: RelayTermFrame): void => {
+      void window.termsprawl.relay.sendFrame(JSON.stringify(frame))
+    }
+    attachedRef.current = true
+    send({ v: 1, k: 'attach', term: termId })
+    const term = termRef.current
+    if (term) {
+      send({ v: 1, k: 'resized', term: termId, cols: term.cols, rows: term.rows })
+    }
+    return () => {
+      attachedRef.current = false
+      send({ v: 1, k: 'detach', term: termId })
+    }
+  }, [isRemote, relayStatus, data.relayTerm])
 
   // Keep the terminal fitted to its container and push the new size to the
   // pty — deferred out of the ResizeObserver callback (rAF) so xterm's own
   // element writes never re-trigger the observer in the same frame (that's
   // the "ResizeObserver loop completed with undelivered notifications" noise).
+  // A remote relay node sizes via its xterm onResize → 'resized' frame over
+  // the tunnel (see the mount effect); it must never touch a local pty.
   useSafeResize(hostRef, () => {
     const term = termRef.current
     const fit = fitRef.current
     if (!term || !fit) return
     fit.fit()
+    if (isRemote) return
     window.termsprawl.pty.resize(id, term.cols, term.rows)
   })
 
@@ -239,9 +327,10 @@ export function TerminalNode({ id, data, selected }: NodeProps<TerminalNodeData>
             {data.title}
           </span>
         )}
+        {isRemote && <span className="terminal-remote-badge">remote</span>}
         <HelpBadge
           label="about this terminal"
-          text={terminalHelp(data.command)}
+          text={terminalHelp(data.command, isRemote)}
         />
         {agentHint && agentStatus && (
           <span className={`agent-badge agent-${agentStatus}`}>{STATUS_LABEL[agentStatus]}</span>
@@ -260,7 +349,7 @@ export function TerminalNode({ id, data, selected }: NodeProps<TerminalNodeData>
         )}
         <button
           className="node-close"
-          title="Close terminal (kills session)"
+          title={isRemote ? 'Close terminal (detach from host)' : 'Close terminal (kills session)'}
           aria-label="Close terminal"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
@@ -271,6 +360,11 @@ export function TerminalNode({ id, data, selected }: NodeProps<TerminalNodeData>
           ×
         </button>
       </div>
+      {isRemote && relayStatus !== 'paired' && (
+        <div className="terminal-remote-status">
+          remote — {relayStatus === 'connecting' ? 'connecting to relay peer' : relayStatus === 'error' ? 'relay error' : 'waiting for relay peer'}
+        </div>
+      )}
       <div
         className="terminal-node-host nodrag nowheel"
         ref={hostRef}
@@ -287,7 +381,10 @@ export function TerminalNode({ id, data, selected }: NodeProps<TerminalNodeData>
   )
 }
 
-function terminalHelp(command: string | undefined): string {
+function terminalHelp(command: string | undefined, isRemote: boolean): string {
+  if (isRemote) {
+    return 'A remote terminal streamed from a paired relay host over the E2E-encrypted tunnel. Output renders here; keystrokes go back to the host. Drag the header to move the node. Close detaches this view from the host terminal; the host terminal keeps running.'
+  }
   if (!command) {
     return 'A real PTY inside a tmux session that survives remounts and app restarts. Drag the header to move the node. Hover, then dwell, to type. Wheel scrolls tmux history. Close kills this session; switching project tabs only detaches.'
   }

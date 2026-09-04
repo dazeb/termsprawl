@@ -148,7 +148,9 @@ export const IPC = {
   relayMint: 'relay:mint',
   // Frames flow only while the renderer holds an onFrame subscriber (audit B7).
   relayFrameSubscribe: 'relay:frame:subscribe',
-  relayFrameUnsubscribe: 'relay:frame:unsubscribe'
+  relayFrameUnsubscribe: 'relay:frame:unsubscribe',
+  /** Client → host relay-term frames (attach/detach/in/resized/list). */
+  relayFrameSend: 'relay:frame:send'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

@@ -58,6 +58,12 @@ export interface RelayRuntime {
   connect(): Promise<{ ok: boolean; error?: string; pairing?: RelayPairingInfo }>
   /** Ask the live paired client to mint a fresh invite code (host role). */
   mintInvite(): Promise<{ ok: boolean; code?: string; error?: string }>
+  /** Send one relay-term frame to the paired HOST (client role only, e.g. an
+   * attach/detach/out-inbound request from a remote terminal node). Never
+   * throws: returns { ok: false, error } when this app is not a paired
+   * client. Host-role frames are served locally, never sent over the tunnel
+   * from a terminal this runtime owns. */
+  sendTermFrame(frame: RelayTermFrame): { ok: boolean; error?: string }
   disconnect(): void
   /** Frame subscription (audit B7): relay:frame previously broadcast decrypted
    * plaintext on every frame with no listener — a dead channel still pushing
@@ -112,8 +118,10 @@ export function createRelayRuntime(deps: RelayRuntimeDeps): RelayRuntime {
     attached.clear()
   }
 
-  /** Send one terminal frame to the paired peer (the only peer we serve). */
-  function sendTermFrame(f: RelayTermFrame): void {
+  /** Host serving: send one terminal frame to the paired peer (the peer we
+   * serve output to). Plain void — the public sendTermFrame is the client-role
+   * mirror that goes the other direction. */
+  function serveTermFrame(f: RelayTermFrame): void {
     if (!client || !pairing?.peerPub || !pairing.peerLogin) return
     try {
       client.sendFrame(pairing, `client:${pairing.peerLogin}`, JSON.stringify(f))
@@ -135,7 +143,7 @@ export function createRelayRuntime(deps: RelayRuntimeDeps): RelayRuntime {
     }
     const coalescer = createTermCoalescer((batch) => {
       for (const frame of batch) {
-        if (frame.k === 'out') sendTermFrame(frame)
+        if (frame.k === 'out') serveTermFrame(frame)
       }
     })
     const unsub = ph.onData(term, (data) => {
@@ -165,7 +173,7 @@ export function createRelayRuntime(deps: RelayRuntimeDeps): RelayRuntime {
     switch (frame.k) {
       case 'list':
         try {
-          sendTermFrame({ v: 1, k: 'term-list', terms: ph.list() })
+          serveTermFrame({ v: 1, k: 'term-list', terms: ph.list() })
         } catch (e) {
           deps.log?.(`relay: term-list failed: ${(e as Error).message}`)
         }
@@ -257,6 +265,24 @@ export function createRelayRuntime(deps: RelayRuntimeDeps): RelayRuntime {
         return { ok: true, code }
       } catch (e) {
         return { ok: false, error: (e as Error).message ?? String(e) }
+      }
+    },
+
+    sendTermFrame(frame: RelayTermFrame): { ok: boolean; error?: string } {
+      // Only a paired CLIENT sends terminal frames over the tunnel (it mirrors
+      // a host's terminal). A host serves inbound frames locally and never
+      // sends its own relay-term requests upstream.
+      if (role !== 'client') return { ok: false, error: 'relay: host role cannot send terminal frames' }
+      if (state !== 'paired' || !client || !pairing) return { ok: false, error: 'relay: not paired' }
+      const peerLogin = pairing.peerLogin
+      if (!peerLogin) return { ok: false, error: 'relay: not paired' }
+      try {
+        client.sendFrame(pairing, `host:${peerLogin}`, JSON.stringify(frame))
+        return { ok: true }
+      } catch (e) {
+        const msg = (e as Error).message ?? String(e)
+        deps.log?.(`relay: failed sending terminal frame: ${msg}`)
+        return { ok: false, error: msg }
       }
     },
 

@@ -31,6 +31,7 @@ import { createChatRuntime, type ChatRuntime } from '../core/chat/runtime'
 import { projectChatTools } from '../core/chat/project-tools'
 import { resolveFileScope } from '../core/project-scope'
 import { createRelayRuntime, type PtyHost, type RelayRuntime } from './relay'
+import { parseRelayTermFrame } from '../core/relay-term'
 import { WorkspaceStore } from '../core/workspace-store'
 import { LinkService } from '../core/links/service'
 import type { NodeLink } from '../shared/types'
@@ -530,6 +531,13 @@ const relayRuntime: RelayRuntime = createRelayRuntime({
   log: (msg) => console.log(`[relay] ${msg}`)
 })
 
+// The relay runtime's frame listener is a SINGLE slot, but any number of
+// renderer surfaces can subscribe (remote terminal nodes + the Settings Relay
+// term-list each call window.termsprawl.relay.onFrame). Reference-count the
+// subscriptions so one surface unsubscribing never kills another's stream;
+// frames only flow while at least one renderer listener is attached (audit B7).
+let relayFrameRefs = 0
+
 function registerRelayIpc(): void {
   ipcMain.handle(IPC.relayStatus, () => ({ state: relayRuntime.state(), error: relayRuntime.lastError() }))
   ipcMain.handle(IPC.relayConnect, () => relayRuntime.connect())
@@ -537,12 +545,23 @@ function registerRelayIpc(): void {
     relayRuntime.disconnect()
   })
   ipcMain.handle(IPC.relayMint, () => relayRuntime.mintInvite())
-  // Decrypted frames only leave the runtime while the renderer listens.
+  // Client → host relay-term frame (attach/in/resized/list). The payload is
+  // parsed in main so the renderer can only ever send a well-formed frame;
+  // garbage never reaches the tunnel. The runtime gates role + pairing.
+  ipcMain.handle(IPC.relayFrameSend, (_e, raw: unknown) => {
+    if (typeof raw !== 'string') return { ok: false, error: 'bad frame' }
+    const frame = parseRelayTermFrame(raw)
+    if (!frame) return { ok: false, error: 'bad frame' }
+    return relayRuntime.sendTermFrame(frame)
+  })
+  // Decrypted frames only leave the runtime while ≥1 renderer listens.
   ipcMain.on(IPC.relayFrameSubscribe, () => {
+    relayFrameRefs += 1
     relayRuntime.setFrameListener((frame) => platform.broadcast('relay:frame', frame))
   })
   ipcMain.on(IPC.relayFrameUnsubscribe, () => {
-    relayRuntime.setFrameListener(null)
+    relayFrameRefs = Math.max(0, relayFrameRefs - 1)
+    if (relayFrameRefs === 0) relayRuntime.setFrameListener(null)
   })
 }
 

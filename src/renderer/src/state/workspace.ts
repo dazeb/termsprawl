@@ -20,6 +20,12 @@ export interface TerminalNodeData {
    * the `.termsprawl/links/*.json` files; rebuilt on project load, so a
    * git-pulled link shows up even if this field was never saved. */
   linkedIds?: string[]
+  /** Remote relay terminal (B3): when set to a HOST terminal id, this node is
+   * NOT a local pty/tmux session — xterm renders output streamed from the
+   * paired relay host over the tunnel, and keystrokes go back over it. The
+   * node kind stays 'terminal' so persistence/re-layout just work; presence of
+   * relayTerm switches TerminalNode into remote mode. */
+  relayTerm?: string
 }
 
 export const STICKY_COLORS = ['slate', 'amber', 'lime', 'pink', 'cyan'] as const
@@ -118,6 +124,21 @@ export function createTerminalNode(cwd?: string): Node<TerminalNodeData> {
     style: { ...TERMINAL_NODE_STYLE },
     position: { x: 60 + Math.random() * 240, y: 60 + Math.random() * 160 },
     data: { kind: 'terminal', title: 'shell', cwd }
+  }
+}
+
+/** A terminal node that mirrors a HOST terminal over the relay tunnel (B3,
+ * client role). No local pty/tmux is created — data.relayTerm is the host
+ * terminal id this xterm attaches to; keystrokes stream back over the tunnel.
+ * The title defaults to the host terminal's title so the node reads naturally. */
+export function createRemoteTerminalNode(relayTerm: string, title?: string): Node<TerminalNodeData> {
+  return {
+    id: nextId(),
+    type: 'terminal',
+    ...TERMINAL_DIMENSIONS,
+    style: { ...TERMINAL_NODE_STYLE },
+    position: { x: 60 + Math.random() * 240, y: 60 + Math.random() * 160 },
+    data: { kind: 'terminal', title: title && title.length > 0 ? title : 'remote', relayTerm }
   }
 }
 

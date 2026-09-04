@@ -1213,6 +1213,36 @@ html[data-theme='light'] .settings-content .settings-btn.accent:hover {
   color: var(--fg);
 }
 
+/* B3 — remote-terminal attach list (client role): the host's served terminals,
+   each with an "Open" action that spawns a remote node on the canvas. */
+.relay-term-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.relay-term-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.relay-term-row:last-child {
+  border-bottom: none;
+}
+.relay-term-name {
+  font-family: 'Geist Mono', 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 
 /* Grouped section (e.g. Appearance) — a titled block, not a divider row. */
 .settings-group {
@@ -1892,6 +1922,34 @@ html[data-theme='light'] .settings-content .settings-btn.accent:hover {
   height: 8px;
   border-radius: 50%;
   background: var(--accent);
+}
+
+/* Remote relay terminal indicator (B3): a muted "remote" chip mirroring the
+   agent-badge geometry but neutral — never purple, never a status colour. */
+.terminal-remote-badge {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(138, 138, 134, 0.35);
+  color: var(--muted);
+  background: rgba(138, 138, 134, 0.08);
+}
+
+/* B3 — inline strip shown when a remote node has no live relay peer yet
+   (disconnected / connecting / error). Sits between the header and the xterm
+   body; the node is still mounted so it auto-attaches on reconnect. */
+.terminal-remote-status {
+  flex-shrink: 0;
+  padding: 4px 12px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
 }
 
 /* Inline title rename (Phase 7, Task 7.4) — same look as the group label

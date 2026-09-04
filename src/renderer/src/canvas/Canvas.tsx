@@ -27,6 +27,7 @@ import {
   createResumeAgentNode,
   createStickyNode,
   createTerminalNode,
+  createRemoteTerminalNode,
   createBrowserNode,
   createChatNode,
   isAgentCommand,
@@ -407,6 +408,18 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
       const target = latestNodesRef.current.find((node) => node.id === id)
       if (!target) return
       if (target.type !== 'terminal') {
+        setNodes((current) => removeNode(current, id))
+        cascadeLinksForNodes([id])
+        push()
+        return
+      }
+
+      // A remote relay terminal (B3) has NO local session to tear down —
+      // closing it just drops the view; the unmount effect sends the relay
+      // detach to the host. Skipping terminal teardown avoids an error toast
+      // about a tmux session that was never created.
+      const remoteTerm = (target.data as { relayTerm?: string }).relayTerm
+      if (remoteTerm) {
         setNodes((current) => removeNode(current, id))
         cascadeLinksForNodes([id])
         push()
@@ -808,6 +821,13 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
       useProjects.getState().select(spawnRequest.projectId)
     } else if (spawnRequest.kind === 'organize') {
       organizeNext()
+    } else if (spawnRequest.kind === 'relayTerm') {
+      // B3 — a remote terminal mirroring a host terminal over the relay tunnel.
+      // A normal terminal node with data.relayTerm set; TerminalNode skips the
+      // local pty path and streams over the tunnel instead.
+      const node = createRemoteTerminalNode(spawnRequest.term, spawnRequest.title)
+      appendOnTop(node)
+      push()
     }
     useCanvasRequests.getState().consume()
   }, [spawnRequest, cwd, appendOnTop, push, organizeNext])

@@ -332,6 +332,10 @@ const api = {
     mintInvite: (): Promise<{ ok: boolean; code?: string; error?: string }> =>
       ipcRenderer.invoke(IPC.relayMint),
     disconnect: (): Promise<void> => ipcRenderer.invoke(IPC.relayDisconnect),
+    /** Send a serialized relay-term frame (client → host): attach/detach/in/
+     * resized/list. Main parses it and gates on role + pairing. */
+    sendFrame: (frame: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC.relayFrameSend, frame),
     onStatus: (cb: (status: { state: string; error: string | null }) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, status: { state: string; error: string | null }): void => cb(status)
       ipcRenderer.on(IPC.relayStatus, listener)

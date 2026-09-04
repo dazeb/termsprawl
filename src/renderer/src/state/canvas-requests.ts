@@ -12,6 +12,9 @@ export type CanvasSpawnRequest =
   | { kind: 'browser'; url: string }
   | { kind: 'switchProject'; projectId: string }
   | { kind: 'organize' }
+  /** Open a remote relay terminal mirroring a host terminal (B3): Canvas adds
+   * a normal terminal node whose data.relayTerm = the host terminal id. */
+  | { kind: 'relayTerm'; term: string; title?: string }
 
 interface CanvasRequestsState {
   request: CanvasSpawnRequest | null

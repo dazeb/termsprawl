@@ -3,6 +3,7 @@ import type { AgentAccount, A2APeer, ApiProviderConfig, AppSettings, CloudBackup
 import { AGENT_REGISTRY } from '@shared/agents/config'
 import { HelpBadge } from './HelpBadge'
 import { discoverAgentCard } from '../../../core/a2a/client'
+import { parseRelayTermFrame, type RelayTermFrame } from '../../../core/relay-term'
 import { useCanvasRequests } from '../state/canvas-requests'
 import { useProjects } from '../state/projects'
 import { applyTheme } from '../state/theme'
@@ -1601,6 +1602,13 @@ function RelaySection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
         </div>
       )}
 
+      {!isHost && paired && !!trusted && !deciding && !busy && (
+        // B3 — client side can open terminals the trusted host is serving. Only
+        // once we are paired AND the peer fingerprint is trusted (relay-trust)
+        // AND no confirm/mismatch card is pending.
+        <RelayTerminalList />
+      )}
+
       {pairing && pairing.decision === 'confirm' && (
         <div className="relay-card">
           <span className="relay-card-title">Confirm this peer</span>
@@ -1665,6 +1673,80 @@ function RelaySection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+/**
+ * B3 — "Remote terminals" list for the relay CLIENT: list the terminals a
+ * trusted host is serving and open each as a remote terminal node on the
+ * active project canvas. It subscribes to the frame stream only while mounted
+ * (returned unsubscribe runs on unmount, so it never steals frames meant for
+ * a remote terminal node — every listener receives every frame and filters by
+ * kind/term). The term-list reply is matched by kind, not by a request id,
+ * which is safe here because only this block ever sends a 'list' frame.
+ */
+function RelayTerminalList(): React.JSX.Element {
+  const [terms, setTerms] = useState<Array<{ id: string; title: string }>>([])
+  const [listing, setListing] = useState(false)
+  const [note, setNote] = useState<string | null>(null)
+
+  useEffect(() => {
+    const off = window.termsprawl.relay.onFrame((frame) => {
+      const parsed = parseRelayTermFrame(frame.text)
+      if (parsed && parsed.k === 'term-list') setTerms(parsed.terms)
+    })
+    return () => off()
+  }, [])
+
+  const list = (): void => {
+    if (listing) return
+    setListing(true)
+    setNote(null)
+    void window.termsprawl.relay
+      .sendFrame(JSON.stringify({ v: 1, k: 'list' } satisfies RelayTermFrame))
+      .then((res) => {
+        setListing(false)
+        if (!res.ok) setNote(res.error ?? 'could not list host terminals')
+      })
+      .catch(() => {
+        setListing(false)
+        setNote('could not list host terminals')
+      })
+  }
+
+  const open = (term: { id: string; title: string }): void => {
+    // Spawn through the same one-shot store the settings panel uses for
+    // agent-login nodes: Canvas adds a remote terminal node to the active
+    // project on its next render. The settings sheet stays open behind it.
+    useCanvasRequests.getState().spawn({ kind: 'relayTerm', term: term.id, title: term.title })
+    setNote(`opened ${term.title || term.id} from the host`)
+  }
+
+  return (
+    <div className="relay-card">
+      <span className="relay-card-title">Remote terminals</span>
+      <span className="relay-card-sub">terminals the trusted host is currently serving</span>
+      <div className="relay-actions">
+        <button className="settings-btn" disabled={listing} onClick={list}>
+          {listing ? 'Listing…' : 'List host terminals'}
+        </button>
+      </div>
+      {note && <p className="relay-error">{note}</p>}
+      {terms.length > 0 && (
+        <ul className="relay-term-list">
+          {terms.map((t) => (
+            <li key={t.id} className="relay-term-row">
+              <span className="relay-term-name" title={t.id}>
+                {t.title || t.id}
+              </span>
+              <button className="settings-btn accent" onClick={() => open(t)}>
+                Open
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }

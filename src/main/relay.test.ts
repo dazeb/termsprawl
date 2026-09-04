@@ -465,4 +465,61 @@ describe('relay runtime client role', () => {
     expect(seen).toEqual([{ from: 'host:h-host', text: 'hello-over-the-tunnel' }])
     harness.fireClose()
   })
+
+  it('sendTermFrame (paired client) seals an E2E envelope to host:<peerLogin>', async () => {
+    const harness = makeHarness({ role: 'host', login: 'h-host' })
+    const rt = createRelayRuntime({
+      resolveTarget: () => ({ url: 'ws://relay.test', role: 'client' as const, invite: 'INV' }),
+      broadcast: () => {},
+      socketFactory: harness.factory,
+      log: vi.fn()
+    })
+    await rt.connect()
+    const res = rt.sendTermFrame({ v: 1, k: 'attach', term: 'term1' })
+    expect(res).toEqual({ ok: true })
+    // The outbound ws message routes to the paired host and round-trips back
+    // to the exact relay-term frame (the harness opens it with the peer key).
+    expect(harness.outbound).toHaveLength(1)
+    expect(harness.outbound[0].to).toBe('host:h-host')
+    expect(harness.outbound[0].frame).toEqual({ v: 1, k: 'attach', term: 'term1' })
+    harness.fireClose()
+  })
+
+  it('sendTermFrame round-trips a client ' + "'in'" + ' frame the host can parse', async () => {
+    const harness = makeHarness({ role: 'host', login: 'h-host' })
+    const rt = createRelayRuntime({
+      resolveTarget: () => ({ url: 'ws://relay.test', role: 'client' as const, invite: 'INV' }),
+      broadcast: () => {},
+      socketFactory: harness.factory,
+      log: vi.fn()
+    })
+    await rt.connect()
+    const res = rt.sendTermFrame({ v: 1, k: 'in', term: 'term1', data: 'ls -la\r' })
+    expect(res.ok).toBe(true)
+    expect(harness.outbound[0].to).toBe('host:h-host')
+    // parseRelayTermFrame on the decrypted payload reproduces the sent frame.
+    expect(parseRelayTermFrame(harness.outbound[0].raw)).toEqual({ v: 1, k: 'in', term: 'term1', data: 'ls -la\r' })
+    harness.fireClose()
+  })
+
+  it('sendTermFrame returns ok:false when the app runs as host', async () => {
+    const harness = makeHarness({ role: 'client', login: 'peer-one' })
+    const ptyHost = makePtyHost(['term1'])
+    const rt = createRelayRuntime(makeHostDeps(harness.factory, ptyHost))
+    await rt.connect()
+    const res = rt.sendTermFrame({ v: 1, k: 'list' })
+    expect(res.ok).toBe(false)
+    expect(res.error).toContain('host role')
+    // A host never pushes its own requests upstream — nothing leaves.
+    expect(harness.outbound).toHaveLength(0)
+    harness.fireClose()
+  })
+
+  it('sendTermFrame returns ok:false when not paired (never connected)', async () => {
+    const factory = fakeSocketFactory(() => {})
+    const rt = createRelayRuntime(makeDeps(factory, { url: 'ws://relay.test', role: 'client', invite: 'INV1' }))
+    const res = rt.sendTermFrame({ v: 1, k: 'list' })
+    expect(res.ok).toBe(false)
+    expect(res.error).toContain('not paired')
+  })
 })
