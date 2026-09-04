@@ -738,6 +738,22 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
 
             <div className="settings-pref-row">
               <div className="settings-pref-copy">
+                <span className="settings-pref-label">Show first-run guide again</span>
+                <span className="settings-pref-sub">
+                  Replays the 3-step welcome (create a project, spawn a terminal, arrange) on
+                  the next launch with no projects — or right now if the canvas is empty
+                </span>
+              </div>
+              <button
+                className="settings-btn"
+                onClick={() => void c.update({ onboardedAt: undefined })}
+              >
+                reset
+              </button>
+            </div>
+
+            <div className="settings-pref-row">
+              <div className="settings-pref-copy">
                 <span className="settings-pref-label">Invert mousewheel zoom</span>
                 <span className="settings-pref-sub">
                   Off (default): scroll up zooms in. On: scroll up zooms out

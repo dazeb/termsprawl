@@ -13,6 +13,7 @@ import { useProjects } from './state/projects'
 import { resolveAccent } from './state/accent'
 import { applyTheme } from './state/theme'
 import { useBrowserHome } from './state/browser-home'
+import { Onboarding, ShouldShowOnboarding } from './components/Onboarding'
 import type { AppSettings } from '@shared/types'
 
 export function App(): React.JSX.Element {
@@ -96,6 +97,15 @@ export function App(): React.JSX.Element {
       </div>
       {settingsOpen && (
         <AppSettingsPanel onClose={() => setSettingsOpen(false)} onSettingsChange={setSettings} />
+      )}
+      {/* First-run onboarding: only when the guide was never finished AND the
+          workspace has no projects yet. Dismissal persists onboardedAt. */}
+      {settings && ShouldShowOnboarding(settings, projects.filter((p) => !p.closed && !p.archived).length) && (
+        <Onboarding
+          onDismiss={() => {
+            void window.termsprawl.settings.set({ onboardedAt: new Date().toISOString() }).then(setSettings)
+          }}
+        />
       )}
       <UpdateToast />
       <AnnouncementBanner />

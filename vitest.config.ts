@@ -12,6 +12,7 @@ export default defineConfig({
     }
   },
   test: {
-    include: ['src/**/*.test.ts', 'scripts/**/*.test.ts', 'relay/**/*.test.mjs']
+    // .test.tsx added for renderer component tests (react-dom/server render).
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'scripts/**/*.test.ts', 'relay/**/*.test.mjs']
   }
 })
