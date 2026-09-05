@@ -18,7 +18,7 @@ import { buildHandlers } from './handlers'
 import { createDispatcher, type RpcDispatcher, type RpcResponse } from './rpc'
 import { startAgentBridge } from './agent-bridge'
 import { createSpacePusher, restoreFromCloud } from './space-sync-wiring'
-import { createAuthPolicy, authorizeUpgrade, type AuthPolicy } from './server-auth'
+import { createAuthPolicy, authorizeUpgrade, timingSafeCompare, type AuthPolicy } from './server-auth'
 import { IPC } from '../shared/ipc'
 
 const PORT = Number(process.env.PORT ?? process.argv[2] ?? 3110)
@@ -105,6 +105,25 @@ export async function createApp(opts?: { auth?: AuthPolicy; onRequest?: (method:
   // instead; the shim (also same-origin) reads the global it defines.
   const bootJs = `window.__TERMPRAWL_WS_TOKEN=${JSON.stringify(policy.disabled ? '' : policy.token)};\n`
 
+  // Container-side gate (space defense-in-depth): inside a hosted space the
+  // router authenticates every request and re-injects the deterministic shared
+  // secret (sha256 hex of `${SPACE_JWT_SECRET}:${login}`) as
+  // `X-Termsprawl-Space`. Only then is the WS boot token served — a direct hit
+  // on the app port (another tenant on a shared bridge) has no such header and
+  // gets 401, never the token. A plain offline Server Edition run (no
+  // TERMSPRAWL_SPACE_HEADER env) has no router and is unchanged: the token is
+  // served as today. The manager sets TERMSPRAWL_SPACE_HEADER only in a space
+  // container, so this stays inert on localhost-only runs.
+  const spaceHeader = process.env.TERMSPRAWL_SPACE_HEADER
+  function routerAuthenticated(req: IncomingMessage): boolean {
+    if (!spaceHeader) return true
+    const raw = req.headers['x-termsprawl-space']
+    const presented = Array.isArray(raw) ? raw[0] : raw
+    return typeof presented === 'string' && presented.length > 0
+      ? timingSafeCompare(presented, spaceHeader)
+      : false
+  }
+
   function serveStatic(path: string, res: ServerResponse): void {
     // Only index.html is served at '/'; everything else is a real asset path.
     const fileName = path === '/' ? 'index.html' : path.replace(/^\//, '')
@@ -133,6 +152,13 @@ export async function createApp(opts?: { auth?: AuthPolicy; onRequest?: (method:
       return
     }
     if (url === '/termsprawl-boot.js') {
+      // Gate: only router-authenticated requests may fetch the WS boot token
+      // inside a space container (see routerAuthenticated above). 401 before
+      // any token bytes leave the process.
+      if (!routerAuthenticated(req)) {
+        res.writeHead(401, { 'Content-Type': 'text/plain' }).end('router required')
+        return
+      }
       res.writeHead(200, {
         'Content-Type': 'text/javascript',
         'Cache-Control': 'no-store',

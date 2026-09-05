@@ -47,8 +47,9 @@ function extractBearer(header?: string): string | null {
 }
 
 /** Constant-time equality over hashed values (so differing lengths don't
- * leak length information). */
-function timingSafeCompare(a: string, b: string): boolean {
+ * leak length information). Exported so the HTTP layer can reuse it to gate
+ * /termsprawl-boot.js on the router-presented space header. */
+export function timingSafeCompare(a: string, b: string): boolean {
   const ha = createHash('sha256').update(a, 'utf8').digest()
   const hb = createHash('sha256').update(b, 'utf8').digest()
   return timingSafeEqual(ha, hb)
