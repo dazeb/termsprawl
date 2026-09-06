@@ -25,6 +25,10 @@ cleanup() {
   docker rm -f ts-gh-e2e >/dev/null 2>&1 || true
   docker volume rm ts-gh-e2e-v >/dev/null 2>&1 || true
   kill "$CLOUD_PID" 2>/dev/null || true
+  # The git daemon inherits this script's stdout — without an explicit kill it
+  # survives cleanup and keeps any `| tail` pipeline open forever (a leaked
+  # daemon also holds port GIT_PORT, breaking the next run).
+  kill "${GITD_PID:-}" 2>/dev/null || true
   rm -rf "$WORK"
 }
 trap cleanup EXIT
