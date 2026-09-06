@@ -1,9 +1,10 @@
-// Audit B8 — hook-server shared secret. Any local process could previously
-// POST spoofed agent status events to the loopback hook server. A per-boot
-// random token, embedded in the installed hook URL (?key=...), makes spoofing
-// require reading the user's own settings.json — i.e. the machine is already
-// compromised. The check is defense-in-depth only: a MISSING key still
-// fails open (200, no event) so an old agent config never blocks the CLI.
+// Audit B8/B8.1 — hook-server shared secret. Any local process could POST
+// spoofed agent status events to the loopback hook server. A per-boot random
+// token, embedded in the installed hook URL (?key=...), makes spoofing require
+// reading the user's own settings.json — i.e. the machine is already
+// compromised. The check is REQUIRED (fail-closed): a missing key is rejected
+// exactly like a wrong one. Old keyless configs stop reporting until the hook
+// installer rewrites them (installClaudeHooks/installCodexHooks embed the key).
 import { createServer, type IncomingMessage, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { randomBytes } from 'node:crypto'
@@ -79,9 +80,9 @@ export class HookServer {
     this.server = null
   }
 
-  /** Route /hook/<agent> to the agent's normalizer. A wrong ?key= is ignored
-   * silently (no event); a missing key still parses (fail-open for old
-   * configs written before B8) — both return fast 200s. */
+  /** Route /hook/<agent> to the agent's normalizer. A wrong OR MISSING ?key=
+   * is ignored silently (fail-closed, audit B8.1) — the POST still gets a
+   * fast 200 so the agent CLI never errors, but no event is emitted. */
   private handle(req: IncomingMessage, url: string, body: string): void {
     const base = url.split('?')[0]
     const match = /^\/hook\/([a-z-]+)\/?$/.exec(base)
@@ -90,10 +91,12 @@ export class HookServer {
     const normalize = NORMALIZERS[agent]
     if (!normalize) return
 
-    // Defense-in-depth token check (audit B8). Key travels in the query —
-    // loopback-only, so it never crosses a network.
+    // Required token check (audit B8.1): a missing key is rejected exactly
+    // like a wrong one — fail-open allowed any local process to spoof agent
+    // status events. Key travels in the query — loopback-only, never crosses
+    // a network.
     const key = new URL(url, this.url).searchParams.get('key')
-    if (key !== null && key !== this.key) return
+    if (key !== this.key) return
 
     let parsed: unknown
     try {

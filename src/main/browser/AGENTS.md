@@ -7,11 +7,9 @@ uses to drive it.
 
 ## Contents
 
-- `runtime.ts` — provisions the one per-session CDP endpoint (random high port,
-  48-hex token, localhost only). `ensureBrowserDebugPort()` puts
-  `--remote-debugging-port` on the real argv (the reliable path) — via the
-  Wayland respawn in `../index.ts`, or appendSwitch on native X11 — and
-  reconciles `browser:cdp-info` to any port a user/agent passes manually.
+- `runtime.ts` — the single per-boot token for the agent-control surface.
+  NO raw Chromium `--remote-debugging-port` is ever opened (audit 2026-09-06:
+  it exposed the main window's full preload bridge to any local process).
 - `manager.ts` — `installBrowserSecurity()` hardens every `<webview>` guest at
   attach (strip preload, force contextIsolation + sandbox, `webSecurity` on),
   blocks non-web `will-navigate`/`will-redirect`, denies all popups, and keeps a
@@ -19,15 +17,16 @@ uses to drive it.
   stable canvas id while enforcing the URL policy in one place.
 - `agent-server.ts` — loopback, token-gated agent-control server: `GET /info`,
   `POST /open` (URL validated by core/browser-policy), discovery file
-  `userData/browser-agent.json`. State-changing only; never open.
+  `userData/browser-agent.json` (mode 0600). State-changing only; never open.
 - `cdp-facade.ts` — "virtual browser" on its own loopback port that re-exposes
   every live guest as a standard `page` target so Playwright's `connectOverCDP`
-  (and Puppeteer) can drive the exact page the user watches. See the big header
-  comment: it implements Playwright's auto-attach model and — critically —
-  reports each guest's REAL target id (== its main frame id, learned from the
-  guest's own `Page.getFrameTree` at attach), because Playwright resolves frame
-  sessions by that id and silently degrades the page to a dummy frame on
-  mismatch.
+  (and Puppeteer) can drive the exact page the user watches. Token REQUIRED on
+  every HTTP discovery call and on the WS upgrade (`?token=` or bearer). See
+  the big header comment: it implements Playwright's auto-attach model and —
+  critically — reports each guest's REAL target id (== its main frame id,
+  learned from the guest's own `Page.getFrameTree` at attach), because
+  Playwright resolves frame sessions by that id and silently degrades the page
+  to a dummy frame on mismatch.
 
 ## Rules
 

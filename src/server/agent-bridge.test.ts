@@ -26,7 +26,7 @@ describe('server agent bridge', () => {
     const payload = JSON.stringify({ hook_event_name: 'PreToolUse', session_id: 'abc', tool_name: 'Bash' })
     await new Promise<void>((resolve, reject) => {
       const req = request(
-        `${bridge!.hookUrl}hook/claude`,
+        `${bridge!.hookUrl}hook/claude?key=${bridge!.hookSecret}`,
         { method: 'POST', headers: { 'content-type': 'application/json' } },
         (res) => {
           res.resume()

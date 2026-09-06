@@ -7,7 +7,7 @@
 // `sshControlPath(userDataPath, remote)` in).
 import { runSsh, type RemoteHost, type SshOptions } from './ssh'
 import type { GitResult } from '../shared/types'
-import { parseGitStatus, parseSyncState } from './git-service'
+import { parseGitStatus, parseSyncState, isValidGitRefName } from './git-service'
 import type { GitBranchInfo, GitCommitInfo, GitFileChange, GitSyncState } from '../shared/types'
 
 export function toGitResult(code: number, stdout: string, stderr: string): GitResult {
@@ -150,6 +150,9 @@ export async function remoteCreateBranch(
   name: string,
   opts?: SshOptions
 ): Promise<GitResult> {
+  if (!isValidGitRefName(name)) {
+    return { code: 128, stdout: '', stderr: `invalid branch name: ${name}` }
+  }
   const r = await runSsh(remote, remoteGitArgs(repoRoot, ['checkout', '-b', name]), opts)
   return toGitResult(r.code, r.stdout, r.stderr)
 }
@@ -160,6 +163,9 @@ export async function remoteCheckoutBranch(
   name: string,
   opts?: SshOptions
 ): Promise<GitResult> {
+  if (!isValidGitRefName(name)) {
+    return { code: 128, stdout: '', stderr: `invalid branch name: ${name}` }
+  }
   const r = await runSsh(remote, remoteGitArgs(repoRoot, ['checkout', name]), opts)
   return toGitResult(r.code, r.stdout, r.stderr)
 }

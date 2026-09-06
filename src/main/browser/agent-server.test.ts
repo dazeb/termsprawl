@@ -18,7 +18,7 @@ describe('agent-server', () => {
     handle = await startAgentServer({
       userDataPath,
       broadcast: (channel, payload) => broadcasts.push({ channel, payload }),
-      cdp: { wsUrl: 'http://127.0.0.1:9231', host: '127.0.0.1', port: 9231 }
+      cdp: { wsUrl: 'http://127.0.0.1:9231', host: '127.0.0.1', port: 9231, token: 'agent-test-token' }
     })
   })
 
@@ -99,7 +99,7 @@ describe('agent-server', () => {
     const h = await startAgentServer({
       userDataPath,
       broadcast: () => {},
-      cdp: { wsUrl: 'http://127.0.0.1:9231', host: '127.0.0.1', port: 9231 }
+      cdp: { wsUrl: 'http://127.0.0.1:9231', host: '127.0.0.1', port: 9231, token: 'agent-test-token' }
     })
     expect(existsSync(h.endpointFile)).toBe(true)
     await h.close()
