@@ -70,7 +70,7 @@ function fakeGuest(id: number, title = 'Example Domain', url = 'https://example.
   return guest
 }
 
-/** Minimal CDP client over the facade's browser WS. */
+/** Minimal CDP client over the facade's browser WS (token on the URL). */
 class CdpClient {
   private ws: WebSocket
   private nextId = 0
@@ -78,7 +78,10 @@ class CdpClient {
   events: { method: string; params: unknown }[] = []
 
   constructor(url: string) {
-    this.ws = new WebSocket(url)
+    // The facade requires the token as ?token= on the ws URL (audit
+    // 2026-09-06). Append it unless the URL already carries one.
+    const sep = url.includes('?') ? '&' : '?'
+    this.ws = new WebSocket(`${url}${sep}token=${TEST_TOKEN}`)
   }
 
   async open(): Promise<void> {
@@ -112,24 +115,59 @@ class CdpClient {
   }
 }
 
+const TEST_TOKEN = 'facade-test-token-0123456789abcdef'
+const CdpInfo = { wsUrl: '', host: '127.0.0.1', port: 0 }
+
 describe('cdp-facade HTTP surface', () => {
   let handle: CdpFacadeHandle
 
   beforeEach(async () => {
     mockGuests.clear()
     mockRegisteredIds.length = 0
-    handle = await startCdpFacade({
-      cdpInfo: { wsUrl: 'ws://127.0.0.1:9999/raw', host: '127.0.0.1', port: 9999 }
-    })
+    handle = await startCdpFacade({ token: TEST_TOKEN, cdpInfo: CdpInfo })
   })
 
   afterEach(async () => {
     await handle.close()
   })
 
-  it('serves /json/version with and without a trailing slash (Playwright uses /json/version/)', async () => {
+  it('rejects discovery without the token (audit 2026-09-06)', async () => {
+    const res = await fetch(`http://127.0.0.1:${handle.port}/json/version`)
+    expect(res.status).toBe(401)
+  })
+
+  it('rejects an unauthenticated WebSocket upgrade (audit 2026-09-06)', async () => {
+    // Authenticated discovery first to learn the real browserId path...
+    const version = (await (
+      await fetch(`http://127.0.0.1:${handle.port}/json/version?token=${TEST_TOKEN}`)
+    ).json()) as { webSocketDebuggerUrl: string }
+    const wsPath = new URL(version.webSocketDebuggerUrl).pathname
+    // ...then connect to the SAME path WITHOUT the token. The facade must
+    // close it before any CDP message is processed.
+    const ws = new WebSocket(`ws://127.0.0.1:${handle.port}${wsPath}`)
+    const result = await new Promise<'open' | 'close' | 'error'>((resolve) => {
+      const t = setTimeout(() => resolve('close'), 2000)
+      ws.on('open', () => {
+        clearTimeout(t)
+        // The facade closes it immediately; resolve on close/error.
+        setTimeout(() => resolve('open'), 300)
+      })
+      ws.on('close', () => {
+        clearTimeout(t)
+        resolve('close')
+      })
+      ws.on('error', () => {
+        clearTimeout(t)
+        resolve('error')
+      })
+    })
+    ws.close()
+    expect(result).toBe('close')
+  })
+
+  it('serves /json/version with and without a trailing slash once authenticated (Playwright uses /json/version/)', async () => {
     for (const path of ['/json/version', '/json/version/']) {
-      const res = await fetch(`http://127.0.0.1:${handle.port}${path}`)
+      const res = await fetch(`http://127.0.0.1:${handle.port}${path}?token=${TEST_TOKEN}`)
       expect(res.status).toBe(200)
       const body = (await res.json()) as {
         Browser: string
@@ -138,7 +176,8 @@ describe('cdp-facade HTTP surface', () => {
       }
       expect(body.Browser).toContain('Electron')
       expect(body.webSocketDebuggerUrl).toContain(`127.0.0.1:${handle.port}`)
-      expect(body.cdp.port).toBe(9999)
+      // The ws URL must carry the token so the upgrade authenticates.
+      expect(body.webSocketDebuggerUrl).toContain(`token=${TEST_TOKEN}`)
     }
   })
 
@@ -155,11 +194,9 @@ describe('cdp-facade CDP protocol', () => {
   beforeEach(async () => {
     mockGuests.clear()
     mockRegisteredIds.length = 0
-    handle = await startCdpFacade({
-      cdpInfo: { wsUrl: 'ws://127.0.0.1:9999/raw', host: '127.0.0.1', port: 9999 }
-    })
+    handle = await startCdpFacade({ token: TEST_TOKEN, cdpInfo: CdpInfo })
     const version = (await (
-      await fetch(`http://127.0.0.1:${handle.port}/json/version`)
+      await fetch(`http://127.0.0.1:${handle.port}/json/version?token=${TEST_TOKEN}`)
     ).json()) as { webSocketDebuggerUrl: string }
     client = new CdpClient(version.webSocketDebuggerUrl)
     await client.open()
@@ -346,11 +383,9 @@ describe('cdp-facade restart (settings toggle off→on)', () => {
     const guest = fakeGuest(7)
 
     // First instance: attach the guest, then close (as a toggle-off would).
-    const first = await startCdpFacade({
-      cdpInfo: { wsUrl: 'ws://127.0.0.1:9999/raw', host: '127.0.0.1', port: 9999 }
-    })
+    const first = await startCdpFacade({ token: TEST_TOKEN, cdpInfo: CdpInfo })
     const v1 = (await (
-      await fetch(`http://127.0.0.1:${first.port}/json/version`)
+      await fetch(`http://127.0.0.1:${first.port}/json/version?token=${TEST_TOKEN}`)
     ).json()) as { webSocketDebuggerUrl: string }
     const c1 = new CdpClient(v1.webSocketDebuggerUrl)
     await c1.open()
@@ -364,11 +399,9 @@ describe('cdp-facade restart (settings toggle off→on)', () => {
     expect(guest.debugger.attached).toBe(false)
 
     // Second instance: attach the SAME guest again — must succeed.
-    const second = await startCdpFacade({
-      cdpInfo: { wsUrl: 'ws://127.0.0.1:9999/raw', host: '127.0.0.1', port: 9999 }
-    })
+    const second = await startCdpFacade({ token: TEST_TOKEN, cdpInfo: CdpInfo })
     const v2 = (await (
-      await fetch(`http://127.0.0.1:${second.port}/json/version`)
+      await fetch(`http://127.0.0.1:${second.port}/json/version?token=${TEST_TOKEN}`)
     ).json()) as { webSocketDebuggerUrl: string }
     const c2 = new CdpClient(v2.webSocketDebuggerUrl)
     await c2.open()

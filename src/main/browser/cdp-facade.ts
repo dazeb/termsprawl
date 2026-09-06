@@ -16,12 +16,15 @@
 // to every live guest, emits attachedToTarget for it, and keeps emitting as new
 // guests appear (polled from the browser manager).
 //
-// SECURITY: bound to 127.0.0.1 only, random high port. It only sees the
-// already-navigation-policy-guarded guests. Like Chromium's own debug port, the
-// facade does not require a bearer token (Playwright's connectOverCDP cannot
-// send one); the loopback binding + isolated non-privileged browser profile are
-// the security boundary. State-changing actions (opening a node) go through the
-// token-gated agent-control server instead (see agent-server.ts).
+// SECURITY: bound to 127.0.0.1 only, random high port, and the per-boot token
+// is REQUIRED on every HTTP discovery call and on the WebSocket upgrade
+// (`?token=` on the ws URL, or `Authorization: Bearer`). Playwright and
+// Puppeteer authenticate by carrying the token-bearing ws URL from the
+// authenticated /json/version response (or the discovery file). State-changing
+// actions (opening a node) go through the token-gated agent-control server
+// (agent-server.ts). Audit 2026-09-06: the facade was previously open to any
+// local process, and a raw Chromium debug port additionally exposed the main
+// window — both are closed now.
 
 // Set TERMSPRAWL_FACADE_DEBUG=1 to log every CDP message/event (verification).
 const FACADE_DEBUG = process.env.TERMSPRAWL_FACADE_DEBUG === '1'
@@ -41,6 +44,13 @@ export interface CdpFacadeHandle {
 }
 
 export interface StartCdpFacadeOptions {
+  /**
+   * Per-boot bearer token. REQUIRED on every HTTP discovery call
+   * (`?token=` query or `Authorization: Bearer`) and on the WebSocket
+   * upgrade (`?token=` on the ws URL). A facade that accepts connections
+   * without this is a local RCE (audit 2026-09-06) — never default it.
+   */
+  token: string
   /** Loopback info of the app's raw debug port (surfaced for the agent). */
   cdpInfo: { wsUrl: string; host: string; port: number }
 }
@@ -237,11 +247,34 @@ export async function startCdpFacade(
   const browserId = randomBytes(16).toString('hex')
   let boundPort = 0
 
+  // Token check shared by HTTP + WS: query `?token=` or `Authorization: Bearer`.
+  // Constant-time-ish compare via a full-string match on random 48-hex tokens;
+  // the value is per-boot and unguessable, and we never log it.
+  const authed = (req: IncomingMessage, queryToken: string | null): boolean => {
+    const bearer = req.headers.authorization
+    if (bearer && bearer === `Bearer ${opts.token}`) return true
+    return queryToken !== null && queryToken === opts.token
+  }
+  const tokenFromUrl = (rawUrl: string | undefined): string | null => {
+    try {
+      return new URL(rawUrl ?? '/', 'http://127.0.0.1').searchParams.get('token')
+    } catch {
+      return null
+    }
+  }
+
   const server = createServer((req: IncomingMessage, res: ServerResponse) => {
     // Playwright requests '/json/version/' (trailing slash); Chromium's devtools
     // server tolerates both forms — normalize before matching.
     const path = (req.url ?? '/').split('?')[0].replace(/\/+$/, '') || '/'
     if (path === '/json/version' || path === '/' || path === '/json') {
+      // No token, no discovery: the ws URL embeds the token, so serving it
+      // unauthenticated would hand the facade to any local process.
+      if (!authed(req, tokenFromUrl(req.url))) {
+        res.writeHead(401, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ ok: false, error: 'unauthorized' }))
+        return
+      }
       const ua = `${versionString()} Safari/537.36`
       res.writeHead(200, { 'content-type': 'application/json' })
       res.end(
@@ -251,7 +284,9 @@ export async function startCdpFacade(
           'User-Agent': ua,
           'V8-Version': process.versions.v8 ?? '0.0.0',
           'WebKit-Version': '537.36',
-          webSocketDebuggerUrl: `ws://127.0.0.1:${boundPort}/devtools/browser/${browserId}`,
+          // The token rides in the ws URL so Playwright/Puppeteer (which
+          // cannot send headers) still authenticate on the upgrade.
+          webSocketDebuggerUrl: `ws://127.0.0.1:${boundPort}/devtools/browser/${browserId}?token=${opts.token}`,
           cdp: opts.cdpInfo
         })
       )
@@ -267,7 +302,16 @@ export async function startCdpFacade(
 
   const wss = new WebSocketServer({ server, path: `/devtools/browser/${browserId}` })
 
-  wss.on('connection', (ws: Ws) => {
+  // Reject WebSocket connections that don't present the token (audit
+  // 2026-09-06: the facade was open to any local process). The connection is
+  // accepted at the TCP/upgrade level but closed immediately — no CDP message
+  // is ever processed without the per-boot token, and the single-client slot
+  // (currentWs) is only claimed after the check passes.
+  wss.on('connection', (ws: Ws, req: IncomingMessage) => {
+    if (!authed(req, tokenFromUrl(req.url))) {
+      ws.close(4001, 'unauthorized')
+      return
+    }
     currentWs = ws
     ws.on('message', (data) => {
       let msg: FacadeMessage

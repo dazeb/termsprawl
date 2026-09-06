@@ -161,8 +161,10 @@ WS boot token from `:3110`). Closed + live-verified since:
 - **Cloud API hygiene** (2026-09-06, all live): OAuth state binding
   (single-use `ts_oauth_state` cookie + server-side consumed-state set),
   device/poll rate limit (30/min/IP), `Cache-Control: no-store` on all
-  sensitive GETs, backup/sync entitlement on live subscription
-  (`isPaidLive`: paid plan AND not canceled), sync-token TTL 30d, store
+  sensitive GETs, backup creation gated on live subscription
+  (`isPaidLive`: paid plan AND not canceled — **create-only**; backup
+  list + decrypted download are auth-only and NEVER gated: canceled/free
+  users always keep access to their data), sync-token TTL 30d, store
   files `0600`, JWT `alg` pinned to HS256, Stripe webhook dedupe by event
   id, and a two-identity cross-tenant IDOR regression suite
   (`server/multitenancy-idor.test.mjs`) proving the data plane isolates.

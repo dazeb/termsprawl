@@ -108,10 +108,11 @@ export interface WorkspaceSnapshot {
 
 // Embedded browser node (Phase — browser node). A browser node is a sandboxed
 // <webview> guest rendered inline in the canvas. The CDP endpoint (localhost
-// only, random high port) is how an external agent attaches to drive it.
+// only, random high port, token-gated) is how an external agent attaches to
+// drive it. The token is REQUIRED on every CDP call (?token= or bearer).
 export interface BrowserCdpInfo {
   port: number
-  /** Bearer token for a future gated CDP proxy; surfaced so the agent can carry it. */
+  /** Per-boot bearer token — REQUIRED on the facade (query or bearer). */
   token: string
   /** http://127.0.0.1:<port> — hand this to connectOverCDP / puppeteer. */
   wsUrl: string

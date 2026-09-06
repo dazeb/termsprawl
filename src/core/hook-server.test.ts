@@ -2,8 +2,10 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { HookServer } from './hook-server'
 import type { AgentStatusEvent } from './agent-status'
 
-// The hook server is a loopback HTTP endpoint agent CLIs POST to. It must be
-// fail-open: unknown tokens/agents/payloads get a fast 200 and never crash.
+// The hook server is a loopback HTTP endpoint agent CLIs POST to. It must
+// never crash or error the CLI: unknown agents/payloads get a fast 200. The
+// shared ?key= check is fail-CLOSED though (audit B8.1) — wrong-or-missing
+// keys still get 200 but no event, so a local process cannot spoof status.
 
 function waitFor(predicate: () => boolean, timeoutMs = 5000): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -40,7 +42,7 @@ describe('HookServer', () => {
 
   it('normalizes a Claude hook POST and emits a status event', async () => {
     const { server, events } = await makeServer()
-    const res = await fetch(`${server.url}hook/claude`, {
+    const res = await fetch(`${server.url}hook/claude?key=${server.secret}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -58,7 +60,7 @@ describe('HookServer', () => {
 
   it('emits done for a Stop hook', async () => {
     const { server, events } = await makeServer()
-    await fetch(`${server.url}hook/claude`, {
+    await fetch(`${server.url}hook/claude?key=${server.secret}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ hook_event_name: 'Stop', session_id: 'sess-2' })
@@ -118,14 +120,15 @@ describe('HookServer', () => {
     expect(events[0].sessionId).toBe('real')
   })
 
-  it('fail-opens on a MISSING key (pre-B8 configs keep working, audit B8)', async () => {
+  it('fail-closes on a MISSING key (audit B8.1): 200 but no event', async () => {
     const { server, events } = await makeServer()
-    await fetch(`${server.url}hook/claude`, {
+    const res = await fetch(`${server.url}hook/claude`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ hook_event_name: 'Stop', session_id: 'legacy' })
     })
-    await waitFor(() => events.length > 0)
-    expect(events[0].sessionId).toBe('legacy')
+    expect(res.status).toBe(200)
+    await new Promise((r) => setTimeout(r, 100))
+    expect(events).toEqual([])
   })
 })

@@ -52,7 +52,7 @@ import { claudeSettingsPath, installClaudeHooks } from './agents/hook-installer'
 import { codexConfigPath, installCodexHooks } from '../core/codex-hook-installer'
 import { SessionNameTracker } from '../core/session-name'
 import { agentSessionNameChannel } from '../shared/ipc'
-import { browserRuntime, ensureBrowserDebugPort } from './browser/runtime'
+import { browserRuntime } from './browser/runtime'
 import {
   installBrowserSecurity,
   registerBrowserGuest,
@@ -90,15 +90,11 @@ const needsX11Respawn =
   !process.argv.some((a) => a.startsWith('--ozone-platform'))
 
 if (needsX11Respawn) {
-  // Forward the ozone fix plus the browser-node CDP port. Only add a debug
-  // port when one isn't already on the real argv (a user/agent may pass
-  // --remote-debugging-port manually); putting it on the real argv is the
-  // reliable path, and ensureBrowserDebugPort() reconciles cdp-info to whatever
-  // is actually in effect.
+  // Forward ONLY the ozone fix. The browser-node CDP surface is the token-
+  // gated facade (see startBrowserControlEndpoints) — Chromium's raw
+  // --remote-debugging-port is never opened (audit 2026-09-06: it exposed the
+  // main window's full preload bridge to any local process).
   const extra = ['--ozone-platform=x11']
-  if (agentBrowserControlEnabled() && !process.argv.some((a) => a.startsWith('--remote-debugging-port'))) {
-    extra.push(`--remote-debugging-port=${browserRuntime.port}`)
-  }
   spawn(process.execPath, [...process.argv.slice(1), ...extra], {
     detached: true,
     stdio: 'inherit'
@@ -107,11 +103,8 @@ if (needsX11Respawn) {
   process.exit(0)
 }
 
-// Expose the browser-node CDP endpoint — only when agent control is enabled
-// (13.4). On the Wayland respawn path the flag is already on the child's real
-// argv (kept identical); on a native X11 session this appends it via the
-// command line, which IS honoured for the debug port (unlike the ozone flag).
-if (agentBrowserControlEnabled()) ensureBrowserDebugPort()
+// The browser-node CDP facade starts inside startBrowserControlEndpoints()
+// when agent control is on; no raw Chromium debug port is ever opened.
 // Harden every <webview> guest that the browser nodes create, before any exists.
 installBrowserSecurity()
 
@@ -306,8 +299,12 @@ async function startBrowserControlEndpoints(): Promise<void> {
   if (cdpFacade) return
   const epoch = ++browserControlEpoch
   try {
+    // The facade is the ONLY CDP surface (raw --remote-debugging-port is never
+    // opened — audit 2026-09-06). It is token-gated: the per-boot token must
+    // be presented as `?token=` on the ws URL / HTTP discovery endpoints.
     const facade = await startCdpFacade({
-      cdpInfo: { wsUrl: browserRuntime.wsUrl, host: '127.0.0.1', port: browserRuntime.port }
+      token: browserRuntime.token,
+      cdpInfo: { wsUrl: '', host: '127.0.0.1', port: 0 }
     })
     if (epoch !== browserControlEpoch) {
       void facade.close()
@@ -316,7 +313,17 @@ async function startBrowserControlEndpoints(): Promise<void> {
     const server = await startAgentServer({
       userDataPath: platform.userDataPath,
       broadcast: (channel, payload) => platform.broadcast(channel, payload),
-      cdp: { wsUrl: facade.url, host: '127.0.0.1', port: facade.port }
+      // ONE per-boot token for the whole agent-control surface (facade WS +
+      // /open server), so browserCdpInfo and the discovery file agree.
+      token: browserRuntime.token,
+      cdp: {
+        wsUrl: facade.url,
+        host: '127.0.0.1',
+        port: facade.port,
+        // The token the facade verifies; agents MUST present it (query or
+        // bearer) on every CDP/HTTP call. Never served unauthenticated.
+        token: browserRuntime.token
+      }
     })
     if (epoch !== browserControlEpoch) {
       void server.close()
