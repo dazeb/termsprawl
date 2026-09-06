@@ -119,15 +119,53 @@ reconcile (cloud API) or on first visit (router wake).
 
 ## Tokens and secrets (all in /opt/termsprawl-cloud/.env)
 
-- `SPACE_JWT_SECRET` — signs 5-min browser hand-off tokens AND long-lived
-  (1 year) `space-sync` tokens given to containers. Rotation: new secret
-  invalidates all spaces' sync tokens (they fail 401 on next push; provision
-  again via the dashboard to re-mint) and forces users to re-open canvas.
-  Do it in a maintenance window.
+- `SPACE_JWT_SECRET` — signs 5-min browser hand-off tokens AND the
+  `space-sync` tokens given to containers (30-day TTL since 2026-09-06,
+  re-minted on every container start). Rotation: new secret invalidates all
+  spaces' sync tokens (they fail 401 on next push; provision again via the
+  dashboard to re-mint) and forces users to re-open canvas. Do it in a
+  maintenance window. LOW-1: a new secret only applies to containers created
+  AFTER the rotation — an already-running container keeps its old token until
+  recreated.
 - `TERMSPRAWL_SERVER_TOKEN` per space — random 48-hex, lives ONLY as
   container env (never persisted, never logged). Rotating = recreate the
   container.
 - `JWT_SECRET` / `VAULT_KEY` — existing cloud secrets; unchanged by spaces.
+
+## Multitenancy & isolation (2026-09-06, 09-05 review closed out)
+
+The 2026-09-05 multitenancy review found a CONFIRMED CRITICAL (tenant
+containers shared the default docker bridge and could fetch another tenant's
+WS boot token from `:3110`). Closed + live-verified since:
+
+- **Per-tenant bridge networks** (`space-manager.mjs` `ensureNetwork`):
+  every container runs on its own `ts-net-<login>` user-defined bridge
+  (docker `--network`), never the shared default bridge. The router stays
+  the sole ingress; the host loopback publish (`-p 127.0.0.1:<port>:3110`)
+  is unchanged. Networks are removed on stop/delete (idempotent).
+- **WS boot token gate** (app `src/server/index.ts`): `/termsprawl-boot.js`
+  is only served to requests carrying the per-space router-injected header —
+  never fetchable from the app port by an anonymous LAN/container client.
+- **Probe-verified today**: from a live tenant container AND from a
+  throwaway default-bridge container, ALL host listeners are refused
+  (8642, 9911, 3005, 22, 443, 8787, 3030). The box's ufw posture
+  (default deny incoming, `deny (routed)`) already blocks the
+  container→host path the review worried about; Phase 3's proposed
+  iptables/loopback-bind changes were therefore **not applied** — the
+  premise ("reachable from the docker gateway") is stale on this box.
+- **Deferred with this rationale**: `userns-remap` (docker daemon restart
+  + volume-ownership churn on a live box with a running tenant; the
+  cross-tenant reachability it defended against is already gone).
+  `hermes` (8642/9911) and `moltex` (3005) keep their `0.0.0.0` binds —
+  they are gateway/LAN products, and ufw already restricts sources.
+- **Cloud API hygiene** (2026-09-06, all live): OAuth state binding
+  (single-use `ts_oauth_state` cookie + server-side consumed-state set),
+  device/poll rate limit (30/min/IP), `Cache-Control: no-store` on all
+  sensitive GETs, backup/sync entitlement on live subscription
+  (`isPaidLive`: paid plan AND not canceled), sync-token TTL 30d, store
+  files `0600`, JWT `alg` pinned to HS256, Stripe webhook dedupe by event
+  id, and a two-identity cross-tenant IDOR regression suite
+  (`server/multitenancy-idor.test.mjs`) proving the data plane isolates.
 
 ## Kill switch
 
