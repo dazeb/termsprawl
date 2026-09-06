@@ -1,0 +1,30 @@
+/* Settings panel styling system — Tailwind v4 utilities, scoped.
+
+   Only the theme + utilities layers are imported; preflight (the base reset)
+   is deliberately EXCLUDED so the hand-rolled global CSS (canvas, nodes,
+   xterm, Monaco, React Flow) is never re-based. Unlayered author CSS beats
+   layered utilities in the cascade, which is why the settings panel must not
+   mix old .settings-* classes with Tailwind classes — it uses these tokens
+   and Tailwind utilities exclusively (see components/settings/ui.tsx).
+
+   Palette note: the settings panel is deliberately NEUTRAL — no lime.
+   Emphasis is ink (--fg) on page (--bg); danger red stays for destructive
+   states. Tokens map the app's semantic variables, so html[data-theme=light]
+   re-skins the panel automatically. */
+@layer theme, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+
+@theme inline {
+  --color-page: var(--bg);
+  --color-panel: var(--panel);
+  --color-raised: var(--surface-raised);
+  --color-hover: var(--bubble);
+  --color-edge: var(--border);
+  --color-ink: var(--fg);
+  --color-mute: var(--muted);
+  --color-danger: #e06c75;
+
+  --font-sans: 'Geist', 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Geist Mono', 'JetBrains Mono', monospace;
+}

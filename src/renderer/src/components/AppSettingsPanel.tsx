@@ -8,6 +8,7 @@ import { useCanvasRequests } from '../state/canvas-requests'
 import { useProjects } from '../state/projects'
 import { applyTheme } from '../state/theme'
 import { trustState, type TrustState } from './relay-trust'
+import { Button, Card, FieldRow, Hint, PrefRow, Row, Section, Select, Status, TextArea, TextInput, Toggle } from './ui/kit'
 
 interface AppSettingsPanelProps {
   onClose: () => void
@@ -605,13 +606,11 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
                 spawn defaults (they gate desktop agent-node launches); the
                 server has no agent-node spawning UI, so they hide there. */}
             {isDesktop && (
-              <div className="settings-pref-row">
-                <div className="settings-pref-copy">
-                  <span className="settings-pref-label">Agent preset</span>
-                  <span className="settings-pref-sub">Tuning for new agent sessions (standard / fast / full)</span>
-                </div>
-                <select
-                  className="settings-select"
+              <PrefRow
+                label="Agent preset"
+                sub="Tuning for new agent sessions (standard / fast / full)"
+              >
+                <Select
                   value={c.settings.agentPreset ?? 'standard'}
                   aria-label="Agent preset"
                   onChange={(e) => void c.update({ agentPreset: e.target.value })}
@@ -619,18 +618,16 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
                   {PRESET_MODES.map((m) => (
                     <option key={m.value} value={m.value}>{m.label}</option>
                   ))}
-                </select>
-              </div>
+                </Select>
+              </PrefRow>
             )}
 
             {isDesktop && (
-              <div className="settings-pref-row">
-                <div className="settings-pref-copy">
-                  <span className="settings-pref-label">Permission</span>
-                  <span className="settings-pref-sub">Default permission mode for new agent sessions (when the CLI supports it)</span>
-                </div>
-                <select
-                  className="settings-select"
+              <PrefRow
+                label="Permission"
+                sub="Default permission mode for new agent sessions (when the CLI supports it)"
+              >
+                <Select
                   value={c.settings.defaultPermission ?? 'workspaceWrite'}
                   aria-label="Default permission mode"
                   onChange={(e) => void c.update({ defaultPermission: e.target.value })}
@@ -638,34 +635,36 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
                   {PERMISSION_MODES.map((m) => (
                     <option key={m.value} value={m.value}>{m.label}</option>
                   ))}
-                </select>
-              </div>
+                </Select>
+              </PrefRow>
             )}
 
-            <div className="settings-group">
-              <div className="settings-group-title">Appearance</div>
-              <div className="settings-theme-cards">
+            <div className="border-b border-edge py-3">
+              <div className="mb-3 text-[13px] font-medium text-ink">Appearance</div>
+              <div className="grid grid-cols-3 gap-2.5">
                 {THEMES.map((t) => (
                   <button
                     key={t.value}
                     type="button"
-                    className={`settings-theme-card${(c.settings.theme ?? 'system') === t.value ? ' is-active' : ''}`}
+                    className={`flex flex-col items-center gap-2 rounded-[10px] border px-3 py-4 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ink ${
+                      (c.settings.theme ?? 'system') === t.value
+                        ? 'border-ink text-ink ring-1 ring-inset ring-ink'
+                        : 'border-edge bg-panel text-mute hover:text-ink'
+                    }`}
                     onClick={() => void c.update({ theme: t.value })}
                   >
-                    <span className="settings-theme-icon">{themeIcon(t.value)}</span>
-                    <span className="settings-theme-label">{t.label}</span>
+                    <span className="flex h-[22px] items-center justify-center">{themeIcon(t.value)}</span>
+                    <span className="text-xs">{t.label}</span>
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="settings-pref-row">
-              <div className="settings-pref-copy">
-                <span className="settings-pref-label">Enter behavior while busy</span>
-                <span className="settings-pref-sub">In chat nodes: Enter sends; busy sessions queue, send, or prompt. Shift+Enter breaks the line</span>
-              </div>
-              <select
-                className="settings-select"
+            <PrefRow
+              label="Enter behavior while busy"
+              sub="In chat nodes: Enter sends; busy sessions queue, send, or prompt. Shift+Enter breaks the line"
+            >
+              <Select
                 value={c.settings.enterBehavior ?? 'queue'}
                 aria-label="Enter behavior while busy"
                 onChange={(e) => void c.update({ enterBehavior: e.target.value })}
@@ -673,101 +672,67 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
                 {ENTER_BEHAVIORS.map((b) => (
                   <option key={b.value} value={b.value}>{b.label}</option>
                 ))}
-              </select>
-            </div>
+              </Select>
+            </PrefRow>
 
             {/* Browser nodes are Electron-only (sandboxed <webview> guests) —
                 a browser-based canvas cannot render one, so the whole browser
                 section (agent control + home page) is desktop-only. */}
             {isDesktop && (
               <>
-                <div className="settings-pref-row">
-                  <div className="settings-pref-copy">
-                    <span className="settings-pref-label">Allow agents to control browser nodes</span>
-                    <span className="settings-pref-sub">
-                      Off (default): embedded browsers work normally but no agent endpoint exists. On: an external
-                      agent can open and drive browser nodes over a localhost-only CDP endpoint
-                    </span>
-                  </div>
-                  <label className="app-settings-toggle">
-                    <input
-                      type="checkbox"
-                      checked={c.settings.agentBrowserControl === true}
-                      onChange={(e) => void c.update({ agentBrowserControl: e.target.checked })}
-                    />
-                  </label>
-                </div>
+                <PrefRow
+                  label="Allow agents to control browser nodes"
+                  sub="Off (default): embedded browsers work normally but no agent endpoint exists. On: an external agent can open and drive browser nodes over a localhost-only CDP endpoint"
+                >
+                  <Toggle
+                    checked={c.settings.agentBrowserControl === true}
+                    onChange={(v) => void c.update({ agentBrowserControl: v })}
+                    ariaLabel="Allow agents to control browser nodes"
+                  />
+                </PrefRow>
 
-                <div className="settings-pref-row">
-                  <div className="settings-pref-copy">
-                    <span className="settings-pref-label">Expose agent nodes to A2A peers</span>
-                    <span className="settings-pref-sub">
-                      Off (default): no A2A endpoint exists. On: your live agent terminals are listed
-                      as agents at a localhost-only endpoint — peers send tasks via the Google A2A
-                      protocol (token in userData/a2a-agent.json)
-                    </span>
-                  </div>
-                  <label className="app-settings-toggle">
-                    <input
-                      type="checkbox"
-                      checked={c.settings.agentA2aServer === true}
-                      onChange={(e) => void c.update({ agentA2aServer: e.target.checked })}
-                    />
-                  </label>
-                </div>
+                <PrefRow
+                  label="Expose agent nodes to A2A peers"
+                  sub="Off (default): no A2A endpoint exists. On: your live agent terminals are listed as agents at a localhost-only endpoint — peers send tasks via the Google A2A protocol (token in userData/a2a-agent.json)"
+                >
+                  <Toggle
+                    checked={c.settings.agentA2aServer === true}
+                    onChange={(v) => void c.update({ agentA2aServer: v })}
+                    ariaLabel="Expose agent nodes to A2A peers"
+                  />
+                </PrefRow>
 
-                <div className="settings-pref-row">
-                  <div className="settings-pref-copy">
-                    <span className="settings-pref-label">Search provider / browser home</span>
-                    <span className="settings-pref-sub">
-                      URL opened when a browser node or new tab starts — point this at
-                      your own SearXNG (e.g. http://127.0.0.1:8080 or a LAN host) for
-                      private search. Empty = DuckDuckGo
-                    </span>
-                  </div>
-                  <input
-                    type="text"
-                    className="settings-text-input"
+                <PrefRow
+                  label="Search provider / browser home"
+                  sub="URL opened when a browser node or new tab starts — point this at your own SearXNG (e.g. http://127.0.0.1:8080 or a LAN host) for private search. Empty = DuckDuckGo"
+                >
+                  <TextInput
                     placeholder="https://duckduckgo.com"
                     spellCheck={false}
                     value={c.settings.browserHomeUrl ?? ''}
                     onChange={(e) => void c.update({ browserHomeUrl: e.target.value })}
                   />
-                </div>
+                </PrefRow>
               </>
             )}
 
-            <div className="settings-pref-row">
-              <div className="settings-pref-copy">
-                <span className="settings-pref-label">Show first-run guide again</span>
-                <span className="settings-pref-sub">
-                  Replays the 3-step welcome (create a project, spawn a terminal, arrange) on
-                  the next launch with no projects — or right now if the canvas is empty
-                </span>
-              </div>
-              <button
-                className="settings-btn"
-                onClick={() => void c.update({ onboardedAt: undefined })}
-              >
-                reset
-              </button>
-            </div>
+            <PrefRow
+              label="Show first-run guide again"
+              sub="Replays the 3-step welcome (create a project, spawn a terminal, arrange) on the next launch with no projects — or right now if the canvas is empty"
+            >
+              <Button onClick={() => void c.update({ onboardedAt: undefined })}>reset</Button>
+            </PrefRow>
 
-            <div className="settings-pref-row">
-              <div className="settings-pref-copy">
-                <span className="settings-pref-label">Invert mousewheel zoom</span>
-                <span className="settings-pref-sub">
-                  Off (default): scroll up zooms in. On: scroll up zooms out
-                </span>
-              </div>
-              <label className="app-settings-toggle">
-                <input
-                  type="checkbox"
-                  checked={c.settings.invertWheelZoom === true}
-                  onChange={(e) => void c.update({ invertWheelZoom: e.target.checked })}
-                />
-              </label>
-            </div>
+            <PrefRow
+              label="Invert mousewheel zoom"
+              sub="Off (default): scroll up zooms in. On: scroll up zooms out"
+            >
+              <Toggle
+                checked={c.settings.invertWheelZoom === true}
+                onChange={(v) => void c.update({ invertWheelZoom: v })}
+                ariaLabel="Invert mousewheel zoom"
+              />
+            </PrefRow>
           </>
         )
       }
@@ -873,37 +838,52 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="settings-sheet" role="dialog" aria-modal="true" aria-label="settings">
-        <div className="settings-sheet-head">
-          <span className="settings-sheet-title">Settings</span>
-          <div className="settings-sheet-head-actions">
-            <button className="settings-modal-close" onClick={onClose} title="Close settings">×</button>
+      <div
+        className="flex h-[min(640px,calc(100vh-48px))] w-[min(720px,calc(100vw-48px))] flex-col overflow-hidden rounded-2xl border border-edge bg-page shadow-[0_24px_64px_rgba(0,0,0,0.6)]"
+        role="dialog"
+        aria-modal="true"
+        aria-label="settings"
+      >
+        <div className="flex items-center gap-3 border-b border-edge px-4 py-3">
+          <span className="mr-auto text-sm font-semibold tracking-[-0.01em] text-ink">Settings</span>
+          <div className="flex items-center gap-2">
+            <button
+              className="flex h-[22px] w-[22px] items-center justify-center rounded-[5px] border border-transparent text-[15px] leading-none text-mute transition-colors hover:border-edge hover:text-ink"
+              onClick={onClose}
+              title="Close settings"
+            >
+              ×
+            </button>
           </div>
         </div>
 
-        <div className="settings-sheet-body">
-          <nav className="settings-nav" aria-label="settings sections">
+        <div className="flex min-h-0 flex-1">
+          <nav className="flex w-[208px] shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-edge p-3" aria-label="settings sections">
             {visibleTabs.map((t) => (
               <button
                 key={t.id}
                 type="button"
-                className={`settings-nav-item${activeTab === t.id ? ' is-active' : ''}`}
+                aria-current={activeTab === t.id ? 'page' : undefined}
+                className={`flex items-center gap-2.5 rounded-lg border px-2.5 py-2 text-left text-[13px] transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ink ${
+                  activeTab === t.id
+                    ? 'border-edge bg-panel text-ink'
+                    : 'border-transparent text-mute hover:bg-hover hover:text-ink'
+                }`}
                 onClick={() => setTab(t.id)}
               >
-                <span className="settings-nav-icon">{t.icon}</span>
+                <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center">{t.icon}</span>
                 <span>{t.title}</span>
               </button>
             ))}
           </nav>
 
-          <div className="settings-content">
+          <div className="flex min-w-0 flex-1 flex-col gap-[22px] overflow-y-auto px-6 py-5">
             {tabSections[activeTab]
               .filter((s) => !s.editions || s.editions.includes(edition))
               .map((section) => (
-                <div key={section.id} className="settings-section">
-                  <div className="settings-section-title">{section.title}</div>
+                <Section key={section.id} title={section.title}>
                   {section.render(ctx)}
-                </div>
+                </Section>
               ))}
           </div>
         </div>
@@ -971,111 +951,109 @@ function UserSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
     void window.termsprawl.openExternal(`${(settings.cloudApiBase ?? 'https://termsprawl.com').replace(/\/$/, '')}/dashboard/billing`)
   }
   return (
-    <div className="settings-section">
+    <>
       {device && (
-        <p className="app-settings-hint">
+        <Hint>
           open <strong>{device.verification_uri}</strong> and enter code <strong>{device.user_code}</strong> to link this device.
-        </p>
+        </Hint>
       )}
       {cloudUser ? (
         <>
-          <p className="app-settings-hint">
+          <Hint>
             signed in as {cloudUser.github_login} · {cloudUser.plan} plan. Backups are encrypted server-side with your key.
-          </p>
-          <div className="account-row">
-            <button className="settings-btn accent" onClick={() => void cloudBackupNow()}>back up now</button>
-            {lastBackup && <span className="account-id">backup {lastBackup.id.slice(0, 8)} · {lastBackup.size_bytes} bytes</span>}
-            <button className="settings-btn danger" onClick={() => void cloudSignOut()}>sign out</button>
-          </div>
+          </Hint>
+          <Row>
+            <Button variant="primary" onClick={() => void cloudBackupNow()}>back up now</Button>
+            {lastBackup && <Status>backup {lastBackup.id.slice(0, 8)} · {lastBackup.size_bytes} bytes</Status>}
+            <Button variant="danger" onClick={() => void cloudSignOut()}>sign out</Button>
+          </Row>
           {isDesktop && (cloudUser.plan === 'pro' || cloudUser.plan === 'canvas') ? (
             <>
-              <div className="account-row">
-                <button className="settings-btn accent" disabled={spaceBusy} onClick={() => void cloudOpenSpace()}>
+              <Row>
+                <Button variant="primary" disabled={spaceBusy} onClick={() => void cloudOpenSpace()}>
                   {spaceBusy ? 'opening…' : 'open your online canvas'}
-                </button>
-                {space && <span className="account-id">{spaceUrlLabel(space)} · {space.status}</span>}
-                {spaceError && <span className="account-confirm-text">{spaceError}</span>}
-                {spaceNote && <span className="account-id">{spaceNote}</span>}
-              </div>
-              <div className="account-row">
+                </Button>
+                {space && <Status>{spaceUrlLabel(space)} · {space.status}</Status>}
+                {spaceError && <Status className="text-danger">{spaceError}</Status>}
+                {spaceNote && <Status>{spaceNote}</Status>}
+              </Row>
+              <Row>
                 {/* D1 — pull the online snapshot into a NEW local project and
                     switch to it. Disabled while busy; a space with nothing
                     online yet shows the note instead of failing. */}
-                <button
-                  className="settings-btn accent"
+                <Button
+                  variant="primary"
                   disabled={spaceBusy || !spaceLoaded}
                   title={spaceLoaded ? undefined : 'checking your space…'}
                   onClick={() => void cloudOpenSnapshot()}
                 >
                   {spaceBusy ? 'working…' : 'open online snapshot'}
-                </button>
+                </Button>
                 {/* D2 — push the active project's nodes + scrollbacks. Provisions
                     the space first when the user has none. */}
-                <button
-                  className="settings-btn accent"
+                <Button
+                  variant="primary"
                   disabled={spaceBusy || !spaceLoaded}
                   title={spaceLoaded ? undefined : 'checking your space…'}
                   onClick={() => void cloudSyncProject()}
                 >
                   {spaceBusy ? 'working…' : 'sync this project online'}
-                </button>
-              </div>
+                </Button>
+              </Row>
               {/* Phase 16 — the whole workspace as ONE json file: save/open
                   dialogs live in main; the same busy/error/note surface as the
                   spaces rows above. Works signed-in or not. */}
-              <div className="account-row">
-                <button
-                  className="settings-btn accent"
+              <Row>
+                <Button
+                  variant="primary"
                   disabled={spaceBusy}
                   onClick={() => void workspaceExportBundle()}
                 >
                   {spaceBusy ? 'working…' : 'export workspace…'}
-                </button>
-                <button
-                  className="settings-btn accent"
+                </Button>
+                <Button
+                  variant="primary"
                   disabled={spaceBusy}
                   onClick={() => void workspaceImportBundle()}
                 >
                   {spaceBusy ? 'working…' : 'open workspace…'}
-                </button>
-              </div>
+                </Button>
+              </Row>
             </>
           ) : !isDesktop ? null : (
-            <div className="account-row">
-              <button className="settings-btn accent" onClick={openBilling}>upgrade to pro</button>
-              <span className="account-id">pro adds an online canvas space that syncs with this desktop</span>
-            </div>
+            <Row>
+              <Button variant="primary" onClick={openBilling}>upgrade to pro</Button>
+              <Status>pro adds an online canvas space that syncs with this desktop</Status>
+            </Row>
           )}
         </>
       ) : (
-        <div className="account-row">
-          <button className="settings-btn accent" disabled={cloudBusy} onClick={() => void cloudSignIn()}>
+        <Row>
+          <Button variant="primary" disabled={cloudBusy} onClick={() => void cloudSignIn()}>
             {cloudBusy ? 'waiting for github…' : 'sign in with github'}
-          </button>
-          {!isDesktop && <span className="account-id">sign in to sync this canvas with your desktop</span>}
-        </div>
+          </Button>
+          {!isDesktop && <Status>sign in to sync this canvas with your desktop</Status>}
+        </Row>
       )}
       {cloudUser && isDesktop && (
-        <div className="account-row">
+        <Row>
           {ghConnected ? (
             <>
-              <span className="account-id">GitHub connected</span>
-              <button className="settings-btn danger" disabled={ghBusy} onClick={() => void ghDisconnect()}>
+              <Status>GitHub connected</Status>
+              <Button variant="danger" disabled={ghBusy} onClick={() => void ghDisconnect()}>
                 {ghBusy ? 'working…' : 'disconnect'}
-              </button>
+              </Button>
             </>
           ) : (
-            <button className="settings-btn accent" disabled={ghBusy || cloudBusy} onClick={() => void ghConnect()}>
+            <Button variant="primary" disabled={ghBusy || cloudBusy} onClick={() => void ghConnect()}>
               {ghBusy || cloudBusy ? 'waiting for github…' : 'Connect GitHub'}
-            </button>
+            </Button>
           )}
-          {ghNote && <span className="account-confirm-text">{ghNote}</span>}
-        </div>
+          {ghNote && <Status className="text-danger">{ghNote}</Status>}
+        </Row>
       )}
-      <label className="app-settings-toggle">
-        display name
-        <input
-          type="text"
+      <PrefRow label="Display name" sub="your name on backups and cloud surfaces">
+        <TextInput
           value={draft}
           placeholder="your name"
           onChange={(e) => setDraft(e.target.value)}
@@ -1084,13 +1062,13 @@ function UserSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
             if (v && v !== settings.displayName) void update({ displayName: v })
           }}
         />
-      </label>
-      <p className="app-settings-hint">
+      </PrefRow>
+      <Hint>
         {isDesktop
           ? 'Termsprawl Cloud account (sign in to back up projects) and a basic display name. Settings live in settings.json in the config directory.'
           : 'Sign in with the same GitHub account as your desktop to sync projects between them. Cloud settings for this canvas are managed here; everything else lives on your desktop.'}
-      </p>
-    </div>
+      </Hint>
+    </>
   )
 }
 
@@ -1100,49 +1078,50 @@ function UpdatesSection({ ctx, isPackaged }: { ctx: SectionCtx; isPackaged: bool
   // nothing. The Updates TAB itself is already desktop-only.
   if (!isPackaged) {
     return (
-      <div className="settings-section">
-        <p className="app-settings-hint">
-          Updates come from GitHub Releases. This build is unpackaged (dev), so the
-          updater is inactive — launch the installed AppImage/.deb to manage updates.
-        </p>
-      </div>
+      <Hint>
+        Updates come from GitHub Releases. This build is unpackaged (dev), so the
+        updater is inactive — launch the installed AppImage/.deb to manage updates.
+      </Hint>
     )
   }
   return (
-    <div className="settings-section">
-      <label className="app-settings-toggle">
-        <input
-          type="checkbox"
-          checked={ctx.settings.autoDownloadUpdates}
-          onChange={(e) => void ctx.update({ autoDownloadUpdates: e.target.checked })}
-        />
-        auto download updates when available
-        <HelpBadge
-          label="about auto download"
-          text="Off (default): a toast appears when a newer GitHub release exists; you choose when to download. On: the AppImage/.deb downloads in the background, then the toast asks you to restart."
-        />
-      </label>
-      <p className="app-settings-hint">When off, you get a toast and choose when to download. When on, updates download in the background and you restart to install.</p>
-    </div>
+    <PrefRow
+      label={
+        <span className="inline-flex items-center gap-1.5">
+          Auto download updates when available
+          <HelpBadge
+            label="about auto download"
+            text="Off (default): a toast appears when a newer GitHub release exists; you choose when to download. On: the AppImage/.deb downloads in the background, then the toast asks you to restart."
+          />
+        </span>
+      }
+      sub="When off, you get a toast and choose when to download. When on, updates download in the background and you restart to install."
+    >
+      <Toggle
+        checked={ctx.settings.autoDownloadUpdates}
+        onChange={(v) => void ctx.update({ autoDownloadUpdates: v })}
+        ariaLabel="auto download updates when available"
+      />
+    </PrefRow>
   )
 }
 
 function AgentsSection(): React.JSX.Element {
   return (
-    <div className="settings-section">
-      <p className="app-settings-hint">Primary agents: codex and grok. Open them from the canvas context menu (Open agent ▸). Claude stays registered but is optional.</p>
+    <>
+      <Hint>Primary agents: codex and grok. Open them from the canvas context menu (Open agent ▸). Claude stays registered but is optional.</Hint>
       {PRIMARY_AGENTS.map((id) => {
         const config = AGENT_REGISTRY[id]
         if (!config) return null
         return (
-          <div key={id} className="account-row">
-            <span className="account-label">{config.name}</span>
-            <span className="account-id">{config.command}</span>
-            <span className="account-id">{config.capabilities.hooks ? 'hooks' : 'no hooks'}</span>
-          </div>
+          <Row key={id}>
+            <span className="text-ink">{config.name}</span>
+            <Status>{config.command}</Status>
+            <Status>{config.capabilities.hooks ? 'hooks' : 'no hooks'}</Status>
+          </Row>
         )
       })}
-    </div>
+    </>
   )
 }
 
@@ -1161,40 +1140,51 @@ function AccountsSection(props: {
 }): React.JSX.Element {
   const { settings, permissionSupported, addAccount, deleteAccount, setActive, setPermissionMode, loginInto, newLabel, setNewLabel, confirmDelete, setConfirmDelete } = props
   return (
-    <div className="settings-section">
-      <p className="app-settings-hint">Each account is its own local agent config directory. Pick the active account for new agents; none means the default. Inherited API keys are stripped from its spawns.</p>
-      {settings.accounts.length === 0 && <p className="app-settings-hint">no accounts yet — add one below.</p>}
+    <>
+      <Hint>Each account is its own local agent config directory. Pick the active account for new agents; none means the default. Inherited API keys are stripped from its spawns.</Hint>
+      {settings.accounts.length === 0 && <Hint>no accounts yet — add one below.</Hint>}
       {settings.accounts.map((acc) => (
-        <div key={acc.id} className="account-row">
-          <label className="account-radio">
-            <input type="radio" name="activeAccount" checked={settings.activeAccountId === acc.id} onChange={() => void setActive(acc.id)} />
-            <span className="account-label">{acc.label}</span>
-            <span className="account-id">{acc.id}</span>
+        <Row key={acc.id}>
+          <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
+            <input
+              type="radio"
+              name="activeAccount"
+              className="accent-ink"
+              checked={settings.activeAccountId === acc.id}
+              onChange={() => void setActive(acc.id)}
+            />
+            <span className="overflow-hidden text-ellipsis whitespace-nowrap text-ink">{acc.label}</span>
+            <Status>{acc.id}</Status>
           </label>
           {permissionSupported && (
-            <select className="account-permission" value={acc.permissionMode ?? 'default'} title="permission mode" onChange={(e) => void setPermissionMode(acc.id, e.target.value as AgentAccount['permissionMode'])}>
+            <Select
+              selectClassName="max-w-[130px]"
+              value={acc.permissionMode ?? 'default'}
+              title="permission mode"
+              onChange={(e) => void setPermissionMode(acc.id, e.target.value as AgentAccount['permissionMode'])}
+            >
               <option value="default">default</option>
               <option value="acceptEdits">accept edits</option>
               <option value="bypassPermissions">bypass</option>
-            </select>
+            </Select>
           )}
-          {!confirmDelete && <button className="settings-btn accent" title="open a login terminal for this account" onClick={() => void loginInto(acc)}>login</button>}
+          {!confirmDelete && <Button variant="primary" title="open a login terminal for this account" onClick={() => void loginInto(acc)}>login</Button>}
           {confirmDelete === acc.id ? (
-            <span className="account-confirm">
-              <span className="account-confirm-text">removes its local config dir</span>
-              <button className="settings-btn danger armed" onClick={() => void deleteAccount(acc.id)}>confirm delete</button>
-              <button onClick={() => setConfirmDelete(null)}>keep</button>
+            <span className="flex items-center gap-2">
+              <Status className="text-danger">removes its local config dir</Status>
+              <Button variant="danger" armed onClick={() => void deleteAccount(acc.id)}>confirm delete</Button>
+              <button className="text-xs text-mute transition-colors hover:text-ink" onClick={() => setConfirmDelete(null)}>keep</button>
             </span>
           ) : (
-            <button className="settings-btn danger" title="delete this account" onClick={() => setConfirmDelete(acc.id)}>delete</button>
+            <Button variant="danger" title="delete this account" onClick={() => setConfirmDelete(acc.id)}>delete</Button>
           )}
-        </div>
+        </Row>
       ))}
-      <div className="account-new">
-        <input className="account-label-input" value={newLabel} placeholder="account label" onChange={(e) => setNewLabel(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void addAccount() }} />
-        <button className="settings-btn accent" onClick={() => void addAccount()}>add account</button>
-      </div>
-    </div>
+      <FieldRow>
+        <TextInput grow value={newLabel} placeholder="account label" onChange={(e) => setNewLabel(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void addAccount() }} />
+        <Button variant="primary" onClick={() => void addAccount()}>add account</Button>
+      </FieldRow>
+    </>
   )
 }
 
@@ -1217,45 +1207,47 @@ function A2ASection(props: {
     addPeer, removePeer, testPeer, peerTestId, peerTestNote
   } = props
   return (
-    <div className="settings-section">
-      <p className="app-settings-hint">Agent-to-agent peers you can route tasks to (canvas right-click → “A2A send to peer”). Peers speak the Google A2A protocol (JSON-RPC over HTTP).</p>
+    <>
+      <Hint>Agent-to-agent peers you can route tasks to (canvas right-click → “A2A send to peer”). Peers speak the Google A2A protocol (JSON-RPC over HTTP).</Hint>
       {peers.map((p) => (
-        <div key={p.id} className="account-row">
-          <span className="account-label">{p.label}</span>
-          <span className="account-id">{p.endpoint}</span>
-          <button className="settings-btn" title="discover the peer's agent card" onClick={() => void testPeer(p)}>test</button>
-          <button className="settings-btn danger" onClick={() => void removePeer(p.id)}>remove</button>
-          {peerTestId === p.id && peerTestNote && <span className="a2a-test-note">{peerTestNote}</span>}
-        </div>
+        <Row key={p.id}>
+          <span className="text-ink">{p.label}</span>
+          <Status>{p.endpoint}</Status>
+          <Button title="discover the peer's agent card" onClick={() => void testPeer(p)}>test</Button>
+          <Button variant="danger" onClick={() => void removePeer(p.id)}>remove</Button>
+          {peerTestId === p.id && peerTestNote && (
+            <Status className={peerTestNote.startsWith('✓') ? '' : 'text-danger'}>{peerTestNote}</Status>
+          )}
+        </Row>
       ))}
-      <div className="account-new">
-        <input className="account-label-input" value={peerLabel} placeholder="peer label" onChange={(e) => setPeerLabel(e.target.value)} />
-        <input className="account-label-input" value={peerEndpoint} placeholder="http://127.0.0.1:8787" onChange={(e) => setPeerEndpoint(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void addPeer() }} />
-        <input className="account-label-input" value={peerToken} placeholder="bearer token (optional)" onChange={(e) => setPeerToken(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void addPeer() }} />
-        <button className="settings-btn accent" onClick={() => void addPeer()}>add peer</button>
-      </div>
-    </div>
+      <FieldRow>
+        <TextInput grow value={peerLabel} placeholder="peer label" onChange={(e) => setPeerLabel(e.target.value)} />
+        <TextInput grow value={peerEndpoint} placeholder="http://127.0.0.1:8787" onChange={(e) => setPeerEndpoint(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void addPeer() }} />
+        <TextInput grow value={peerToken} placeholder="bearer token (optional)" onChange={(e) => setPeerToken(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void addPeer() }} />
+        <Button variant="primary" onClick={() => void addPeer()}>add peer</Button>
+      </FieldRow>
+    </>
   )
 }
 
 function ApiSection(props: { providers: ApiProviderConfig[]; providerName: string; providerBaseUrl: string; setProviderName: (v: string) => void; setProviderBaseUrl: (v: string) => void; addProvider: () => Promise<void>; removeProvider: (id: string) => Promise<void> }): React.JSX.Element {
   const { providers, providerName, providerBaseUrl, setProviderName, setProviderBaseUrl, addProvider, removeProvider } = props
   return (
-    <div className="settings-section">
-      <p className="app-settings-hint">OSS/provider API endpoints for the chat and agent drivers. API keys are NOT stored here — add a keychain-backed field later if needed.</p>
+    <>
+      <Hint>OSS/provider API endpoints for the chat and agent drivers. API keys are NOT stored here — add a keychain-backed field later if needed.</Hint>
       {providers.map((p) => (
-        <div key={p.id} className="account-row">
-          <span className="account-label">{p.name}</span>
-          <span className="account-id">{p.baseUrl}</span>
-          <button className="settings-btn danger" onClick={() => void removeProvider(p.id)}>remove</button>
-        </div>
+        <Row key={p.id}>
+          <span className="text-ink">{p.name}</span>
+          <Status>{p.baseUrl}</Status>
+          <Button variant="danger" onClick={() => void removeProvider(p.id)}>remove</Button>
+        </Row>
       ))}
-      <div className="account-new">
-        <input className="account-label-input" value={providerName} placeholder="provider (e.g. xAI)" onChange={(e) => setProviderName(e.target.value)} />
-        <input className="account-label-input" value={providerBaseUrl} placeholder="https://api.x.ai/v1" onChange={(e) => setProviderBaseUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void addProvider() }} />
-        <button className="settings-btn accent" onClick={() => void addProvider()}>add provider</button>
-      </div>
-    </div>
+      <FieldRow>
+        <TextInput grow value={providerName} placeholder="provider (e.g. xAI)" onChange={(e) => setProviderName(e.target.value)} />
+        <TextInput grow value={providerBaseUrl} placeholder="https://api.x.ai/v1" onChange={(e) => setProviderBaseUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void addProvider() }} />
+        <Button variant="primary" onClick={() => void addProvider()}>add provider</Button>
+      </FieldRow>
+    </>
   )
 }
 
@@ -1285,40 +1277,27 @@ function TelegramSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
   }
 
   return (
-    <div className="settings-section">
-      <p className="app-settings-hint">
+    <>
+      <Hint>
         Control termsprawl from your phone. Pair by messaging the bot with /start from
         the phone; the first chat becomes the owner unless you list chats below. The bot
         token is stored on this machine only — never committed to the repo (the
         TERMSPRAWL_TELEGRAM_TOKEN env var overrides it).
-      </p>
+      </Hint>
 
-      <div className="settings-pref-row">
-        <div className="settings-pref-copy">
-          <span className="settings-pref-label">Enable Telegram bot</span>
-          <span className="settings-pref-sub">
-            On: the bot starts and watches for messages. Off (default): nothing runs
-          </span>
-        </div>
-        <label className="app-settings-toggle">
-          <input
-            type="checkbox"
-            checked={tg.enabled === true}
-            onChange={(e) => void save({ enabled: e.target.checked })}
-          />
-        </label>
-      </div>
+      <PrefRow
+        label="Enable Telegram bot"
+        sub="On: the bot starts and watches for messages. Off (default): nothing runs"
+      >
+        <Toggle checked={tg.enabled === true} onChange={(v) => void save({ enabled: v })} ariaLabel="Enable Telegram bot" />
+      </PrefRow>
 
-      <div className="settings-pref-row">
-        <div className="settings-pref-copy">
-          <span className="settings-pref-label">Bot token</span>
-          <span className="settings-pref-sub">
-            {tg.token ? `a token is set (${tg.token.slice(-4)})` : 'no token — get one from @BotFather'}
-          </span>
-        </div>
-        <input
+      <PrefRow
+        label="Bot token"
+        sub={tg.token ? `a token is set (${tg.token.slice(-4)})` : 'no token — get one from @BotFather'}
+      >
+        <TextInput
           type="password"
-          className="settings-text-input"
           placeholder={tg.token ? '••••••••' : '123:bot-token'}
           spellCheck={false}
           value={draft.token}
@@ -1327,18 +1306,13 @@ function TelegramSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
             if (draft.token.trim() && draft.token !== (tg.token ?? '')) void save({ token: draft.token.trim() })
           }}
         />
-      </div>
+      </PrefRow>
 
-      <div className="settings-pref-row">
-        <div className="settings-pref-copy">
-          <span className="settings-pref-label">Allowed chat ids</span>
-          <span className="settings-pref-sub">
-            empty = the first chat to /start becomes the owner; otherwise only these chats
-            may issue commands
-          </span>
-        </div>
-        <textarea
-          className="settings-text-input"
+      <PrefRow
+        label="Allowed chat ids"
+        sub="empty = the first chat to /start becomes the owner; otherwise only these chats may issue commands"
+      >
+        <TextArea
           rows={3}
           placeholder="one chat id per line"
           spellCheck={false}
@@ -1353,8 +1327,8 @@ function TelegramSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
             })
           }
         />
-      </div>
-    </div>
+      </PrefRow>
+    </>
   )
 }
 
@@ -1502,21 +1476,19 @@ function RelaySection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
   const peerName = pairing?.peerLogin ?? 'peer'
 
   return (
-    <div className="settings-section">
-      <p className="app-settings-hint">
+    <>
+      <Hint>
         Pair two termsprawl instances through the E2E-encrypted relay. A host mints a
         single-use invite once the peers are paired; the other instance joins with that
         code as a client. Traffic is end-to-end encrypted — the relay only routes
         ciphertext. Both sides confirm the peer&apos;s key fingerprint before trusting it.
-      </p>
+      </Hint>
 
-      <div className="settings-pref-row">
-        <div className="settings-pref-copy">
-          <span className="settings-pref-label">Relay URL</span>
-          <span className="settings-pref-sub">wss:// address of the relay service</span>
-        </div>
-        <input
-          className="settings-text-input"
+      <PrefRow
+        label="Relay URL"
+        sub="wss:// address of the relay service"
+      >
+        <TextInput
           placeholder="wss://relay.example.com"
           spellCheck={false}
           value={draft.url}
@@ -1525,71 +1497,64 @@ function RelaySection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
             if (draft.url.trim() !== (relay.url ?? '')) void saveRelay({ url: draft.url.trim() })
           }}
         />
-      </div>
+      </PrefRow>
 
-      <div className="settings-pref-row">
-        <div className="settings-pref-copy">
-          <span className="settings-pref-label">Role</span>
-          <span className="settings-pref-sub">host exposes this machine; client connects out to a host</span>
-        </div>
-        <select
-          className="settings-select"
+      <PrefRow
+        label="Role"
+        sub="host exposes this machine; client connects out to a host"
+      >
+        <Select
           value={relay.role === 'client' ? 'client' : 'host'}
           aria-label="Relay role"
           onChange={(e) => void saveRelay({ role: e.target.value as 'host' | 'client' })}
         >
           <option value="host">host</option>
           <option value="client">client</option>
-        </select>
-      </div>
+        </Select>
+      </PrefRow>
 
       {isHost ? (
         <>
-          <div className="settings-pref-row">
-            <div className="settings-pref-copy">
-              <span className="settings-pref-label">Invite a peer</span>
-              <span className="settings-pref-sub">
-                {paired && !deciding
-                  ? 'pairing ready — generate a single-use invite to share'
-                  : paired && deciding
-                    ? 'confirm the peer’s fingerprint above before inviting'
-                    : 'a peer must pair with this host before an invite can be minted'}
-              </span>
-            </div>
-            <div className="settings-pref-actions">
-              <button
-                className="settings-btn accent"
-                disabled={!paired || deciding || mint.busy || busy}
-                onClick={() => void mintInvite()}
-              >
-                {mint.busy ? 'Generating…' : 'Generate invite'}
-              </button>
-            </div>
-          </div>
-          {mint.error && <p className="relay-error">{mint.error}</p>}
+          <PrefRow
+            label="Invite a peer"
+            sub={
+              paired && !deciding
+                ? 'pairing ready — generate a single-use invite to share'
+                : paired && deciding
+                  ? 'confirm the peer’s fingerprint above before inviting'
+                  : 'a peer must pair with this host before an invite can be minted'
+            }
+          >
+            <Button
+              variant="primary"
+              disabled={!paired || deciding || mint.busy || busy}
+              onClick={() => void mintInvite()}
+            >
+              {mint.busy ? 'Generating…' : 'Generate invite'}
+            </Button>
+          </PrefRow>
+          {mint.error && <Hint className="text-danger">{mint.error}</Hint>}
           {mint.code && (
             <>
-              <div className="relay-invite-code">
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-edge bg-raised px-3 py-2 font-mono text-[15px] tracking-[0.08em] text-ink">
                 <span>{mint.code}</span>
-                <button className="settings-btn" onClick={() => void copyInvite(mint.code as string)}>
+                <Button onClick={() => void copyInvite(mint.code as string)}>
                   {copied ? 'Copied' : 'Copy'}
-                </button>
+                </Button>
               </div>
-              <p className="app-settings-hint">Single-use, expires in 7 days. Share it out of band with the peer.</p>
+              <Hint>Single-use, expires in 7 days. Share it out of band with the peer.</Hint>
             </>
           )}
         </>
       ) : (
-        <div className="settings-pref-row">
-          <div className="settings-pref-copy">
-            <span className="settings-pref-label">Invite code</span>
-            <span className="settings-pref-sub">
-              {relay.invite ? `an invite is set (${relay.invite.slice(-4)})` : 'paste the invite code the host shared'}
-            </span>
-          </div>
-          <input
+        <PrefRow
+          label="Invite code"
+          sub={
+            relay.invite ? `an invite is set (${relay.invite.slice(-4)})` : 'paste the invite code the host shared'
+          }
+        >
+          <TextInput
             type="password"
-            className="settings-text-input"
             placeholder={relay.invite ? '••••••••' : 'invite code'}
             spellCheck={false}
             value={draft.invite}
@@ -1598,7 +1563,7 @@ function RelaySection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
               if (draft.invite.trim() !== (relay.invite ?? '')) void saveRelay({ invite: draft.invite.trim() })
             }}
           />
-        </div>
+        </PrefRow>
       )}
 
       {!isHost && paired && !!trusted && !deciding && !busy && (
@@ -1609,70 +1574,72 @@ function RelaySection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
       )}
 
       {pairing && pairing.decision === 'confirm' && (
-        <div className="relay-card">
-          <span className="relay-card-title">Confirm this peer</span>
-          <span className="relay-card-sub">
-            {peerName} — fingerprint:
-          </span>
-          <span className="relay-fp">{pairing.fingerprint}</span>
-          <div className="relay-actions">
-            <button className="settings-btn" onClick={teardown}>
+        <Card
+          title="Confirm this peer"
+          sub={<>{peerName} — fingerprint:</>}
+        >
+          <span className="break-all font-mono text-xs text-ink">{pairing.fingerprint}</span>
+          <div className="flex justify-end gap-2">
+            <Button onClick={teardown}>
               Disconnect
-            </button>
-            <button className="settings-btn accent" onClick={trustPeer}>
+            </Button>
+            <Button variant="primary" onClick={trustPeer}>
               Trust this peer
-            </button>
+            </Button>
           </div>
-        </div>
+        </Card>
       )}
 
       {pairing && pairing.decision === 'mismatch' && (
-        <div className="relay-card danger">
-          <span className="relay-card-title">Peer key changed — not trusted</span>
-          <span className="relay-card-sub">
-            {peerName} now presents a different key than the fingerprint this machine
-            trusted ({trusted ? shortFp(trusted) : 'none'}). You may be talking to a
-            different machine. Re-trust only if you are certain.
-          </span>
-          <span className="relay-fp">{pairing.fingerprint}</span>
-          <div className="relay-actions">
-            <button className="settings-btn danger" onClick={teardown}>
+        <Card
+          title="Peer key changed — not trusted"
+          danger
+          sub={
+            <>
+              {peerName} now presents a different key than the fingerprint this machine
+              trusted ({trusted ? shortFp(trusted) : 'none'}). You may be talking to a
+              different machine. Re-trust only if you are certain.
+            </>
+          }
+        >
+          <span className="break-all font-mono text-xs text-ink">{pairing.fingerprint}</span>
+          <div className="flex justify-end gap-2">
+            <Button variant="danger" onClick={teardown}>
               Disconnect
-            </button>
-            <button className="settings-btn accent" onClick={trustPeer}>
+            </Button>
+            <Button variant="primary" onClick={trustPeer}>
               Trust this peer
-            </button>
+            </Button>
           </div>
-        </div>
+        </Card>
       )}
 
-      <div className="settings-pref-row">
-        <div className="settings-pref-copy">
-          <span className="settings-pref-label">Connection</span>
-          <span className="settings-pref-sub">
+      <PrefRow
+        label="Connection"
+        sub={
+          <>
             {conn.state}
             {paired && trusted ? ` — trusted peer (${shortFp(trusted)})` : ''}
             {conn.error ? ` — ${conn.error}` : ''}
-          </span>
-        </div>
-        <div className="settings-pref-actions">
-          {trusted && (
-            <button className="settings-btn danger" onClick={forget} title="Forget the trusted peer and disconnect">
-              Forget
-            </button>
-          )}
-          {paired || conn.state === 'connecting' ? (
-            <button className="settings-btn accent" disabled={busy} onClick={teardown}>
-              Disconnect
-            </button>
-          ) : (
-            <button className="settings-btn accent" disabled={busy || !relay.url} onClick={() => void connect()}>
-              Connect
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
+          </>
+        }
+      >
+        {trusted && (
+          <Button variant="danger" onClick={forget} title="Forget the trusted peer and disconnect">
+            Forget
+          </Button>
+        )}
+        {paired || conn.state === 'connecting' ? (
+          <Button variant="primary" disabled={busy} onClick={teardown}>
+            Disconnect
+          </Button>
+        ) : (
+          <Button variant="primary" disabled={busy || !relay.url} onClick={() => void connect()}>
+            Connect
+          </Button>
+        )}
+      </PrefRow>
+    </>
   )
 }
 
@@ -1723,30 +1690,31 @@ function RelayTerminalList(): React.JSX.Element {
   }
 
   return (
-    <div className="relay-card">
-      <span className="relay-card-title">Remote terminals</span>
-      <span className="relay-card-sub">terminals the trusted host is currently serving</span>
-      <div className="relay-actions">
-        <button className="settings-btn" disabled={listing} onClick={list}>
+    <Card
+      title="Remote terminals"
+      sub="terminals the trusted host is currently serving"
+    >
+      <div className="flex justify-end gap-2">
+        <Button disabled={listing} onClick={list}>
           {listing ? 'Listing…' : 'List host terminals'}
-        </button>
+        </Button>
       </div>
-      {note && <p className="relay-error">{note}</p>}
+      {note && <Hint className="text-danger">{note}</Hint>}
       {terms.length > 0 && (
-        <ul className="relay-term-list">
+        <ul className="m-0 flex list-none flex-col gap-1 p-0">
           {terms.map((t) => (
-            <li key={t.id} className="relay-term-row">
-              <span className="relay-term-name" title={t.id}>
+            <li key={t.id} className="flex items-center justify-between gap-3 border-b border-edge py-1.5 last:border-b-0">
+              <span className="truncate font-mono text-xs text-ink" title={t.id}>
                 {t.title || t.id}
               </span>
-              <button className="settings-btn accent" onClick={() => open(t)}>
+              <Button variant="primary" onClick={() => open(t)}>
                 Open
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
       )}
-    </div>
+    </Card>
   )
 }
 
@@ -1774,20 +1742,20 @@ function ChatSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
   }
 
   return (
-    <div className="settings-section">
-      <p className="app-settings-hint">
+    <>
+      <Hint>
         Chat nodes talk to an OpenAI-compatible or Anthropic endpoint. Add a provider under
         API providers, then paste its key below. Keys are stored on this machine only —
         never committed (the {providers.length > 0 ? envName(providers[0].id) : 'TERMSPRAWL_PROVIDER_KEY_<ID>'} env var overrides a stored key).
-      </p>
+      </Hint>
 
-      <div className="settings-pref-row">
-        <div className="settings-pref-copy">
-          <span className="settings-pref-label">Default provider</span>
-          <span className="settings-pref-sub">which configured provider new chat nodes use</span>
-        </div>
-        <select
-          className="settings-text-input"
+      <PrefRow
+        label="Default provider"
+        sub="which configured provider new chat nodes use"
+      >
+        <Select
+          className="w-[200px]"
+          selectClassName="w-full"
           value={chat.defaultProvider ?? ''}
           onChange={(e) => void saveChat({ defaultProvider: e.target.value || undefined })}
         >
@@ -1797,40 +1765,35 @@ function ChatSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
               {p.name || p.id}
             </option>
           ))}
-        </select>
-      </div>
+        </Select>
+      </PrefRow>
 
-      <div className="settings-pref-row">
-        <div className="settings-pref-copy">
-          <span className="settings-pref-label">Default model</span>
-          <span className="settings-pref-sub">e.g. gpt-4o-mini, claude-sonnet-4-5, llama3 — /model overrides per chat</span>
-        </div>
-        <input
-          className="settings-text-input"
+      <PrefRow
+        label="Default model"
+        sub="e.g. gpt-4o-mini, claude-sonnet-4-5, llama3 — /model overrides per chat"
+      >
+        <TextInput
           placeholder="model id"
           spellCheck={false}
           value={chat.defaultModel ?? ''}
           onChange={(e) => void saveChat({ defaultModel: e.target.value || undefined })}
         />
-      </div>
+      </PrefRow>
 
       {providers.length === 0 ? (
-        <p className="app-settings-hint">No providers configured yet — add one under “API providers” above.</p>
+        <Hint>No providers configured yet — add one under “API providers” above.</Hint>
       ) : (
         providers.map((p) => {
           const stored = keyFor(p.id)
           const draft = drafts[p.id] ?? ''
           return (
-            <div className="settings-pref-row" key={p.id}>
-              <div className="settings-pref-copy">
-                <span className="settings-pref-label">{p.name || p.id} API key</span>
-                <span className="settings-pref-sub">
-                  {stored ? `a key is set (…${stored.slice(-4)})` : `no key — or set ${envName(p.id)}`}
-                </span>
-              </div>
-              <input
+            <PrefRow
+              key={p.id}
+              label={`${p.name || p.id} API key`}
+              sub={stored ? `a key is set (…${stored.slice(-4)})` : `no key — or set ${envName(p.id)}`}
+            >
+              <TextInput
                 type="password"
-                className="settings-text-input"
                 placeholder={stored ? '••••••••' : 'sk-…'}
                 spellCheck={false}
                 value={draft}
@@ -1839,10 +1802,10 @@ function ChatSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
                   if (draft.trim() && draft !== stored) saveKey(p.id, draft)
                 }}
               />
-            </div>
+            </PrefRow>
           )
         })
       )}
-    </div>
+    </>
   )
 }

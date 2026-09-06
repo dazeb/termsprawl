@@ -715,35 +715,6 @@ body {
   -webkit-backdrop-filter: blur(3px);
 }
 
-.settings-modal {
-  width: min(560px, calc(100vw - 48px));
-  max-height: min(560px, calc(100vh - 96px));
-  display: flex;
-  flex-direction: column;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
-}
-
-.settings-modal-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--border);
-}
-
-.settings-modal-title {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .settings-modal-close {
   width: 22px;
   height: 22px;
@@ -764,259 +735,8 @@ body {
   border-color: var(--border);
 }
 
-.settings-modal-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
 
-.settings-section {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
 
-.settings-section-title {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.settings-modal-foot {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 12px 16px;
-  border-top: 1px solid var(--border);
-}
-
-.settings-modal-done {
-  padding: 5px 14px;
-  background: var(--accent);
-  border: 1px solid var(--accent);
-  border-radius: 5px;
-  color: #0a0a0a;
-  font: 12px/1.4 'Geist Mono', monospace;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.settings-modal-done:hover {
-  filter: brightness(1.08);
-}
-
-/* Settings sheet — full-width sidebar rendering (matches the reference layout):
-   head row (title + open-config + close), then a left nav rail and a scrollable
-   content column. Replaces the older narrow centered modal. */
-.settings-sheet {
-  width: min(720px, calc(100vw - 48px));
-  height: min(640px, calc(100vh - 48px));
-  display: flex;
-  flex-direction: column;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
-  overflow: hidden;
-}
-
-.settings-sheet-head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
-}
-
-.settings-sheet-title {
-  font-size: 14px;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-  margin-right: auto;
-}
-
-.settings-sheet-head-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.settings-sheet-body {
-  flex: 1;
-  display: flex;
-  min-height: 0;
-}
-
-.settings-nav {
-  width: 208px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 12px 10px;
-  border-right: 1px solid var(--border);
-  overflow-y: auto;
-}
-
-.settings-nav-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  color: var(--muted);
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.settings-nav-item:hover {
-  color: var(--fg);
-  background: rgba(255, 255, 255, 0.04);
-}
-
-html[data-theme='light'] .settings-nav-item:hover {
-  background: rgba(0, 0, 0, 0.05);
-}
-
-.settings-nav-item.is-active {
-  color: var(--fg);
-  background: var(--panel);
-  border-color: var(--border);
-}
-
-.settings-nav-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
-}
-
-.settings-content {
-  flex: 1;
-  min-width: 0;
-  padding: 20px 24px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-}
-
-/* Preference rows (label + sub-copy on the left, select on the right). */
-.settings-pref-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.settings-pref-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-}
-
-.settings-pref-label {
-  font-size: 13px;
-  font-weight: 550;
-  color: var(--fg);
-}
-
-.settings-pref-sub {
-  font-size: 11px;
-  line-height: 1.4;
-  color: var(--muted);
-}
-
-.settings-select {
-  flex-shrink: 0;
-  padding: 7px 10px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--fg);
-  font: 12px/1.4 'Geist Mono', monospace;
-  cursor: pointer;
-}
-
-/* ---------------------------------------------------------------------------
-   Settings control system (settings-polish) — one coherent scale for EVERY
-   control in the settings sheet: normal-sized, Geist (sans) where text is
-   prose / Geist Mono where the value is code-ish, and lime (--accent) as the
-   ONLY highlight. Native form controls are re-themed so the OS accent
-   (purple/blue GTK) can never leak into the panel again.
-   --------------------------------------------------------------------------- */
-
-/* Checkboxes + radios: lime accent in both themes (kills the OS purple). */
-.settings-content input[type='checkbox'],
-.settings-content input[type='radio'] {
-  accent-color: var(--accent);
-  width: 15px;
-  height: 15px;
-  cursor: pointer;
-}
-
-/* Text inputs / textareas / selects inside the content column: consistent
-   box, 13px Geist (sans) — these hold user prose (URLs, names, tokens).
-   The font stack mirrors body (Geist may be absent on the host). */
-.settings-content input[type='text'],
-.settings-content input[type='password'],
-.settings-content textarea,
-.settings-content select {
-  min-height: 32px;
-  padding: 6px 10px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  color: var(--fg);
-  font-family: 'Geist', 'Inter', system-ui, -apple-system, sans-serif;
-  font-size: 13px;
-  line-height: 1.4;
-}
-
-.settings-content textarea {
-  min-height: 0;
-  padding: 8px 10px;
-  resize: vertical;
-}
-
-.settings-content input[type='text']:hover,
-.settings-content input[type='password']:hover,
-.settings-content textarea:hover,
-.settings-content select:hover {
-  border-color: var(--surface-raised);
-}
-
-.settings-content input:focus-visible,
-.settings-content textarea:focus-visible,
-.settings-content select:focus-visible {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
-}
-
-/* Selects: custom chevron (appearance:none) so the GTK arrow never appears;
-   the chevron uses currentColor so both themes stay correct. */
-.settings-content select {
-  appearance: none;
-  -webkit-appearance: none;
-  padding-right: 28px;
-  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238a8a86' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-}
 
 /* Native widget theming — GLOBAL, not scoped to one panel. A `<select>`'s
    dropdown list is an OS popup: unthemed, the GTK highlight color (purple on
@@ -1047,342 +767,10 @@ html[data-theme='light'] option {
   color: var(--fg);
 }
 
-/* Buttons: two roles, one size. .settings-btn = neutral action;
-   .settings-btn.accent = primary (lime outline — the app's functional
-   signal). 13px Geist, 32px tall, comfortable hit targets. */
-.settings-content .settings-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 32px;
-  padding: 0 14px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  color: var(--fg);
-  font-family: 'Geist', 'Inter', system-ui, -apple-system, sans-serif;
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1;
-  letter-spacing: 0.01em;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.settings-content .settings-btn:hover {
-  background: var(--surface-raised);
-  border-color: var(--surface-raised);
-}
-
-.settings-content .settings-btn:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-.settings-content .settings-btn:disabled:hover {
-  background: var(--panel);
-  border-color: var(--border);
-}
-
-.settings-content .settings-btn.accent {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: transparent;
-}
-
-.settings-content .settings-btn.accent:hover {
-  background: rgba(198, 241, 53, 0.1);
-}
-
-html[data-theme='light'] .settings-content .settings-btn.accent:hover {
-  background: rgba(140, 168, 30, 0.12);
-}
-
-/* Destructive: red is a STATE (hover/armed), never a resting color. */
-.settings-content .settings-btn.danger:hover {
-  border-color: #e06c75;
-  color: #e06c75;
-  background: transparent;
-}
-
-.settings-content .settings-btn.danger.armed {
-  border-color: #e06c75;
-  color: #e06c75;
-}
-
-.settings-content :is(button, [type='checkbox'], [type='radio'], select, input):focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-
-.settings-content input[type='checkbox']:focus-visible,
-.settings-content input[type='radio']:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.settings-content select:focus-visible,
-.settings-content input:focus-visible,
-.settings-content textarea:focus-visible {
-  outline: none;
-}
-
-/* The pref-row selects (legacy class) inherit the system scale; keep only
-   their layout-specific bits. */
-.settings-select {
-  flex-shrink: 0;
-}
-
-.settings-text-input {
-  flex-shrink: 1;
-  min-width: 0;
-  max-width: 280px;
-}
-
-.settings-text-input::placeholder {
-  color: var(--muted);
-}
-
-/* Right-side action group for a pref row that needs more than one control
-   (Relay connection + invite rows). */
-.settings-pref-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-/* Relay pairing confirm / invite code surfaces (A4). Lime (--accent) is the
-   ONLY highlight; red (#e06c75) is reserved for the key-mismatch hard
-   warning, where the peer must re-trust explicitly. */
-.relay-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-}
-.relay-card-title {
-  font-size: 13px;
-  font-weight: 550;
-  color: var(--fg);
-}
-.relay-card-sub {
-  font-size: 11px;
-  line-height: 1.45;
-  color: var(--muted);
-}
-.relay-card .relay-fp {
-  font-family: 'Geist Mono', 'JetBrains Mono', monospace;
-  font-size: 12px;
-  color: var(--fg);
-  word-break: break-all;
-}
-.relay-card .relay-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-.relay-card.danger {
-  background: rgba(224, 108, 117, 0.06);
-  border-color: #e06c75;
-}
-.relay-card.danger .relay-card-title {
-  color: #e06c75;
-}
-.relay-error {
-  margin: 0;
-  font-size: 11px;
-  line-height: 1.4;
-  color: #e06c75;
-}
-.relay-invite-code {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 12px;
-  background: var(--surface-raised);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-family: 'Geist Mono', 'JetBrains Mono', monospace;
-  font-size: 15px;
-  letter-spacing: 0.08em;
-  color: var(--fg);
-}
-
-/* B3 — remote-terminal attach list (client role): the host's served terminals,
-   each with an "Open" action that spawns a remote node on the canvas. */
-.relay-term-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.relay-term-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--border);
-}
-.relay-term-row:last-child {
-  border-bottom: none;
-}
-.relay-term-name {
-  font-family: 'Geist Mono', 'JetBrains Mono', monospace;
-  font-size: 12px;
-  color: var(--fg);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
 
-/* Grouped section (e.g. Appearance) — a titled block, not a divider row. */
-.settings-group {
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border);
-}
 
-.settings-group-title {
-  font-size: 13px;
-  font-weight: 550;
-  color: var(--fg);
-  margin-bottom: 12px;
-}
 
-.settings-theme-cards {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-}
-
-.settings-theme-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 16px 12px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.settings-theme-card:hover {
-  color: var(--fg);
-}
-
-.settings-theme-card.is-active {
-  color: var(--fg);
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent) inset;
-}
-
-.settings-theme-card.is-active .settings-theme-icon {
-  color: var(--accent);
-}
-
-.settings-theme-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 22px;
-  color: inherit;
-}
-
-.settings-theme-label {
-  font-size: 12px;
-}
-
-.app-settings-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--fg);
-  margin: 8px 0;
-}
-
-.app-settings-toggle input {
-  margin-top: 2px;
-}
-
-.app-settings-hint {
-  margin: 0 0 10px;
-  font-size: 11px;
-  line-height: 1.4;
-  color: var(--muted);
-}
-
-/* Managed agent accounts (7.6) + every list-row section (A2A peers, API
-   providers, cloud). Buttons use the shared .settings-btn system; these rules
-   keep only the row layout and the code-ish value text. */
-.account-section-title {
-  margin: 16px 0 0;
-  font-size: 12px;
-}
-.account-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border);
-  font-size: 13px;
-}
-.account-radio {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-  min-width: 0;
-  cursor: pointer;
-}
-.account-radio input {
-  margin: 0;
-}
-.account-label {
-  color: var(--fg);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.account-id {
-  color: var(--muted);
-  font-size: 11px;
-  font-family: 'Geist Mono', monospace;
-}
-.account-confirm {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.account-confirm-text {
-  color: #e06c75;
-  font-size: 11px;
-}
-.account-new {
-  display: flex;
-  gap: 8px;
-  margin-top: 12px;
-}
-.account-new .settings-btn {
-  flex-shrink: 0;
-}
-.account-label-input {
-  flex: 1;
-  min-width: 0;
-}
-.account-permission {
-  max-width: 130px;
-}
 
 /* Source control panel (Phase 8) */
 .source-control {
@@ -1553,6 +941,12 @@ html[data-theme='light'] .settings-content .settings-btn.accent:hover {
   color: #ff8a8a;
   border-color: #ff5c5c66;
 }
+/* Danger note inside a confirm row (worktree removal). Was part of the old
+   settings control system; restored 2026-09-06 as a shared rule. */
+.account-confirm-text {
+  color: #e06c75;
+  font-size: 11px;
+}
 .source-control-commit,
 .source-control-newbranch {
   display: flex;
@@ -1572,6 +966,46 @@ html[data-theme='light'] .settings-content .settings-btn.accent:hover {
 }
 .source-control-msg:focus {
   border-color: var(--accent);
+}
+/* Worktree + branch list rows (added 2026-09-06 — these shipped unstyled). */
+.source-control-worktrees,
+.source-control-branches {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.source-control-wtrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+.source-control-wtrow:last-child {
+  border-bottom: none;
+}
+.source-control-wtpath {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg);
+}
+.source-control-wtbranch {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px;
+}
+.source-control-remotehost {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .source-control-subtitle {
   margin-top: 14px;
@@ -1968,6 +1402,20 @@ html[data-theme='light'] .settings-content .settings-btn.accent:hover {
   font-weight: 600;
   min-width: 80px;
   flex: 1;
+}
+
+/* Terminal title span (the read-only sibling of the rename input) — same
+   weight as the input, ellipsized. Added 2026-09-06 (was unstyled). */
+.terminal-node-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: default;
 }
 
 /* Agent status badges (Phase 7) — lime = working (functional signal),
@@ -2555,13 +2003,6 @@ html[data-theme='light'] .settings-content .settings-btn.accent:hover {
 }
 
 /* A2A peer "test" result line (settings → connections). */
-.a2a-test-note {
-  font-size: 11px;
-  color: var(--muted);
-  margin-left: auto;
-  text-align: right;
-  word-break: break-word;
-}
 
 /* Node-link edges (Phase 18): a small kind chip at the edge midpoint. Kind
    hues come from the muted palette; lime stays functional (selection only). */
@@ -2628,6 +2069,14 @@ html[data-theme='light'] .settings-content .settings-btn.accent:hover {
   background: rgba(198, 241, 53, 0.08);
 }
 
+/* Settings sheet + control system — REPLACED 2026-09-06: the settings
+   panel now renders with Tailwind v4 utilities and the shared UI kit
+   (src/renderer/src/components/ui/kit.tsx, tokens in
+   src/renderer/src/settings.css). The .settings-* / .account-* / .relay-* /
+   .app-settings-* blocks were removed with the refactor; EVERYTHING else
+   (source-control, update-toast, announcement, node styles, context-menu,
+   ...) was restored from the pre-refactor file. Do NOT reintroduce shared
+   settings classes for the panel. */
 /* First-run onboarding (Task 3.2): a single centered card over a scrim.
    Same visual family as the settings sheet — dark panel, lime accents.
    No animations (reduced-motion friendly by construction). */

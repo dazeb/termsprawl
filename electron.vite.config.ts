@@ -1,5 +1,6 @@
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 import { fileURLToPath } from 'node:url'
 
 // tsconfig paths (@shared/*) are used by type-checking, but electron-vite does
@@ -20,7 +21,7 @@ export default defineConfig({
     resolve: { alias: sharedAlias }
   },
   renderer: {
-    plugins: [react()],
+    plugins: [react(), tailwindcss()],
     resolve: { alias: sharedAlias }
   }
 })

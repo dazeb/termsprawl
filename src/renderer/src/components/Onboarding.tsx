@@ -9,6 +9,7 @@ import React from 'react'
 import { useEffect } from 'react'
 import { useProjects } from '../state/projects'
 import { projectNameFromPath } from '../state/workspace'
+import { Button } from './ui/kit'
 
 export interface OnboardingProps {
   onDismiss(): void
@@ -73,12 +74,12 @@ export function Onboarding({ onDismiss }: OnboardingProps): React.JSX.Element {
           ))}
         </ol>
         <div className="onboarding-actions">
-          <button className="settings-btn accent" onClick={createProject}>
+          <Button variant="primary" onClick={createProject}>
             Get started — create a project
-          </button>
-          <button className="settings-btn" onClick={onDismiss}>
+          </Button>
+          <Button onClick={onDismiss}>
             Skip — I know my way around
-          </button>
+          </Button>
         </div>
       </div>
     </div>
