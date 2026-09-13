@@ -89,8 +89,21 @@ function blockContainsMarker(lines: string[], start: number, end: number): boole
  * (audit B8, same as the Claude installer). Creates the parent dir if needed.
  */
 export function installCodexHooks(configPath: string, baseUrl: string, secretKey?: string): void {
-  const raw = existsSync(configPath) ? readFileSync(configPath, 'utf8') : ''
-  if (raw.includes(MANAGED_KEY)) return // double-install guard
+  let raw = existsSync(configPath) ? readFileSync(configPath, 'utf8') : ''
+  if (raw.includes(MANAGED_KEY)) {
+    // Legacy repair (v0.22–v0.25 wrote INVALID TOML): the old literal-string
+    // command carried shell-style doubled single quotes (''Content-Type''),
+    // which TOML rejects — codex exits on every launch with a parse error at
+    // the hook line. If the managed block shows that pattern, drop our tables
+    // and reinstall with valid basic strings. A correct managed block is left
+    // untouched (double-install guard).
+    if (raw.includes("''Content-Type")) {
+      uninstallCodexHooks(configPath)
+      raw = existsSync(configPath) ? readFileSync(configPath, 'utf8') : ''
+    } else {
+      return
+    }
+  }
 
   const command = handlerCommand(baseUrl, secretKey)
   const lines: string[] = raw.split('\n')
@@ -134,8 +147,13 @@ export function uninstallCodexHooks(configPath: string): void {
 }
 
 function tomlString(v: string): string {
-  // Single-quoted TOML literal string: no escapes needed for our URL/secret.
-  return `'${v.replace(/'/g, "''")}'`
+  // TOML basic string (double-quoted). JSON string escaping is a compatible
+  // subset (\" \\ \n \t …), and inner single quotes — which our curl command
+  // uses for the Content-Type header and URL — stay literal. TOML literal
+  // strings (single-quoted) cannot contain single quotes at all; the old
+  // shell-style doubling (''…'') is a parse error that killed codex at
+  // startup (seen in the wild across v0.22–v0.25).
+  return JSON.stringify(v)
 }
 
 /** Path to Codex CLI's config (~/.codex/config.toml). */

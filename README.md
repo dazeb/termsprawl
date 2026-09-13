@@ -19,9 +19,10 @@ sprawls, nothing hides in tabs.
   scrollback intact (cold starts replay a byte-capped scrollback snapshot).
 - **Projects & persistence** — tabs, one project per tab; layouts persist to a
   git-shareable project file, so you can commit and share a workspace.
-- **Agent nodes** — spawn Claude / Codex / Gemini / Grok right on the canvas,
-  with hook-driven status badges (RUNNING / NEEDS YOU), unread dots, and OS
-  notifications when an agent finishes.
+- **Agent nodes** — spawn Claude / Codex / Antigravity / Grok / OpenClaude
+  right on the canvas, with hook-driven status badges (RUNNING / NEEDS YOU),
+  unread dots, and OS notifications when an agent finishes. OpenClaude points
+  at any OpenAI-compatible endpoint, including local models.
 - **Sticky, group, editor, and diff nodes** — notes, frames, and Monaco-based
   editors/diffs as first-class canvas citizens.
 - **Embedded browser nodes** — a real sandboxed Chromium browser on the canvas,

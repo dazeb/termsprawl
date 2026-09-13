@@ -126,6 +126,64 @@ describe('codex hook installer', () => {
   })
 })
 
+describe('codex hook installer TOML validity', () => {
+  it('writes command values as valid TOML basic strings (no doubled single quotes)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'codex-hooks-toml-'))
+    const path = join(dir, 'config.toml')
+    try {
+      installCodexHooks(path, 'http://127.0.0.1:5555/', 'sekret')
+      const raw = readFileSync(path, 'utf8')
+      const commandLines = raw.split('\n').filter((l) => l.startsWith('command = '))
+      expect(commandLines.length).toBeGreaterThan(0)
+      for (const line of commandLines) {
+        // TOML basic string (double-quoted): literal single-quoted strings
+        // can't contain single quotes, and the old shell-style doubling
+        // (`''Content-Type''`) is a TOML parse error that kills codex.
+        expect(line.startsWith('command = "')).toBe(true)
+        expect(line.endsWith('"')).toBe(true)
+        expect(line).not.toContain("''")
+      }
+      expect(raw).toContain("-H 'Content-Type: application/json'") // inner quotes survive
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('self-repairs a legacy broken managed block (doubled single quotes)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'codex-hooks-repair-'))
+    const path = join(dir, 'config.toml')
+    const legacyCommand = `command = 'curl -s -o /dev/null -X POST -H ''Content-Type: application/json'' --data-binary @- ''http://127.0.0.1:5555/hook/codex?key=s'''`
+    writeFileSync(
+      path,
+      [
+        'model = "o3"',
+        '',
+        '# termsprawl agent-status hooks (managed — do not edit)',
+        '',
+        '[[hooks.PreToolUse.hooks]]',
+        'matcher = "*"',
+        'type = "command"',
+        legacyCommand,
+        'timeout = 3',
+        '__termsprawl = true',
+        ''
+      ].join('\n')
+    )
+    try {
+      installCodexHooks(path, 'http://127.0.0.1:5555/', 'sekret')
+      const raw = readFileSync(path, 'utf8')
+      expect(raw).not.toContain("''Content-Type")
+      expect((raw.match(/__termsprawl = true/g) ?? []).length).toBe(11)
+      const commandLines = raw.split('\n').filter((l) => l.startsWith('command = '))
+      for (const line of commandLines) expect(line).not.toContain("''")
+      // User content preserved, exactly one managed block per event.
+      expect(raw).toContain('model = "o3"')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
+
 describe('codex hook install (mkdir smoke)', () => {
   it('caller provides the dir; nested creation works via mkdirSync beforehand', () => {
     const dir = mkdtempSync(join(tmpdir(), 'codex-hooks2-'))

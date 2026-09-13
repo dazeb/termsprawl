@@ -2,7 +2,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { findExecutable, resolveCommandLine } from './command-resolver'
+import { findExecutable, resolveCommandLine, unresolvedNotice } from './command-resolver'
 
 // The resolver exists because GUI-launched apps (AppImage from a desktop
 // launcher) inherit a minimal PATH that omits user dirs like ~/.druk/bin —
@@ -76,5 +76,52 @@ describe('resolveCommandLine', () => {
     expect(resolveCommandLine('missing-cmd --flag', '/tmp/nonexistent-home')).toBe(
       'missing-cmd --flag'
     )
+  })
+})
+
+describe('gemini alias (Antigravity ships as agy on modern installs)', () => {
+  it('findExecutable resolves gemini to a local agy binary', () => {
+    const home = mkdtempSync(join(tmpdir(), 'ts-home-'))
+    tempDirs.push(home)
+    const bin = join(home, '.local', 'bin')
+    mkdirSync(bin, { recursive: true })
+    const agy = join(bin, 'agy')
+    writeFileSync(agy, '#!/bin/sh\necho agy\n', 'utf8')
+    chmodSync(agy, 0o755)
+    process.env.PATH = '/usr/local/bin:/usr/bin:/bin'
+    expect(findExecutable('gemini', home)).toBe(agy)
+    expect(resolveCommandLine('gemini', home)).toBe(agy)
+  })
+})
+
+describe('unresolvedNotice', () => {
+  it('returns null when the command resolves (incl. via home fallback)', () => {
+    const home = fakeHomeWithDruk()
+    process.env.PATH = '/usr/local/bin:/usr/bin:/bin'
+    expect(unresolvedNotice('druk', home)).toBeNull()
+  })
+
+  it('returns null when the command resolves via alias', () => {
+    const home = mkdtempSync(join(tmpdir(), 'ts-home-'))
+    tempDirs.push(home)
+    const bin = join(home, '.local', 'bin')
+    mkdirSync(bin, { recursive: true })
+    const agy = join(bin, 'agy')
+    writeFileSync(agy, '#!/bin/sh\necho agy\n', 'utf8')
+    chmodSync(agy, 0o755)
+    process.env.PATH = '/usr/local/bin:/usr/bin:/bin'
+    expect(unresolvedNotice('gemini', home)).toBeNull()
+  })
+
+  it('names the command when nothing resolves', () => {
+    const home = fakeHomeWithDruk()
+    process.env.PATH = '/usr/local/bin:/usr/bin:/bin'
+    const notice = unresolvedNotice('claude --session-id abc', home)
+    expect(notice).not.toBeNull()
+    expect(notice).toContain('claude')
+  })
+
+  it('returns null for an already-absolute command even if the file is absent', () => {
+    expect(unresolvedNotice('/usr/bin/env foo', '/tmp/nonexistent-home')).toBeNull()
   })
 })

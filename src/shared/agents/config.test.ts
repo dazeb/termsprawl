@@ -6,8 +6,8 @@ import { AGENT_REGISTRY, agentCommand, agentIds, agentName, agentTitle } from '.
 // each CLI's real hooks/status behaviour.
 
 describe('agent registry', () => {
-  it('exposes the five agent ids', () => {
-    expect(agentIds()).toEqual(['claude', 'codex', 'gemini', 'grok', 'custom'])
+  it('exposes the six agent ids', () => {
+    expect(agentIds()).toEqual(['claude', 'codex', 'gemini', 'grok', 'openclaude', 'custom'])
   })
 
   it('every agent has a command, name, and title', () => {
@@ -43,6 +43,7 @@ describe('agent registry', () => {
     expect(AGENT_REGISTRY.codex.enabled).toBe(true)
     expect(AGENT_REGISTRY.gemini.enabled).toBe(true)
     expect(AGENT_REGISTRY.grok.enabled).toBe(true)
+    expect(AGENT_REGISTRY.openclaude.enabled).toBe(true)
     // custom is a template — not auto-enabled until configured.
     expect(AGENT_REGISTRY.custom.enabled).toBe(false)
   })
@@ -54,6 +55,9 @@ describe('agent registry', () => {
     expect(agentTitle('grok')).toBe('grok')
     expect(agentCommand('grok')).toBe('grok')
     expect(agentName('grok')).toBe('Grok')
+    expect(agentName('openclaude')).toBe('OpenClaude')
+    expect(agentCommand('openclaude')).toBe('openclaude')
+    expect(agentTitle('openclaude')).toBe('openclaude')
   })
 
   // Capability honesty: hooks:true may only be declared for CLIs the hook

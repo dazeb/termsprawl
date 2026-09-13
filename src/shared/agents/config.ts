@@ -4,7 +4,7 @@
 // declared shape; Task 7.2+ normalizes each CLI's hooks/status into the
 // shared state model (working/waiting/blocked/done).
 
-export type AgentId = 'claude' | 'codex' | 'gemini' | 'grok' | 'custom'
+export type AgentId = 'claude' | 'codex' | 'gemini' | 'grok' | 'openclaude' | 'custom'
 
 export interface AgentCapabilities {
   /** Hooks/status integration (7.2 hook server). */
@@ -120,6 +120,29 @@ export const AGENT_REGISTRY: Record<AgentId, AgentConfig> = {
       usage: true,
       chat: true,
       permissionMode: true
+    }
+  },
+  openclaude: {
+    id: 'openclaude',
+    // OpenClaude: a Claude-Code-compatible TUI that connects to any
+    // OpenAI-compatible endpoint — including LOCAL models (Ollama, llama.cpp,
+    // LM Studio) — so users can drive their own models on the canvas.
+    name: 'OpenClaude',
+    title: 'openclaude',
+    command: 'openclaude',
+    enabled: true,
+    capabilities: {
+      // Honesty: no hook normalizer exists (NORMALIZERS maps claude + codex).
+      // No capability is claimed until verified against the real CLI.
+      hooks: false,
+      resume: false,
+      subagents: false,
+      recurring: false,
+      branch: false,
+      contextLink: false,
+      usage: false,
+      chat: false,
+      permissionMode: false
     }
   },
   custom: {
