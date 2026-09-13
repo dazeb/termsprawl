@@ -2,7 +2,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { findExecutable, resolveCommandLine, unresolvedNotice } from './command-resolver'
+import { findExecutable, missingCommandExec, resolveCommandLine, unresolvedNotice } from './command-resolver'
 
 // The resolver exists because GUI-launched apps (AppImage from a desktop
 // launcher) inherit a minimal PATH that omits user dirs like ~/.druk/bin —
@@ -123,5 +123,17 @@ describe('unresolvedNotice', () => {
 
   it('returns null for an already-absolute command even if the file is absent', () => {
     expect(unresolvedNotice('/usr/bin/env foo', '/tmp/nonexistent-home')).toBeNull()
+  })
+})
+
+describe('missingCommandExec', () => {
+  it('produces an exec line that prints the notice and exits', () => {
+    const line = missingCommandExec("termsprawl: 'claude' not found")
+    expect(line.startsWith('exec /bin/sh -c ')).toBe(true)
+    expect(line).toContain('exit 1')
+    // The notice rides inside a double-quoted shell string (JSON-escaped);
+    // single quotes are literal there, so no quote> prompts can occur.
+    expect(line).toContain('claude')
+    expect(line.split('\n').length).toBe(1) // one line: nothing can break the editor
   })
 })

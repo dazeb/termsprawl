@@ -76,6 +76,18 @@ export function unresolvedNotice(line: string, home: string = homedir()): string
 }
 
 /**
+ * The line to exec in place of a missing preset command. Written raw into an
+ * INTERACTIVE shell, the notice text would be parsed by the line editor
+ * (unmatched quotes → `quote>` prompts, echoed garbage). Instead we exec a
+ * non-interactive /bin/sh that prints the notice and exits cleanly — the
+ * message is the whole story, no shell mangling.
+ */
+export function missingCommandExec(notice: string): string {
+  const script = `printf '%s\\n' ${JSON.stringify(notice)}; exit 1`
+  return `exec /bin/sh -c ${JSON.stringify(script)}`
+}
+
+/**
  * Resolve the first token of a command line (e.g. `druk` in `druk --dir x`)
  * to an absolute path, keeping any trailing arguments intact. When nothing
  * resolves, the original line is returned so the shell can report the error.

@@ -18,7 +18,7 @@ import * as pty from 'node-pty'
 import type { CorePlatform } from './platform'
 import { ptyDataChannel, ptyExitChannel } from '../shared/ipc'
 import type { PtyCreateRequest, PtyCreateResult, PtyExitInfo } from '../shared/types'
-import { resolveCommandLine, unresolvedNotice } from './command-resolver'
+import { resolveCommandLine, missingCommandExec, unresolvedNotice } from './command-resolver'
 import { stripAuthEnv } from './agent-accounts'
 import { ensureTmuxConfig, hasSession, sessionNameFor, type TmuxConfig } from './tmux'
 import { remoteTmuxSpawnArgv, remoteTmuxHasSessionSync, remoteTmuxKillSessionSync, remoteTmuxCaptureSync } from './remote-pty'
@@ -164,12 +164,12 @@ export class PtyManager {
     // fast command can print and exit before node-pty delivers its first data
     // event. Warm tmux reattachments must not launch the command a second time.
     if (command && fresh && (req.remote || this.tmux)) {
-      // Surface WHY a preset died: an unresolvable command (missing CLI)
-      // gets a notice line before the exec so the user sees the fix, not a
-      // bare "[exited]" after the shell's own error.
+      // Surface WHY a preset died: an unresolvable command (missing CLI) is
+      // replaced by a one-shot shell that prints the fix, instead of a bare
+      // "command not found" + "[exited]".
       const notice = unresolvedNotice(req.command ?? '')
-      if (notice) session.write(`\x1b[38;5;214m${notice}\x1b[0m\r\n`)
-      session.write(`exec ${command}\r`)
+      if (notice) session.write(`${missingCommandExec(notice)}\r`)
+      else session.write(`exec ${command}\r`)
     }
 
     return { id: req.id, pid: session.pid, fresh }
