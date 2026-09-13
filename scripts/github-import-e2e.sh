@@ -19,6 +19,10 @@ WORK=$(mktemp -d /tmp/ts-gh-e2e-XXXXXX)
 CLOUD_PORT=18990
 SRV_PORT=18991
 FAKE_TOKEN="gho_e2e_fake_token_$(openssl rand -hex 8)"
+# The container binds 0.0.0.0, which the server allows only with the hosted
+# space router gate present (the space manager injects the real per-tenant
+# value; nothing here acts as a router, so any non-empty value will do).
+SPACE_ROUTER_HEADER="e2e-space-router-header"
 FAILURES=0
 
 cleanup() {
@@ -114,6 +118,7 @@ docker run -d --name ts-gh-e2e -v ts-gh-e2e-v:/data \
   -p "127.0.0.1:$SRV_PORT:3110" \
   --add-host=host.docker.internal:host-gateway \
   -e TERMSPRAWL_SERVER_HOST=0.0.0.0 -e TERMSPRAWL_SERVER_TOKEN= -e PORT=3110 \
+  -e TERMSPRAWL_SPACE_HEADER="$SPACE_ROUTER_HEADER" \
   -e TS_CLOUD_API="http://host.docker.internal:$CLOUD_PORT" \
   -e TS_SPACE_BOOT_TOKEN="e2e-space-sync-token" \
   "$IMAGE" >/dev/null

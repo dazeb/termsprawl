@@ -10,7 +10,7 @@
 // renderer-side "not available" rejections in src/server/shim.js.
 
 import { createServer, type ServerResponse, type IncomingMessage } from 'node:http'
-import { readFileSync, existsSync, mkdirSync } from 'node:fs'
+import { readFileSync, existsSync, mkdirSync, statSync } from 'node:fs'
 import { extname, join, resolve } from 'node:path'
 import { WebSocketServer, WebSocket } from 'ws'
 import { ServerPlatform } from './platform'
@@ -25,6 +25,15 @@ import { IPC } from '../shared/ipc'
 const PORT = Number(process.env.PORT ?? process.argv[2] ?? 3110)
 const RENDERER_DIR = resolve('out/renderer')
 const SHIM_PATH = resolve('src/server/shim.js')
+
+/** True only for an existing regular file (directories must never be read). */
+function isRegularFile(filePath: string): boolean {
+  try {
+    return statSync(filePath).isFile()
+  } catch {
+    return false
+  }
+}
 
 const MIME: Record<string, string> = {
   '.html': 'text/html',
@@ -129,7 +138,10 @@ export async function createApp(opts?: { auth?: AuthPolicy; onRequest?: (method:
     // Only index.html is served at '/'; everything else is a real asset path.
     const fileName = path === '/' ? 'index.html' : path.replace(/^\//, '')
     const filePath = resolveContainedPath(RENDERER_DIR, fileName)
-    if (!filePath || !existsSync(filePath)) {
+    // A directory under out/renderer passes an existence check but throws
+    // EISDIR on read — and an uncaught throw here takes the whole process down
+    // (one unauthenticated GET /assets was enough), so only regular files serve.
+    if (!filePath || !isRegularFile(filePath)) {
       res.writeHead(404).end('not found')
       return
     }

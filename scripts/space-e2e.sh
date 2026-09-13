@@ -38,6 +38,11 @@ cleanup() {
 trap cleanup EXIT
 
 secret="e2e-sync-secret-0123456789abcdef0123456789abcdef"
+# Hosted spaces bind 0.0.0.0 and must carry the router gate the space manager
+# normally injects (termsprawl-web server/space-manager.mjs) — without it the
+# server refuses a non-loopback bind. Nothing in this script plays the router,
+# so any non-empty value satisfies the gate.
+space_router_header="e2e-space-router-header"
 port=3199
 base="http://127.0.0.1:$port"
 content_dir="$scratch/content"
@@ -281,6 +286,7 @@ boot_space() {
       -e TS_SPACE_BOOT_TOKEN="$TOKEN" \
       -e TERMSPRAWL_SERVER_TOKEN="$WS_TOKEN" \
       -e TERMSPRAWL_SERVER_HOST=0.0.0.0 \
+      -e TERMSPRAWL_SPACE_HEADER="$space_router_header" \
       ts-space:latest >/dev/null
   fi
   SPACE_PID=$!

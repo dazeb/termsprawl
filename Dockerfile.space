@@ -239,8 +239,12 @@ RUN pnpm config set --global store-dir /data/pnpm-store
 
 # TERMSPRAWL_SERVER_HOST is deliberately NOT defaulted to 0.0.0.0 here: the
 # server's loopback default is a security feature. Exposing a space to the
-# network is the operator's explicit decision:
-#   docker run -e TERMSPRAWL_SERVER_HOST=0.0.0.0 …
+# network is the operator's explicit decision — and a non-loopback bind is
+# refused unless the hosted-space router gate is present, so a manual run needs
+# both. The space manager (termsprawl-web server/space-manager.mjs) sets the
+# header to the per-tenant secret; a hand-rolled run can use any non-empty
+# value, since nothing behind it acts as the router:
+#   docker run -e TERMSPRAWL_SERVER_HOST=0.0.0.0 -e TERMSPRAWL_SPACE_HEADER=… …
 EXPOSE 3110
 USER space
 CMD ["/usr/local/bin/space-boot"]

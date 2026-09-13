@@ -65,7 +65,7 @@ describe('relay security regressions', () => {
       const afterCreate = JSON.parse(fs.readFileSync(ctx.storeFile, 'utf8'))
       const created = afterCreate.invites.find((inv) => inv.code === inviteReply.code)
       expect(created).toBeTruthy()
-      expect(created.usedAt ?? null).toBeNull()
+      expect(created.uses).toBe(0)
 
       const client = await dial(url)
       client.ws.send(JSON.stringify({
@@ -75,7 +75,7 @@ describe('relay security regressions', () => {
 
       const afterRedeem = JSON.parse(fs.readFileSync(ctx.storeFile, 'utf8'))
       const redeemed = afterRedeem.invites.find((inv) => inv.code === inviteReply.code)
-      expect(typeof redeemed.usedAt).toBe('number')
+      expect(redeemed.uses).toBe(1)
 
       host.ws.close()
       client.ws.close()
