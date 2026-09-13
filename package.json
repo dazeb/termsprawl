@@ -87,6 +87,12 @@
       "owner": "dazeb",
       "repo": "termsprawl"
     },
-    "electronUpdaterCompatibility": ">= 2.16"
+    "electronUpdaterCompatibility": ">= 2.16",
+    "extraResources": [
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
+      }
+    ]
   }
 }

@@ -1441,6 +1441,12 @@ function createWindow(): void {
     minWidth: 800,
     minHeight: 600,
     title: 'termsprawl',
+    // Taskbar/dock icon. The packaged build ships build/icon.png as a
+    // resource (electron-builder extraResources) so a direct AppImage launch
+    // — no desktop integration — still shows the tesseract instead of a
+    // generic Electron mark. Packaged .desktop entries carry their own Icon=
+    // (set from linux.icon in the builder config).
+    icon: app.isPackaged ? join(process.resourcesPath, 'icon.png') : join(app.getAppPath(), 'build/icon.png'),
     backgroundColor: '#0a0a0a',
     webPreferences: {
       preload: join(__dirname, '../preload/index.mjs'),
