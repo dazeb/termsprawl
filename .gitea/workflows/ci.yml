@@ -33,11 +33,18 @@ jobs:
       - name: typecheck
         run: pnpm run typecheck
 
-      - name: test
-        run: pnpm test
-
+      # The renderer build must come before the suite: the container boot-gate
+      # test (src/server/server-boot-gate.test.ts) GETs '/' and asserts the
+      # served shell, which only exists once out/renderer/index.html is built.
+      # On a fresh checkout, test-then-build 404s that assertion every run.
       - name: build
         run: pnpm run build
+
+      - name: build server
+        run: pnpm run build:server
+
+      - name: test
+        run: pnpm test
 
   release:
     # On version tags: build the AppImage/.deb once, publish to BOTH the Gitea
