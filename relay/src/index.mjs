@@ -6,7 +6,7 @@
 //   RELAY_DATA_DIR   store directory      (default ./data)
 //   GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET   OAuth device-flow app
 //   ADMIN_TOKEN      bearer token for /admin/* (required unless RELAY_DEV_AUTH=1)
-//   RELAY_DEV_AUTH   1 = unauthenticated dev hosts (refused under NODE_ENV=production)
+//   RELAY_DEV_AUTH   1 = unauthenticated dev hosts (loopback only; never production)
 //
 // SECURITY: logs never contain frame or envelope contents — only ids, counts,
 // and error codes. The relay never sees plaintext anyway, but it doesn't log
@@ -21,6 +21,17 @@ import { createAdminHandler } from './admin.mjs'
 
 const STORE_DEFAULTS = { users: [], invites: [] }
 
+export function isLoopbackBind(host) {
+  const value = String(host ?? '').trim().toLowerCase().replace(/^\[(.*)\]$/, '$1')
+  if (value === 'localhost' || value === '::1') return true
+  const parts = value.split('.')
+  if (parts.length === 4 && parts.every((part) => /^\d{1,3}$/.test(part))) {
+    const nums = parts.map(Number)
+    return nums[0] === 127 && nums.every((n) => n >= 0 && n <= 255)
+  }
+  return false
+}
+
 export function loadConfig(env = process.env) {
   const devAuth = env.RELAY_DEV_AUTH === '1'
   const config = {
@@ -33,12 +44,13 @@ export function loadConfig(env = process.env) {
     devAuth
   }
   if (devAuth && env.NODE_ENV === 'production') {
-    console.error('[relay] RELAY_DEV_AUTH=1 is forbidden when NODE_ENV=production — refusing to start')
-    process.exit(1)
+    throw new Error('RELAY_DEV_AUTH=1 is forbidden when NODE_ENV=production')
+  }
+  if (devAuth && !isLoopbackBind(config.bind)) {
+    throw new Error('RELAY_DEV_AUTH=1 is allowed only on a loopback bind')
   }
   if (!config.adminToken && !devAuth) {
-    console.error('[relay] ADMIN_TOKEN is required unless RELAY_DEV_AUTH=1 — refusing to start')
-    process.exit(1)
+    throw new Error('ADMIN_TOKEN is required unless RELAY_DEV_AUTH=1')
   }
   return config
 }
@@ -50,16 +62,8 @@ export function startServer(config, log = console.log) {
 
   const persist = () => saveStore(storeFile, store)
   const devAuth = config.devAuth
-  const hub = createHub({ store, requireAuth: true, devAuth })
-
-  // persist auth-mutating store changes (invite redemptions happen per hello)
-  const origHandleUpgrade = hub.handleUpgrade
-  hub.handleUpgrade = (req, socket, head) => {
-    origHandleUpgrade.call(hub, req, socket, head)
-    persist()
-  }
-
-  const handler = createAdminHandler({ store, hub, adminToken: config.adminToken })
+  const hub = createHub({ store, requireAuth: true, devAuth, persist })
+  const handler = createAdminHandler({ store, hub, adminToken: config.adminToken, persist })
   const server = http.createServer(handler)
   server.on('upgrade', (req, socket, head) => hub.handleUpgrade(req, socket, head))
 
@@ -85,7 +89,13 @@ export function startServer(config, log = console.log) {
 
 // run when invoked directly (not under test import)
 if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {
-  const config = loadConfig()
+  let config
+  try {
+    config = loadConfig()
+  } catch (err) {
+    console.error('[relay] refusing to start:', err instanceof Error ? err.message : String(err))
+    process.exit(1)
+  }
   startServer(config).catch((err) => {
     console.error('[relay] fatal:', err.message)
     process.exit(1)
