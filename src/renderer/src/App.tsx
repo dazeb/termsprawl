@@ -14,6 +14,7 @@ import { resolveAccent } from './state/accent'
 import { applyTheme } from './state/theme'
 import { useBrowserHome } from './state/browser-home'
 import { Onboarding, ShouldShowOnboarding } from './components/Onboarding'
+import { TesseractSpinner } from './components/TesseractSpinner'
 import type { AppSettings } from '@shared/types'
 
 export function App(): React.JSX.Element {
@@ -119,7 +120,13 @@ export function App(): React.JSX.Element {
           <Canvas cwd={activeCwd} remote={activeRemote} invertWheelZoom={settings?.invertWheelZoom ?? false} />
         </ReactFlowProvider>
       ) : (
-        <div className="canvas" />
+        <div className="canvas">
+          {/* Branded boot state: the tesseract logo rotates over the dot grid
+              while the workspace store loads over IPC. */}
+          <div className="boot-overlay">
+            <TesseractSpinner />
+          </div>
+        </div>
       )}
     </div>
   )
