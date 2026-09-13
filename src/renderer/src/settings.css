@@ -11,9 +11,29 @@
    Emphasis is ink (--fg) on page (--bg); danger red stays for destructive
    states. Tokens map the app's semantic variables, so html[data-theme=light]
    re-skins the panel automatically. */
-@layer theme, utilities;
+@layer theme, base, utilities;
 @import 'tailwindcss/theme.css' layer(theme);
 @import 'tailwindcss/utilities.css' layer(utilities);
+
+/* Minimal control preflight, scoped to the panel. Tailwind's preflight is
+   deliberately excluded (it would re-base the hand-rolled canvas CSS), which
+   left native <button> chrome — the grey buttonface fill and a 2px border — on
+   every control that does not set its own background/border: the inactive nav
+   tabs and unselected cards rendered as grey "disabled" buttons. Declaring
+   this in the BASE layer is the whole trick: base loses to the utilities
+   layer (so every Tailwind background or border utility still wins) but beats
+   the UA stylesheet (so the native chrome never shows). */
+@layer base {
+  .settings-panel :is(button, select, input, textarea) {
+    background-color: transparent;
+    border: 0 solid transparent;
+    font: inherit;
+    color: inherit;
+  }
+  .settings-panel button {
+    padding: 0;
+  }
+}
 
 @theme inline {
   --color-page: var(--bg);
@@ -27,4 +47,32 @@
 
   --font-sans: 'Geist', 'Inter', system-ui, -apple-system, sans-serif;
   --font-mono: 'Geist Mono', 'JetBrains Mono', monospace;
+}
+
+/* Scrollable regions inside the panel (nav + content). Unlayered author CSS so
+   it beats the utilities layer; the native GTK scrollbar is light-on-light in
+   a dark panel and reads as a defect. Thin, neutral, near-invisible until used. */
+.settings-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  overscroll-behavior: contain;
+}
+.settings-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.settings-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.settings-scroll::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+.settings-scroll:hover::-webkit-scrollbar-thumb {
+  background-color: var(--muted);
+}
+.settings-scroll::-webkit-scrollbar-corner {
+  background: transparent;
 }

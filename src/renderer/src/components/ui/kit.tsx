@@ -19,16 +19,20 @@ import type {
 
 export function Section({ title, children }: { title?: string; children: ReactNode }): React.JSX.Element {
   return (
-    <section className="flex flex-col gap-2">
+    <section className="flex flex-col gap-2.5">
       {title && (
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-mute">{title}</h2>
+        <h2 className="text-[10px] font-semibold uppercase leading-none tracking-[0.14em] text-mute">
+          {title}
+        </h2>
       )}
       {children}
     </section>
   )
 }
 
-/** Label + sub-copy on the left, control(s) on the right — the workhorse row. */
+/** Label + sub-copy on the left, control(s) on the right — the workhorse row.
+ * The copy column is measure-capped so long descriptions never run the full
+ * width of a wide sheet, and the control column stays a stable size. */
 export function PrefRow({
   label,
   sub,
@@ -41,10 +45,12 @@ export function PrefRow({
   className?: string
 }): React.JSX.Element {
   return (
-    <div className={`flex items-center justify-between gap-4 border-b border-edge py-2.5 ${className}`}>
-      <div className="min-w-0">
-        <div className="text-[13px] font-medium text-ink">{label}</div>
-        {sub && <div className="mt-0.5 text-[11px] leading-snug text-mute">{sub}</div>}
+    <div className={`flex items-center justify-between gap-8 border-b border-edge py-3 ${className}`}>
+      <div className="min-w-0 max-w-[52ch]">
+        <div className="text-[13px] font-medium leading-tight text-ink">{label}</div>
+        {sub && (
+          <div className="mt-1 text-[11px] leading-snug text-mute [text-wrap:pretty]">{sub}</div>
+        )}
       </div>
       <div className="flex shrink-0 items-center gap-2">{children}</div>
     </div>
@@ -94,13 +100,15 @@ export function Button({
   return (
     <button
       type={type}
-      className={`inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-[7px] border font-sans font-medium leading-none tracking-[0.01em] transition-colors duration-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ink disabled:cursor-default disabled:opacity-45 ${sizeClass[size]} ${variantClass[variant]} ${className}`}
+      className={`inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-[7px] border font-sans font-medium leading-none tracking-[0.01em] transition-[color,background-color,border-color,transform] duration-100 active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ink disabled:cursor-default disabled:opacity-45 disabled:active:scale-100 ${sizeClass[size]} ${variantClass[variant]} ${className}`}
       {...rest}
     />
   )
 }
 
-/** Switch-style toggle (role=switch) — replaces the raw checkbox. */
+/** Switch-style toggle (role=switch) — replaces the raw checkbox. The visible
+ * track is 36x20; a pseudo-element extends the hit area to ~44px tall (dense
+ * desktop minimum) without changing the layout. */
 export function Toggle({
   checked,
   onChange,
@@ -114,8 +122,8 @@ export function Toggle({
   ariaLabel?: string
   title?: string
 }): React.JSX.Element {
-  const trackClass = checked ? 'border-ink bg-ink' : 'border-edge bg-panel'
-  const knobClass = checked ? 'left-[18px] bg-page' : 'left-[3px] bg-mute'
+  const trackClass = checked ? 'border-ink bg-ink' : 'border-edge bg-transparent'
+  const knobClass = checked ? 'left-[17px] bg-page' : 'left-[3px] bg-mute'
   return (
     <button
       role="switch"
@@ -125,10 +133,10 @@ export function Toggle({
       aria-label={ariaLabel}
       title={title}
       disabled={disabled}
-      className={`relative h-5 w-9 shrink-0 rounded-full border transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink disabled:cursor-default disabled:opacity-45 ${trackClass}`}
+      className={`group relative h-5 w-9 shrink-0 rounded-full border transition-colors duration-150 before:absolute before:-inset-x-1 before:-inset-y-3 before:content-[''] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink disabled:cursor-default disabled:opacity-45 ${trackClass}`}
     >
       <span
-        className={`absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full transition-[left] duration-150 ${knobClass}`}
+        className={`absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full shadow-[0_1px_2px_rgba(0,0,0,0.45)] transition-[left,background-color] duration-150 group-hover:shadow-[0_1px_3px_rgba(0,0,0,0.6)] ${knobClass}`}
       />
     </button>
   )
@@ -212,7 +220,7 @@ export function Card({
 }): React.JSX.Element {
   return (
     <div
-      className={`flex flex-col gap-2 rounded-lg border p-3 ${danger ? 'border-danger bg-danger/5' : 'border-edge bg-panel'} ${className}`}
+      className={`flex flex-col gap-2 rounded-xl border p-3 ${danger ? 'border-danger bg-danger/5' : 'border-edge bg-panel'} ${className}`}
     >
       {title !== undefined && (
         <div className={`text-[13px] font-medium ${danger ? 'text-danger' : 'text-ink'}`}>{title}</div>
@@ -228,7 +236,8 @@ export function Hint({ children, className = '' }: { children: ReactNode; classN
   return <p className={`mb-2.5 text-[11px] leading-snug text-mute ${className}`}>{children}</p>
 }
 
-/** Small mono value text (ids, endpoints, sizes). */
+/** Small mono value text (ids, endpoints, sizes). Tabular figures keep
+ * changing values (sizes, ports, counts) from shifting. */
 export function Status({ children, className = '' }: { children: ReactNode; className?: string }): React.JSX.Element {
-  return <span className={`font-mono text-[11px] text-mute ${className}`}>{children}</span>
+  return <span className={`font-mono text-[11px] tabular-nums text-mute ${className}`}>{children}</span>
 }

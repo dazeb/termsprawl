@@ -640,23 +640,27 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
             )}
 
             <div className="border-b border-edge py-3">
-              <div className="mb-3 text-[13px] font-medium text-ink">Appearance</div>
-              <div className="grid grid-cols-3 gap-2.5">
-                {THEMES.map((t) => (
-                  <button
-                    key={t.value}
-                    type="button"
-                    className={`flex flex-col items-center gap-2 rounded-[10px] border px-3 py-4 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ink ${
-                      (c.settings.theme ?? 'system') === t.value
-                        ? 'border-ink text-ink ring-1 ring-inset ring-ink'
-                        : 'border-edge bg-panel text-mute hover:text-ink'
-                    }`}
-                    onClick={() => void c.update({ theme: t.value })}
-                  >
-                    <span className="flex h-[22px] items-center justify-center">{themeIcon(t.value)}</span>
-                    <span className="text-xs">{t.label}</span>
-                  </button>
-                ))}
+              <div className="mb-3 text-[13px] font-medium leading-tight text-ink">Appearance</div>
+              <div className="grid grid-cols-3 gap-2.5" role="group" aria-label="Theme">
+                {THEMES.map((t) => {
+                  const selected = (c.settings.theme ?? 'system') === t.value
+                  return (
+                    <button
+                      key={t.value}
+                      type="button"
+                      aria-pressed={selected}
+                      className={`flex flex-col items-center gap-2 rounded-xl border px-3 py-3.5 transition-[color,background-color,border-color,transform] duration-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ink active:scale-[0.98] ${
+                        selected
+                          ? 'border-ink bg-raised text-ink'
+                          : 'border-edge text-mute hover:border-raised hover:bg-hover hover:text-ink'
+                      }`}
+                      onClick={() => void c.update({ theme: t.value })}
+                    >
+                      <span className="flex h-[22px] items-center justify-center">{themeIcon(t.value)}</span>
+                      <span className="text-xs">{t.label}</span>
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
@@ -839,7 +843,7 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
   return (
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div
-        className="flex h-[min(640px,calc(100vh-48px))] w-[min(720px,calc(100vw-48px))] flex-col overflow-hidden rounded-2xl border border-edge bg-page shadow-[0_24px_64px_rgba(0,0,0,0.6)]"
+        className="settings-panel flex h-[min(660px,calc(100vh-48px))] w-[min(880px,calc(100vw-48px))] flex-col overflow-hidden rounded-2xl border border-edge bg-page shadow-[0_24px_64px_rgba(0,0,0,0.6)]"
         role="dialog"
         aria-modal="true"
         aria-label="settings"
@@ -858,33 +862,55 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
         </div>
 
         <div className="flex min-h-0 flex-1">
-          <nav className="flex w-[208px] shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-edge p-3" aria-label="settings sections">
-            {visibleTabs.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                aria-current={activeTab === t.id ? 'page' : undefined}
-                className={`flex items-center gap-2.5 rounded-lg border px-2.5 py-2 text-left text-[13px] transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ink ${
-                  activeTab === t.id
-                    ? 'border-edge bg-panel text-ink'
-                    : 'border-transparent text-mute hover:bg-hover hover:text-ink'
-                }`}
-                onClick={() => setTab(t.id)}
-              >
-                <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center">{t.icon}</span>
-                <span>{t.title}</span>
-              </button>
-            ))}
+          <nav
+            className="settings-scroll flex w-[196px] shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-edge p-3"
+            aria-label="settings sections"
+          >
+            {visibleTabs.map((t) => {
+              const active = activeTab === t.id
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  aria-current={active ? 'page' : undefined}
+                  className={`group relative flex items-center gap-2.5 rounded-lg py-2 pl-3.5 pr-2.5 text-left text-[13px] transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ink ${
+                    active
+                      ? 'bg-raised font-medium text-ink'
+                      : 'text-mute hover:bg-hover hover:text-ink'
+                  }`}
+                  onClick={() => setTab(t.id)}
+                >
+                  {/* Active indicator: a short ink bar at the item's left edge,
+                      so the current section reads at a glance. */}
+                  <span
+                    aria-hidden="true"
+                    className={`absolute left-1 top-1/2 h-3.5 w-[2px] -translate-y-1/2 rounded-full bg-ink transition-opacity ${
+                      active ? 'opacity-100' : 'opacity-0'
+                    }`}
+                  />
+                  <span
+                    className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center transition-colors ${
+                      active ? 'text-ink' : 'text-mute group-hover:text-ink'
+                    }`}
+                  >
+                    {t.icon}
+                  </span>
+                  <span>{t.title}</span>
+                </button>
+              )
+            })}
           </nav>
 
-          <div className="flex min-w-0 flex-1 flex-col gap-[22px] overflow-y-auto px-6 py-5">
-            {tabSections[activeTab]
-              .filter((s) => !s.editions || s.editions.includes(edition))
-              .map((section) => (
-                <Section key={section.id} title={section.title}>
-                  {section.render(ctx)}
-                </Section>
-              ))}
+          <div className="settings-scroll flex min-w-0 flex-1 flex-col overflow-y-auto px-7 py-6">
+            <div className="flex min-w-0 max-w-[640px] flex-col gap-6">
+              {tabSections[activeTab]
+                .filter((s) => !s.editions || s.editions.includes(edition))
+                .map((section) => (
+                  <Section key={section.id} title={section.title}>
+                    {section.render(ctx)}
+                  </Section>
+                ))}
+            </div>
           </div>
         </div>
       </div>

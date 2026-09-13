@@ -113,10 +113,12 @@ interface CanvasProps {
   invertWheelZoom?: boolean
 }
 
-// Match React Flow's default zoom bounds so the inverted (custom) wheel path
-// clamps to the same range as the native zoom-on-scroll.
-const MIN_ZOOM = 0.5
-const MAX_ZOOM = 2
+// Zoom bounds. The canvas is spatially unbounded — nodes can live anywhere and
+// panning was never clamped — so the zoom-out floor is generous: at 0.05x you
+// can pull back and see a whole sprawl at once. Max stays modest because nodes
+// are text; past ~3x there is nothing more to read.
+const MIN_ZOOM = 0.05
+const MAX_ZOOM = 3
 
 export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): React.JSX.Element {
   const activeProjectId = useProjects((s) => s.activeProjectId)
