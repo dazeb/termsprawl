@@ -19,6 +19,7 @@ import { createDispatcher, type RpcDispatcher, type RpcResponse } from './rpc'
 import { startAgentBridge } from './agent-bridge'
 import { createSpacePusher, restoreFromCloud } from './space-sync-wiring'
 import { createAuthPolicy, authorizeUpgrade, timingSafeCompare, type AuthPolicy } from './server-auth'
+import { assertSafeServerBind, resolveContainedPath } from './server-boundary'
 import { IPC } from '../shared/ipc'
 
 const PORT = Number(process.env.PORT ?? process.argv[2] ?? 3110)
@@ -127,8 +128,8 @@ export async function createApp(opts?: { auth?: AuthPolicy; onRequest?: (method:
   function serveStatic(path: string, res: ServerResponse): void {
     // Only index.html is served at '/'; everything else is a real asset path.
     const fileName = path === '/' ? 'index.html' : path.replace(/^\//, '')
-    const filePath = resolve(RENDERER_DIR, fileName)
-    if (!filePath.startsWith(RENDERER_DIR) || !existsSync(filePath)) {
+    const filePath = resolveContainedPath(RENDERER_DIR, fileName)
+    if (!filePath || !existsSync(filePath)) {
       res.writeHead(404).end('not found')
       return
     }
@@ -244,6 +245,14 @@ export async function createApp(opts?: { auth?: AuthPolicy; onRequest?: (method:
 // Start only when run directly (the test imports createApp without booting a
 // listener). Run via `TERMSPRAWL_SERVER_ENTRY=1 node out/server/index.js`.
 if (process.env.TERMSPRAWL_SERVER_ENTRY === '1') {
+  const HOST = process.env.TERMSPRAWL_SERVER_HOST ?? '127.0.0.1'
+  try {
+    assertSafeServerBind(HOST, Boolean(process.env.TERMSPRAWL_SPACE_HEADER))
+  } catch (error) {
+    console.error('[server] refusing to start:', error instanceof Error ? error.message : String(error))
+    process.exit(1)
+  }
+
   // Audit B1: auth token. TERMSPRAWL_SERVER_TOKEN='' explicitly disables auth
   // (disclosed mode — logged loudly); absent → a fresh token is generated and
   // printed once; a 48-hex value is honored as-is (for scripted restarts).
@@ -306,9 +315,6 @@ if (process.env.TERMSPRAWL_SERVER_ENTRY === '1') {
   }
 
   // ---- Port fallback: try PORT, PORT+1, ... PORT+10 ----
-  // Audit B1: bind the LOOPBACK by default. TERMSPRAWL_SERVER_HOST=0.0.0.0
-  // opts into LAN exposure (with TERMSPRAWL_SERVER_TOKEN set deliberately).
-  const HOST = process.env.TERMSPRAWL_SERVER_HOST ?? '127.0.0.1'
   function listenWithFallback(portNum: number, maxAttempts = 10): Promise<number> {
     return new Promise((resolve, reject) => {
       function tryPort(p: number, attempt: number) {
@@ -331,7 +337,7 @@ if (process.env.TERMSPRAWL_SERVER_ENTRY === '1') {
   }
 
   const actualPort = await listenWithFallback(PORT)
-  console.log(`termsprawl Server Edition listening on http://${process.env.TERMSPRAWL_SERVER_HOST ?? '127.0.0.1'}:${actualPort}`)
+  console.log(`termsprawl Server Edition listening on http://${HOST}:${actualPort}`)
   if (authToken) {
     console.log(`ws auth token (browser asks for it once, then it's stored in localStorage):\n  ${authToken}`)
   }
