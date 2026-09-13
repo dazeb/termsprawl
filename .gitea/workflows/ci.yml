@@ -39,6 +39,9 @@ jobs:
       - name: build
         run: pnpm run build
 
+      - name: build server
+        run: pnpm run build:server
+
   release:
     # On version tags: build the AppImage/.deb once, publish to BOTH the Gitea
     # release (this instance) and GitHub Releases (the app's auto-updater reads
