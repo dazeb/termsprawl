@@ -5,7 +5,7 @@ import { homedir } from 'node:os'
 import { dirname, isAbsolute, join, posix } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { IPC } from '../shared/ipc'
-import type { ContextLinkListResult, ContextLinkWriteResult, DiffBase, DiffInfoResult, ProjectRemote, ProjectSettings, PtyCreateRequest, PtyExitInfo, SerializedNode, AppSettings, GitPanelSnapshot, GitResult, GitTarget, CommitMessageResult, Announcement, FileReadResult, FileWriteResult, DirListResult } from '../shared/types'
+import type { ContextLinkListResult, ContextLinkWriteResult, DiffBase, DiffInfoResult, ProjectRemote, ProjectSettings, PtyCreateRequest, PtyExitInfo, SerializedNode, AppSettings, SettingsCapabilities, GitPanelSnapshot, GitResult, GitTarget, CommitMessageResult, Announcement, FileReadResult, FileWriteResult, DirListResult } from '../shared/types'
 import type { CorePlatform } from '../core/platform'
 import { diffInfo, findRepoRoot, currentBranch, remoteUrl, syncState, gitStatus, listBranches, recentCommits, ghAuthed, stageChanges, unstageChanges, discardChanges, commitChanges, createBranch, checkoutBranch, push as gitPush, pull as gitPull, publish as gitPublish, listWorktrees, addWorktree, removeWorktree } from '../core/git-service'
 import {
@@ -51,10 +51,12 @@ import { HookServer } from '../core/hook-server'
 import { claudeSettingsPath, installClaudeHooks } from './agents/hook-installer'
 import { codexConfigPath, installCodexHooks } from '../core/codex-hook-installer'
 import { SessionNameTracker } from '../core/session-name'
-import { discoverSkills } from '../core/settings-skills'
+import { discoverSkills, setSkillEnabled, skillRoots } from '../core/settings-skills'
 import { inventoryHooks } from '../core/settings-hooks'
 import { discoverCommands } from '../core/settings-commands'
-import { aggregateUsage } from '../core/settings-usage'
+import { inventoryMcp, mcpFiles } from '../core/settings-mcp'
+import { aggregateUsage, chatUsageSamples } from '../core/settings-usage'
+import { costOf } from '../core/chat/cost'
 import { agentSessionNameChannel } from '../shared/ipc'
 import { browserRuntime } from './browser/runtime'
 import {
@@ -1058,8 +1060,52 @@ function registerFileProtocol(): void {
 }
 
 function registerUpdateIpc(): void {
-  ipcMain.handle(IPC.settingsCapabilitiesGet, () => ({ supported: true, skills: discoverSkills([{ path: join(homedir(), '.claude', 'skills'), source: 'claude' }, { path: join(homedir(), '.codex', 'skills'), source: 'codex' }]), hooks: inventoryHooks([{ path: claudeSettingsPath(homedir()), agent: 'claude' }, { path: codexConfigPath(homedir()), agent: 'codex' }]), commands: discoverCommands() }))
-  ipcMain.handle(IPC.settingsUsageGet, () => ({ supported: false, reason: 'Usage collection is not implemented yet.', hasData: false, totalInputTokens: 0, totalOutputTokens: 0, totalCost: 0, sessions: 0, longestSessionSeconds: 0, daily: [], models: [] }))
+  // Capability discovery is read-only: skills/hooks/commands/MCP all live in
+  // the agent CLIs' own config trees, and the panel reports what is there.
+  const capabilitySnapshot = (): SettingsCapabilities => ({
+    supported: true,
+    skills: discoverSkills(skillRoots(homedir())),
+    // The installers' own path helpers are the single source of truth for
+    // where hooks live — never re-derive those paths here.
+    hooks: inventoryHooks([
+      { path: claudeSettingsPath(homedir()), agent: 'claude' },
+      { path: codexConfigPath(homedir()), agent: 'codex' },
+    ]),
+    commands: discoverCommands(),
+    mcp: inventoryMcp(mcpFiles(homedir())),
+  })
+  ipcMain.handle(IPC.settingsCapabilitiesGet, capabilitySnapshot)
+  // The one write in this surface, and it is a rename: see settings-skills.ts.
+  ipcMain.handle(IPC.settingsSetSkillEnabled, (_event, id: string, enabled: boolean) => {
+    setSkillEnabled(skillRoots(homedir()), String(id), Boolean(enabled))
+    return capabilitySnapshot()
+  })
+  // Hook repair: re-run the installer we already run at boot. Idempotent by
+  // construction (merge-only writers), so a second press is harmless.
+  ipcMain.handle(IPC.settingsReinstallHooks, async (_event, agent: string) => {
+    const home = homedir()
+    if (agent === 'claude') installClaudeHooks(claudeSettingsPath(home), hookServer.url, hookServer.secret)
+    else if (agent === 'codex') installCodexHooks(codexConfigPath(home), hookServer.url, hookServer.secret)
+    else throw new Error(`unknown agent: ${agent}`)
+    return capabilitySnapshot()
+  })
+  // Usage needs no collection pass of its own: chat nodes already save token
+  // counts and timestamps per assistant reply in the workspace file, so this
+  // totals what is on disk (all projects, saved revisions).
+  ipcMain.handle(IPC.settingsUsageGet, () => {
+    const { projects } = workspaceStore.snapshot()
+    const overrides = appSettings.current.chat?.priceOverrides
+    const samples = Object.values(projects).flatMap((nodes) =>
+      chatUsageSamples(nodes, (model, usage) => costOf(usage, model, overrides).usd)
+    )
+    const stats = aggregateUsage(samples)
+    if (stats.hasData) return stats
+    return {
+      ...stats,
+      supported: true,
+      reason: 'No chat replies have reported tokens yet. Run a chat node and the totals appear here.'
+    }
+  })
   ipcMain.handle(IPC.appSettingsGet, () => appSettings.current)
   ipcMain.handle(IPC.appSettingsSet, (_event, patch: Partial<AppSettings>) => {
     appSettings.current = saveAppSettings(platform.userDataPath, patch)

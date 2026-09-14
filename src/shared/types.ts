@@ -1,9 +1,54 @@
 // Shared types across main / preload / renderer.
 
-export interface SettingsSkill { id: string; name: string; description: string; source: string; path: string; enabled: boolean }
+/** One skill directory found under an agent CLI's config tree.
+ *
+ * `enabled` is real state, not decoration: the CLIs scan exactly one directory,
+ * so a disabled skill sits in the sibling `skills-disabled/` folder where they
+ * cannot see it. Toggling moves the directory between the two. */
+export interface SettingsSkill {
+  id: string
+  name: string
+  description: string
+  /** Which root it came from, for the scope filter's label. */
+  source: string
+  /** Agent CLI that reads this root ('claude' | 'codex'). */
+  agent: string
+  /** Directory name inside the skill root. */
+  path: string
+  enabled: boolean
+}
+
+/** A hook entry found in an agent CLI's own hooks config. `managed` entries
+ * are the ones termsprawl installed (the CLI's hooks are the status source);
+ * `legacy` entries belong to another tool and are reported, not touched. */
 export interface SettingsHook { id: string; event: string; agent: string; source: 'managed' | 'legacy'; command: string; enabled: boolean }
+
+/** A slash command the chat node understands. `built-in` commands are shipped
+ * with termsprawl; the parser is the source of truth for which exist. */
 export interface SettingsCommand { name: string; description: string; source: 'built-in' | 'project' | 'agent'; available: boolean }
-export interface SettingsCapabilities { supported: boolean; reason?: string; skills: SettingsSkill[]; hooks: SettingsHook[]; commands: SettingsCommand[] }
+
+/** One MCP server declared in an agent CLI's config file. Discovery is
+ * read-only by design: the CLI is what launches the server, and termsprawl
+ * reports what it will launch rather than rewriting that file. */
+export interface SettingsMcpServer {
+  id: string
+  name: string
+  agent: string
+  transport: 'stdio' | 'http'
+  /** stdio: the command line. http: the endpoint URL. */
+  detail: string
+  /** Config file it was read from (shown as the row's provenance). */
+  configPath: string
+}
+
+export interface SettingsCapabilities {
+  supported: boolean
+  reason?: string
+  skills: SettingsSkill[]
+  hooks: SettingsHook[]
+  commands: SettingsCommand[]
+  mcp: SettingsMcpServer[]
+}
 export interface UsageStats { hasData: boolean; supported: boolean; reason?: string; totalInputTokens: number; totalOutputTokens: number; totalCost: number; sessions: number; longestSessionSeconds: number; daily: Array<{ date: string; inputTokens: number; outputTokens: number; cost: number }>; models: Array<{ provider: string; model: string; inputTokens: number; outputTokens: number; cost: number }> }
 
 export interface PtyCreateRequest {

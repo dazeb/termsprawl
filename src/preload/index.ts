@@ -79,6 +79,10 @@ const api = {
     permissionSupported: (): Promise<boolean> => ipcRenderer.invoke(IPC.permissionProbe),
     loginCommand: (): Promise<string> => ipcRenderer.invoke(IPC.loginCommand),
     capabilities: (): Promise<SettingsCapabilities> => ipcRenderer.invoke(IPC.settingsCapabilitiesGet),
+    setSkillEnabled: (id: string, enabled: boolean): Promise<SettingsCapabilities> =>
+      ipcRenderer.invoke(IPC.settingsSetSkillEnabled, id, enabled),
+    reinstallHooks: (agent: string): Promise<SettingsCapabilities> =>
+      ipcRenderer.invoke(IPC.settingsReinstallHooks, agent),
     usage: (): Promise<UsageStats> => ipcRenderer.invoke(IPC.settingsUsageGet)
   },
 

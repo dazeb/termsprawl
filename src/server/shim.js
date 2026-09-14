@@ -150,6 +150,8 @@
       permissionSupported: function () { return Promise.resolve(false) },
       loginCommand: function () { return Promise.resolve('') },
       capabilities: function () { return invoke('settings:capabilities-get') },
+      setSkillEnabled: function (id, enabled) { return invoke('settings:set-skill-enabled', id, enabled) },
+      reinstallHooks: function (agent) { return invoke('settings:reinstall-hooks', agent) },
       usage: function () { return invoke('settings:usage-get') }
     },
 

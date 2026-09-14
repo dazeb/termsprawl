@@ -15,6 +15,11 @@ export const IPC = {
   announcementGet: 'announcement:get',
   settingsCapabilitiesGet: 'settings:capabilities-get',
   settingsUsageGet: 'settings:usage-get',
+  /** Toggle a skill by moving its folder between the scanned and the
+   * `skills-disabled/` root — the only state a CLI actually respects. */
+  settingsSetSkillEnabled: 'settings:set-skill-enabled',
+  /** Re-run our hook installer for one agent CLI (idempotent repair). */
+  settingsReinstallHooks: 'settings:reinstall-hooks',
 
   // Workspace / projects (Phase 5)
   workspaceSnapshot: 'workspace:snapshot',

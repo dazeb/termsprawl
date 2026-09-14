@@ -66,6 +66,8 @@ declare global {
         permissionSupported(): Promise<boolean>
         loginCommand(): Promise<string>
         capabilities(): Promise<SettingsCapabilities>
+        setSkillEnabled(id: string, enabled: boolean): Promise<SettingsCapabilities>
+        reinstallHooks(agent: string): Promise<SettingsCapabilities>
         usage(): Promise<UsageStats>
       }
       updates: {

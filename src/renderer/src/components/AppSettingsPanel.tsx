@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import type { AgentAccount, A2APeer, ApiProviderConfig, AppSettings, CloudBackup, CloudDeviceStart, CloudSpace, CloudUser } from '@shared/types'
 import { AGENT_REGISTRY } from '@shared/agents/config'
 import { HelpBadge } from './HelpBadge'
@@ -9,7 +9,7 @@ import { useProjects } from '../state/projects'
 import { applyTheme } from '../state/theme'
 import { trustState, type TrustState } from './relay-trust'
 import { Button, Card, FieldRow, Hint, PrefRow, Row, Section, Select, Status, TextArea, TextInput, Toggle } from './ui/kit'
-import { CapabilityPage, UsagePage } from './CapabilityPages'
+import { CommandsPage, HooksPage, McpServersPage, SkillsPage, UsagePage } from './CapabilityPages'
 
 interface AppSettingsPanelProps {
   onClose: () => void
@@ -58,7 +58,12 @@ const THEMES: { value: ThemeChoice; label: string }[] = [
  * canvas shows only what the Server Edition implements). */
 interface SettingsSection {
   id: string
-  title: string
+  /** Card heading. Omitted by pages that lay out their own titled groups
+   * (Skills, Hooks, Commands, MCP, Usage) — `bare` says so explicitly. */
+  title?: string
+  /** Render the section's output directly, without the panel's card wrapper:
+   * the section already renders the cards it wants. */
+  bare?: boolean
   editions?: EditionKind[]
   render: (ctx: SectionCtx) => React.JSX.Element
 }
@@ -112,12 +117,16 @@ type PageId =
   | 'appearance'
   | 'models'
   | 'browser'
+  | 'skills'
+  | 'hooks'
+  | 'commands'
+  | 'mcp'
   | 'accounts'
   | 'a2a'
+  | 'usage'
   | 'cloud'
   | 'connections'
   | 'updates'
-  | 'skills' | 'hooks' | 'commands' | 'usage'
 /** Which edition is rendering this panel: the desktop app (full surface) or
  * the Server Edition canvas in a browser (only what the server actually
  * implements — no auto-update, no native dialogs, no desktop-only
@@ -209,9 +218,53 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Agent capabilities',
     pages: [
-      { id: 'skills', title: 'Skills', description: 'Installed agent skills.', icon: <span>◎</span> },
-      { id: 'hooks', title: 'Hooks', description: 'Configured agent hooks.', icon: <span>⌁</span> },
-      { id: 'commands', title: 'Commands', description: 'Available chat commands.', icon: <span>/</span> },
+      {
+        id: 'skills',
+        title: 'Skills',
+        description: 'Skills the agent CLIs on this machine will load, and where each one came from.',
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M4 20l7-7" />
+            <path d="M14 4l1.2 3.3L18.5 8.5l-3.3 1.2L14 13l-1.2-3.3L9.5 8.5l3.3-1.2z" />
+            <path d="M19 15l.7 1.8L21.5 17.5l-1.8.7L19 20l-.7-1.8L16.5 17.5l1.8-.7z" />
+          </svg>
+        )
+      },
+      {
+        id: 'hooks',
+        title: 'Hooks',
+        description: 'The hooks each agent CLI will run — ours, and any other tool\'s we can see.',
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="12" cy="5" r="2.5" />
+            <path d="M12 7.5V15a4.5 4.5 0 0 0 9 0v-1.5" />
+            <path d="M18.5 11.5L21 13.5l-2.5 2" />
+          </svg>
+        )
+      },
+      {
+        id: 'commands',
+        title: 'Commands',
+        description: 'Slash commands the chat node intercepts before sending a message.',
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M4 7l5 5-5 5" />
+            <path d="M12 17h8" />
+          </svg>
+        )
+      },
+      {
+        id: 'mcp',
+        title: 'MCP Servers',
+        description: 'MCP servers declared in the agent CLIs\' own config — read-only, because that is what actually launches.',
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="7" rx="2" />
+            <rect x="3" y="13" width="18" height="7" rx="2" />
+            <path d="M7 7.5h.01M7 16.5h.01" />
+          </svg>
+        )
+      },
       {
         id: 'accounts',
         title: 'Agent accounts',
@@ -242,7 +295,19 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Data and statistics',
     pages: [
-      { id: 'usage', title: 'Usage', description: 'Token and cost usage.', icon: <span>◌</span> },
+      {
+        id: 'usage',
+        title: 'Usage',
+        description: 'Tokens and cost across your chat nodes, once a conversation has run.',
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M4 20V10" />
+            <path d="M10 20V4" />
+            <path d="M16 20v-7" />
+            <path d="M22 20H2" />
+          </svg>
+        )
+      },
       {
         id: 'cloud',
         title: 'Cloud & backup',
@@ -952,10 +1017,11 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
     updates: [
       { id: 'updates', title: 'Release', render: (c) => <UpdatesSection ctx={c} isPackaged={isPackaged} /> }
     ],
-    skills: [{ id: 'skills', title: 'Installed skills', render: () => <CapabilityPage kind="skills" /> }],
-    hooks: [{ id: 'hooks', title: 'Configured hooks', render: () => <CapabilityPage kind="hooks" /> }],
-    commands: [{ id: 'commands', title: 'Chat commands', render: () => <CapabilityPage kind="commands" /> }],
-    usage: [{ id: 'usage', title: 'Usage', render: () => <UsagePage /> }]
+    skills: [{ id: 'skills', bare: true, render: () => <SkillsPage /> }],
+    hooks: [{ id: 'hooks', bare: true, render: () => <HooksPage /> }],
+    commands: [{ id: 'commands', bare: true, render: () => <CommandsPage /> }],
+    mcp: [{ id: 'mcp', bare: true, render: () => <McpServersPage /> }],
+    usage: [{ id: 'usage', bare: true, render: () => <UsagePage /> }]
   }
 
   // Pages this edition can render, and the one actually on screen: a page the
@@ -1066,11 +1132,15 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
               </header>
               {allSections[activePage.id]
                 .filter((s) => !s.editions || s.editions.includes(edition))
-                .map((section) => (
-                  <Section key={section.id} title={section.title}>
-                    {section.render(ctx)}
-                  </Section>
-                ))}
+                .map((section) =>
+                  section.bare ? (
+                    <Fragment key={section.id}>{section.render(ctx)}</Fragment>
+                  ) : (
+                    <Section key={section.id} title={section.title}>
+                      {section.render(ctx)}
+                    </Section>
+                  )
+                )}
             </div>
           </div>
         </div>
