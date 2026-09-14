@@ -46,6 +46,9 @@ describe('app-settings', () => {
       agentBrowserControl: false,
       agentA2aServer: false,
       invertWheelZoom: false,
+      terminalFontFamily: 'Geist Mono, JetBrains Mono, monospace',
+      terminalProfile: '',
+      httpProxy: '',
       telegram: { enabled: false, allowedChatIds: [] }
     }
     expect(saveAppSettings(dir, { autoDownloadUpdates: true })).toEqual(base)

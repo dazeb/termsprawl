@@ -109,6 +109,7 @@ export class PtyManager {
     // inherited auth env (ANTHROPIC_* / CLAUDE_API_KEY) so a managed account's
     // config dir is the only credential source.
     const env = stripAuthEnv({ ...process.env, ...req.env }) as Record<string, string>
+    if (req.terminalProfile) env.TERMSPRAWL_TERMINAL_PROFILE = req.terminalProfile
     delete env['TMUX']
     delete env['TMUX_PANE']
 

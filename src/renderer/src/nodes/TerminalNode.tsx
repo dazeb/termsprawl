@@ -55,6 +55,8 @@ export function TerminalNode({ id, data, selected }: NodeProps<TerminalNodeData>
   const hasUnread = useAgentStatuses((s) => s.unread[id] === true)
   const clearUnread = useAgentStatuses((s) => s.clearUnread)
   const [agentHint, setAgentHint] = useState(false)
+  const [terminalSettings, setTerminalSettings] = useState({ fontFamily: 'Geist Mono, JetBrains Mono, monospace', profile: '' })
+  useEffect(() => { void window.termsprawl.settings.get().then((s) => setTerminalSettings({ fontFamily: s.terminalFontFamily ?? 'Geist Mono, JetBrains Mono, monospace', profile: s.terminalProfile ?? '' })) }, [])
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState(data.title)
   // B3 — a remote relay terminal (data.relayTerm set) mirrors a HOST terminal
@@ -124,7 +126,7 @@ export function TerminalNode({ id, data, selected }: NodeProps<TerminalNodeData>
     if (!host) return
 
     const term = new Terminal({
-      fontFamily: 'Geist Mono, JetBrains Mono, monospace',
+      fontFamily: terminalSettings.fontFamily,
       fontSize: 13,
       cursorBlink: true,
       theme: {
@@ -198,6 +200,7 @@ export function TerminalNode({ id, data, selected }: NodeProps<TerminalNodeData>
         rows: term.rows,
         cwd: data.cwd,
         command: data.command,
+        terminalProfile: terminalSettings.profile,
         ...(ownerRemote ? { remote: ownerRemote } : {})
       })
       .then(async (result) => {

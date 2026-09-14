@@ -718,6 +718,28 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
             </PrefRow>
 
             <PrefRow
+              label="Terminal font"
+              sub="Font family used by terminal nodes"
+            >
+              <TextInput
+                value={c.settings.terminalFontFamily ?? ''}
+                aria-label="Terminal font"
+                onChange={(e) => void c.update({ terminalFontFamily: e.target.value })}
+              />
+            </PrefRow>
+
+            <PrefRow
+              label="Inherited terminal profile"
+              sub="Profile name exposed to spawned terminal processes"
+            >
+              <TextInput
+                value={c.settings.terminalProfile ?? ''}
+                aria-label="Inherited terminal profile"
+                onChange={(e) => void c.update({ terminalProfile: e.target.value })}
+              />
+            </PrefRow>
+
+            <PrefRow
               label="Invert mousewheel zoom"
               sub="Off (default): scroll up zooms in. On: scroll up zooms out"
             >

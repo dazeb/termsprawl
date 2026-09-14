@@ -21,6 +21,8 @@ export interface PtyCreateRequest {
   cols: number
   rows: number
   env?: Record<string, string>
+  /** Inherited profile name exposed to spawned terminal processes. */
+  terminalProfile?: string
   /** Remote project (Phase 9): when set, the terminal runs on the remote host
    * via ssh -tt + remote tmux instead of a local node-pty. */
   remote?: ProjectRemote
@@ -357,6 +359,12 @@ export interface AppSettings {
   /** Browser home page for new browser nodes + new tabs (14.1). Unset =
    * the app default (DuckDuckGo). */
   browserHomeUrl?: string
+  /** Terminal font family used by xterm views. */
+  terminalFontFamily?: string
+  /** Terminal profile name inherited by spawned shells. */
+  terminalProfile?: string
+  /** HTTP(S) proxy inherited by terminal and agent processes. */
+  httpProxy?: string
   /** Local Telegram bot (11.3). Token is the user's own bot secret — stored in
    * settings.json on this machine only (env TERMSPRAWL_TELEGRAM_TOKEN overrides
    * it in dev). Allowed chats = the paired phone(s); empty list = the first
