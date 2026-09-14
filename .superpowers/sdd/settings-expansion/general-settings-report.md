@@ -1,17 +1,19 @@
 # Task 8 General settings report
 
-Implemented the General settings scope for terminal font and inherited terminal profile.
+Implemented and reviewed the General settings scope.
 
 - Added normalized, persisted `terminalFontFamily`, `terminalProfile`, and `httpProxy` fields to app settings.
-- Added General panel rows for terminal font and inherited terminal profile.
-- Terminal nodes use the configured font and pass the configured profile to PTY creation as `TERMSPRAWL_TERMINAL_PROFILE`.
-- Kept `httpProxy` as a normalized round trip setting only. There is no concrete proxy consumer in the current application: no HTTP client, agent transport, browser session, or PTY behavior reads this setting. Injecting proxy variables into every terminal would silently change child process behavior, so proxy runtime application is intentionally unsupported and deferred until a concrete consumer and contract exist.
-- Fixed the PTY request type documentation and removed the incomplete proxy propagation from terminal creation.
+- Added General panel controls for terminal font, inherited terminal profile, and HTTP proxy.
+- HTTP proxy is concretely supported for terminal and agent child processes: a configured URL is propagated as `HTTP_PROXY`, `HTTPS_PROXY`, `http_proxy`, and `https_proxy` in the PTY environment. The value is trimmed during settings normalization; blank input clears it.
+- Terminal nodes wait for `settings.get()` before creating xterm or the PTY, so persisted font and profile settings apply on first mount. The configured profile is passed as `TERMSPRAWL_TERMINAL_PROFILE`.
+- Capability pages now honor `supported` and `reason`, rendering an explicit unavailable state instead of empty results. This covers Server Edition responses.
+- Usage now carries `supported` and `reason`; the current backend truthfully reports that collection is not implemented, while the renderer still renders summary, daily, and model details whenever supported data exists.
+- Fixed the PTY request type documentation and added the missing contract coverage.
 
-Validation:
+Validation output:
 
-- `pnpm run typecheck` passed.
-- `pnpm vitest run src/core/app-settings.test.ts src/core/pty-manager.test.ts src/shared/settings-contracts.test.ts` passed: 3 files, 51 tests.
-- `git diff --check` passed.
+- `pnpm run typecheck` — exit code 0 (`tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json`).
+- `pnpm vitest run src/core/app-settings.test.ts src/core/pty-manager.test.ts src/shared/settings-contracts.test.ts` — exit code 0; 3 files passed, 51 tests passed.
+- `git diff --check` — exit code 0.
 
-The PTY integration suite may print expected tmux socket connection messages while exercising cleanup paths.
+The PTY integration suite prints expected tmux socket connection messages during cleanup paths.
