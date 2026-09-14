@@ -107,7 +107,13 @@ pnpm test
 # ---- 4. commit bump + push main to all 3 remotes ----
 echo "==> commit bump + push main"
 git add package.json README.md pnpm-lock.yaml 2>/dev/null || git add package.json README.md
-git commit -m "chore: bump to $NEW_VER"
+# Idempotent rerun: when the bump is already committed (e.g. resuming a release
+# that died after its bump landed), there is nothing to commit — don't abort.
+if git diff --cached --quiet; then
+  echo "==> already at $NEW_VER — nothing to commit (resuming)"
+else
+  git commit -m "chore: bump to $NEW_VER"
+fi
 git push origin main
 git push gitea main
 git push github main
