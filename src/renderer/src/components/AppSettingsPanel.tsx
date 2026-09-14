@@ -740,6 +740,18 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
             </PrefRow>
 
             <PrefRow
+              label="HTTP proxy"
+              sub="Inherited by terminal and agent processes when set"
+            >
+              <TextInput
+                value={c.settings.httpProxy ?? ''}
+                aria-label="HTTP proxy"
+                placeholder="http://proxy.example:8080"
+                onChange={(e) => void c.update({ httpProxy: e.target.value })}
+              />
+            </PrefRow>
+
+            <PrefRow
               label="Invert mousewheel zoom"
               sub="Off (default): scroll up zooms in. On: scroll up zooms out"
             >

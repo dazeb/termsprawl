@@ -55,8 +55,8 @@ export function TerminalNode({ id, data, selected }: NodeProps<TerminalNodeData>
   const hasUnread = useAgentStatuses((s) => s.unread[id] === true)
   const clearUnread = useAgentStatuses((s) => s.clearUnread)
   const [agentHint, setAgentHint] = useState(false)
-  const [terminalSettings, setTerminalSettings] = useState({ fontFamily: 'Geist Mono, JetBrains Mono, monospace', profile: '' })
-  useEffect(() => { void window.termsprawl.settings.get().then((s) => setTerminalSettings({ fontFamily: s.terminalFontFamily ?? 'Geist Mono, JetBrains Mono, monospace', profile: s.terminalProfile ?? '' })) }, [])
+  const [terminalSettings, setTerminalSettings] = useState<{ fontFamily: string; profile: string; proxy: string } | null>(null)
+  useEffect(() => { let alive = true; void window.termsprawl.settings.get().then((s) => { if (alive) setTerminalSettings({ fontFamily: s.terminalFontFamily ?? 'Geist Mono, JetBrains Mono, monospace', profile: s.terminalProfile ?? '', proxy: s.httpProxy ?? '' }) }); return () => { alive = false } }, [])
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState(data.title)
   // B3 — a remote relay terminal (data.relayTerm set) mirrors a HOST terminal
@@ -122,6 +122,7 @@ export function TerminalNode({ id, data, selected }: NodeProps<TerminalNodeData>
   }
 
   useEffect(() => {
+    if (!terminalSettings) return
     const host = hostRef.current
     if (!host) return
 
@@ -201,6 +202,7 @@ export function TerminalNode({ id, data, selected }: NodeProps<TerminalNodeData>
         cwd: data.cwd,
         command: data.command,
         terminalProfile: terminalSettings.profile,
+        httpProxy: terminalSettings.proxy,
         ...(ownerRemote ? { remote: ownerRemote } : {})
       })
       .then(async (result) => {
@@ -243,7 +245,7 @@ export function TerminalNode({ id, data, selected }: NodeProps<TerminalNodeData>
         requestAnimationFrame(() => requestAnimationFrame(() => term.dispose()))
       })
     }
-  }, [id, data.cwd, data.command, isRemote, data.relayTerm])
+  }, [id, data.cwd, data.command, isRemote, data.relayTerm, terminalSettings])
 
   // Remote relay node (B3): follow the local relay connection so we can show a
   // clear "waiting for relay peer" state and (re)attach once actually paired.

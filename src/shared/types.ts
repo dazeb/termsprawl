@@ -4,7 +4,7 @@ export interface SettingsSkill { id: string; name: string; description: string; 
 export interface SettingsHook { id: string; event: string; agent: string; source: 'managed' | 'legacy'; command: string; enabled: boolean }
 export interface SettingsCommand { name: string; description: string; source: 'built-in' | 'project' | 'agent'; available: boolean }
 export interface SettingsCapabilities { supported: boolean; reason?: string; skills: SettingsSkill[]; hooks: SettingsHook[]; commands: SettingsCommand[] }
-export interface UsageStats { hasData: boolean; totalInputTokens: number; totalOutputTokens: number; totalCost: number; sessions: number; longestSessionSeconds: number; daily: Array<{ date: string; inputTokens: number; outputTokens: number; cost: number }>; models: Array<{ provider: string; model: string; inputTokens: number; outputTokens: number; cost: number }> }
+export interface UsageStats { hasData: boolean; supported: boolean; reason?: string; totalInputTokens: number; totalOutputTokens: number; totalCost: number; sessions: number; longestSessionSeconds: number; daily: Array<{ date: string; inputTokens: number; outputTokens: number; cost: number }>; models: Array<{ provider: string; model: string; inputTokens: number; outputTokens: number; cost: number }> }
 
 export interface PtyCreateRequest {
   /** Stable per-node id; also the tmux session key (Phase 4). */
@@ -23,6 +23,8 @@ export interface PtyCreateRequest {
   env?: Record<string, string>
   /** Inherited profile name exposed to spawned terminal processes. */
   terminalProfile?: string
+  /** HTTP(S) proxy URL inherited by spawned processes. */
+  httpProxy?: string
   /** Remote project (Phase 9): when set, the terminal runs on the remote host
    * via ssh -tt + remote tmux instead of a local node-pty. */
   remote?: ProjectRemote

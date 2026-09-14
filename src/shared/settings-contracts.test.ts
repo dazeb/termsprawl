@@ -5,7 +5,7 @@ import type { SettingsCapabilities, UsageStats } from './types'
 describe('settings contracts', () => {
   it('supports empty results', () => {
     const capabilities: SettingsCapabilities = { supported: true, skills: [], hooks: [], commands: [] }
-    const usage: UsageStats = { hasData: false, totalInputTokens: 0, totalOutputTokens: 0, totalCost: 0, sessions: 0, longestSessionSeconds: 0, daily: [], models: [] }
+    const usage: UsageStats = { supported: true, hasData: false, totalInputTokens: 0, totalOutputTokens: 0, totalCost: 0, sessions: 0, longestSessionSeconds: 0, daily: [], models: [] }
     expect(capabilities.skills).toEqual([])
     expect(usage).toMatchObject({ hasData: false, sessions: 0 })
   })
