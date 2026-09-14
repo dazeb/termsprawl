@@ -33,3 +33,5 @@ npm-debug.log*
 # hermes plan files
 .hermes/
 .worktrees/
+
+.worktrees/
