@@ -42,8 +42,12 @@ import type {
   LinkRunResult,
   BrowserCdpInfo,
   BrowserNavigateResult,
-  ChatSettings
-} from '../shared/types'
+  ChatSettings,
+  SettingsSkill,
+  SettingsHook,
+  SettingsCommand,
+  SettingsCapabilities,
+  UsageStats} from '../shared/types'
 import type { ChatEvent } from '../core/chat/types'
 import { chatEventChannel } from '../shared/ipc'
 import type { UpdateStatus } from '../shared/update-status'
@@ -73,7 +77,9 @@ const api = {
     deleteAccount: (id: string): Promise<AppSettings> =>
       ipcRenderer.invoke(IPC.accountDelete, id),
     permissionSupported: (): Promise<boolean> => ipcRenderer.invoke(IPC.permissionProbe),
-    loginCommand: (): Promise<string> => ipcRenderer.invoke(IPC.loginCommand)
+    loginCommand: (): Promise<string> => ipcRenderer.invoke(IPC.loginCommand),
+    capabilities: (): Promise<SettingsCapabilities> => ipcRenderer.invoke(IPC.settingsCapabilitiesGet),
+    usage: (): Promise<UsageStats> => ipcRenderer.invoke(IPC.settingsUsageGet)
   },
 
   updates: {

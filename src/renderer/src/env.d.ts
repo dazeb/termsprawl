@@ -39,7 +39,8 @@ import type {
   BrowserCdpInfo,
   BrowserNavigateResult,
   NodeLink,
-  LinkRunResult
+  LinkRunResult,
+  SettingsSkill, SettingsHook, SettingsCommand, SettingsCapabilities, UsageStats
   } from '@shared/types'
 import type { AgentStatusEvent } from '@shared/agent-status'
 import type { UpdateStatus } from '@shared/update-status'
@@ -64,6 +65,8 @@ declare global {
         deleteAccount(id: string): Promise<AppSettings>
         permissionSupported(): Promise<boolean>
         loginCommand(): Promise<string>
+        capabilities(): Promise<SettingsCapabilities>
+        usage(): Promise<UsageStats>
       }
       updates: {
         check(): Promise<UpdateStatus>

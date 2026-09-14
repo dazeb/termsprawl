@@ -24,6 +24,9 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   agentA2aServer: false,
   // Mousewheel zooms the canvas; scroll-up = zoom in by default.
   invertWheelZoom: false,
+  terminalFontFamily: 'Geist Mono, JetBrains Mono, monospace',
+  terminalProfile: '',
+  httpProxy: '',
   // Telegram bot is opt-in, off by default (token required to start).
   telegram: { enabled: false, allowedChatIds: [] }
 }
@@ -202,6 +205,9 @@ export function normalizeAppSettings(raw: unknown): AppSettings {
     agentBrowserControl: obj.agentBrowserControl === true,
     agentA2aServer: obj.agentA2aServer === true,
     invertWheelZoom: obj.invertWheelZoom === true,
+    terminalFontFamily: typeof obj.terminalFontFamily === 'string' && obj.terminalFontFamily.trim() ? obj.terminalFontFamily.trim() : 'Geist Mono, JetBrains Mono, monospace',
+    terminalProfile: typeof obj.terminalProfile === 'string' ? obj.terminalProfile.trim() : '',
+    httpProxy: typeof obj.httpProxy === 'string' ? obj.httpProxy.trim() : '',
     // First-run marker: only a non-empty trimmed string counts; anything else
     // (absent, junk, whitespace) keeps the key absent so onboarding can show.
     ...(typeof obj.onboardedAt === 'string' && obj.onboardedAt.trim().length > 0

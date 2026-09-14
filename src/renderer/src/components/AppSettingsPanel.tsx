@@ -9,6 +9,7 @@ import { useProjects } from '../state/projects'
 import { applyTheme } from '../state/theme'
 import { trustState, type TrustState } from './relay-trust'
 import { Button, Card, FieldRow, Hint, PrefRow, Row, Section, Select, Status, TextArea, TextInput, Toggle } from './ui/kit'
+import { CapabilityPage, UsagePage } from './CapabilityPages'
 
 interface AppSettingsPanelProps {
   onClose: () => void
@@ -116,7 +117,7 @@ type PageId =
   | 'cloud'
   | 'connections'
   | 'updates'
-
+  | 'skills' | 'hooks' | 'commands' | 'usage'
 /** Which edition is rendering this panel: the desktop app (full surface) or
  * the Server Edition canvas in a browser (only what the server actually
  * implements — no auto-update, no native dialogs, no desktop-only
@@ -208,6 +209,9 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Agent capabilities',
     pages: [
+      { id: 'skills', title: 'Skills', description: 'Installed agent skills.', icon: <span>◎</span> },
+      { id: 'hooks', title: 'Hooks', description: 'Configured agent hooks.', icon: <span>⌁</span> },
+      { id: 'commands', title: 'Commands', description: 'Available chat commands.', icon: <span>/</span> },
       {
         id: 'accounts',
         title: 'Agent accounts',
@@ -238,6 +242,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Data and statistics',
     pages: [
+      { id: 'usage', title: 'Usage', description: 'Token and cost usage.', icon: <span>◌</span> },
       {
         id: 'cloud',
         title: 'Cloud & backup',
@@ -693,8 +698,7 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
   // the Server Edition actually implements.
   const allSections: Record<PageId, SettingsSection[]> = {
     general: [
-      {
-        id: 'interaction',
+      { id: 'interaction',
         title: 'Interaction',
         render: (c) => (
           <>
@@ -711,6 +715,40 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
                   <option key={b.value} value={b.value}>{b.label}</option>
                 ))}
               </Select>
+            </PrefRow>
+
+            <PrefRow
+              label="Terminal font"
+              sub="Font family used by terminal nodes"
+            >
+              <TextInput
+                value={c.settings.terminalFontFamily ?? ''}
+                aria-label="Terminal font"
+                onChange={(e) => void c.update({ terminalFontFamily: e.target.value })}
+              />
+            </PrefRow>
+
+            <PrefRow
+              label="Inherited terminal profile"
+              sub="Profile name exposed to spawned terminal processes"
+            >
+              <TextInput
+                value={c.settings.terminalProfile ?? ''}
+                aria-label="Inherited terminal profile"
+                onChange={(e) => void c.update({ terminalProfile: e.target.value })}
+              />
+            </PrefRow>
+
+            <PrefRow
+              label="HTTP proxy"
+              sub="Inherited by terminal and agent processes when set"
+            >
+              <TextInput
+                value={c.settings.httpProxy ?? ''}
+                aria-label="HTTP proxy"
+                placeholder="http://proxy.example:8080"
+                onChange={(e) => void c.update({ httpProxy: e.target.value })}
+              />
             </PrefRow>
 
             <PrefRow
@@ -913,7 +951,11 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
     ],
     updates: [
       { id: 'updates', title: 'Release', render: (c) => <UpdatesSection ctx={c} isPackaged={isPackaged} /> }
-    ]
+    ],
+    skills: [{ id: 'skills', title: 'Installed skills', render: () => <CapabilityPage kind="skills" /> }],
+    hooks: [{ id: 'hooks', title: 'Configured hooks', render: () => <CapabilityPage kind="hooks" /> }],
+    commands: [{ id: 'commands', title: 'Chat commands', render: () => <CapabilityPage kind="commands" /> }],
+    usage: [{ id: 'usage', title: 'Usage', render: () => <UsagePage /> }]
   }
 
   // Pages this edition can render, and the one actually on screen: a page the
