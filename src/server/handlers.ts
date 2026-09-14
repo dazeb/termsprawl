@@ -199,7 +199,7 @@ export function buildHandlers(platform: CorePlatform): Record<string, RpcHandler
     [IPC.updateDownload]: () => idleUpdateStatus(),
     [IPC.updateInstall]: () => idleUpdateStatus(),
     [IPC.updateDismiss]: () => idleUpdateStatus(),
-    [IPC.settingsCapabilitiesGet]: () => ({ skills: [], hooks: [], commands: [] }),
+    [IPC.settingsCapabilitiesGet]: () => ({ supported: false, reason: 'Capability discovery is unavailable in Server Edition.', skills: [], hooks: [], commands: [] }),
     [IPC.settingsUsageGet]: () => ({ hasData: false, totalInputTokens: 0, totalOutputTokens: 0, totalCost: 0, sessions: 0, longestSessionSeconds: 0, daily: [], models: [] }),
     [IPC.announcementGet]: () => null,
 

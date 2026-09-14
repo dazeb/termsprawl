@@ -1058,7 +1058,7 @@ function registerFileProtocol(): void {
 }
 
 function registerUpdateIpc(): void {
-  ipcMain.handle(IPC.settingsCapabilitiesGet, () => ({ skills: discoverSkills([{ path: join(homedir(), '.claude', 'skills'), source: 'claude' }, { path: join(homedir(), '.codex', 'skills'), source: 'codex' }]), hooks: inventoryHooks([{ path: claudeSettingsPath(homedir()), agent: 'claude' }, { path: codexConfigPath(homedir()), agent: 'codex' }]), commands: discoverCommands() }))
+  ipcMain.handle(IPC.settingsCapabilitiesGet, () => ({ supported: true, skills: discoverSkills([{ path: join(homedir(), '.claude', 'skills'), source: 'claude' }, { path: join(homedir(), '.codex', 'skills'), source: 'codex' }]), hooks: inventoryHooks([{ path: claudeSettingsPath(homedir()), agent: 'claude' }, { path: codexConfigPath(homedir()), agent: 'codex' }]), commands: discoverCommands() }))
   ipcMain.handle(IPC.settingsUsageGet, () => aggregateUsage([]))
   ipcMain.handle(IPC.appSettingsGet, () => appSettings.current)
   ipcMain.handle(IPC.appSettingsSet, (_event, patch: Partial<AppSettings>) => {
