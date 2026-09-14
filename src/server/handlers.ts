@@ -199,6 +199,7 @@ export function buildHandlers(platform: CorePlatform): Record<string, RpcHandler
     [IPC.updateDownload]: () => idleUpdateStatus(),
     [IPC.updateInstall]: () => idleUpdateStatus(),
     [IPC.updateDismiss]: () => idleUpdateStatus(),
+    [IPC.settingsCapabilitiesGet]: () => ({ skills: [], hooks: [], commands: [] }),
     [IPC.announcementGet]: () => null,
 
     [IPC.workspaceSnapshot]: () => workspaceStore.snapshot(),
