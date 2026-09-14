@@ -54,6 +54,7 @@ import { SessionNameTracker } from '../core/session-name'
 import { discoverSkills } from '../core/settings-skills'
 import { inventoryHooks } from '../core/settings-hooks'
 import { discoverCommands } from '../core/settings-commands'
+import { aggregateUsage } from '../core/settings-usage'
 import { agentSessionNameChannel } from '../shared/ipc'
 import { browserRuntime } from './browser/runtime'
 import {
@@ -1058,7 +1059,7 @@ function registerFileProtocol(): void {
 
 function registerUpdateIpc(): void {
   ipcMain.handle(IPC.settingsCapabilitiesGet, () => ({ skills: discoverSkills([{ path: join(homedir(), '.claude', 'skills'), source: 'claude' }, { path: join(homedir(), '.codex', 'skills'), source: 'codex' }]), hooks: inventoryHooks([{ path: claudeSettingsPath(homedir()), agent: 'claude' }, { path: codexConfigPath(homedir()), agent: 'codex' }]), commands: discoverCommands() }))
-  ipcMain.handle(IPC.settingsUsageGet, () => ({ hasData: false, totalInputTokens: 0, totalOutputTokens: 0, totalCost: 0, sessions: 0, longestSessionSeconds: 0, daily: [], models: [] }))
+  ipcMain.handle(IPC.settingsUsageGet, () => aggregateUsage([]))
   ipcMain.handle(IPC.appSettingsGet, () => appSettings.current)
   ipcMain.handle(IPC.appSettingsSet, (_event, patch: Partial<AppSettings>) => {
     appSettings.current = saveAppSettings(platform.userDataPath, patch)
