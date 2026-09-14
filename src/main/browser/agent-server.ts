@@ -33,7 +33,13 @@ export interface StartAgentServerOptions {
   userDataPath: string
   /** Forward the open command to the renderer (the app's broadcast seam). */
   broadcast: (channel: string, payload: unknown) => void
-  cdp: { wsUrl: string; host: string; port: number }
+  cdp: { wsUrl: string; host: string; port: number; token: string }
+  /**
+   * Per-boot token shared with the CDP facade so browserCdpInfo stays
+   * coherent (one token for the whole agent-control surface). Omit → a fresh
+   * random token is generated (tests, standalone use).
+   */
+  token?: string
 }
 
 function json(res: ServerResponse, status: number, body: unknown): void {
@@ -57,7 +63,7 @@ function readBody(req: IncomingMessage): Promise<string> {
 export async function startAgentServer(
   opts: StartAgentServerOptions
 ): Promise<AgentServerHandle> {
-  const token = randomBytes(24).toString('hex')
+  const token = opts.token ?? randomBytes(24).toString('hex')
   let boundPort = 0
 
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
@@ -115,6 +121,7 @@ export async function startAgentServer(
   })
 
   // Discovery file — the agent reads this to find the endpoint, token, and cdp.
+  // Mode 0600: the file carries the bearer token; never world-readable.
   mkdirSync(opts.userDataPath, { recursive: true })
   const endpointFile = join(opts.userDataPath, 'browser-agent.json')
   const openUrl = `http://127.0.0.1:${boundPort}/open`
@@ -129,7 +136,8 @@ export async function startAgentServer(
       },
       null,
       2
-    )
+    ),
+    { mode: 0o600 }
   )
 
   return {

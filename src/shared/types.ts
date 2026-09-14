@@ -108,10 +108,11 @@ export interface WorkspaceSnapshot {
 
 // Embedded browser node (Phase — browser node). A browser node is a sandboxed
 // <webview> guest rendered inline in the canvas. The CDP endpoint (localhost
-// only, random high port) is how an external agent attaches to drive it.
+// only, random high port, token-gated) is how an external agent attaches to
+// drive it. The token is REQUIRED on every CDP call (?token= or bearer).
 export interface BrowserCdpInfo {
   port: number
-  /** Bearer token for a future gated CDP proxy; surfaced so the agent can carry it. */
+  /** Per-boot bearer token — REQUIRED on the facade (query or bearer). */
   token: string
   /** http://127.0.0.1:<port> — hand this to connectOverCDP / puppeteer. */
   wsUrl: string
@@ -321,8 +322,6 @@ export interface AppSettings {
   dismissedAnnouncementVersion: string | null
   /** Termsprawl Cloud origin for the in-app sign-in + backup. Unset = https://termsprawl.com */
   cloudApiBase?: string
-  /** Basic user profile: a display name shown in the user section. */
-  displayName?: string
   /** Agent-to-agent peers (settings: A2A details). Config only — orchestration
    * is a later feature; the panel just manages the peer list. */
   a2aPeers?: A2APeer[]
@@ -331,10 +330,6 @@ export interface AppSettings {
   apiProviders?: ApiProviderConfig[]
   /** UI theme. 'system' follows the OS preference. Defaults to 'system'. */
   theme?: 'light' | 'dark' | 'system'
-  /** Default agent preset mode for new agents (e.g. 'standard'). */
-  agentPreset?: string
-  /** Default permission mode for new sessions. */
-  defaultPermission?: string
   /** Enter behavior while an agent is busy: 'queue' | 'send' | 'prompt'. */
   enterBehavior?: string
   /** Allow external agents to control embedded browser nodes (13.4): when on,

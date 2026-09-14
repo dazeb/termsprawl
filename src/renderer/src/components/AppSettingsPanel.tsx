@@ -8,6 +8,7 @@ import { useCanvasRequests } from '../state/canvas-requests'
 import { useProjects } from '../state/projects'
 import { applyTheme } from '../state/theme'
 import { trustState, type TrustState } from './relay-trust'
+import { Button, Card, FieldRow, Hint, PrefRow, Row, Section, Select, Status, TextArea, TextInput, Toggle } from './ui/kit'
 
 interface AppSettingsPanelProps {
   onClose: () => void
@@ -105,7 +106,16 @@ interface SectionCtx {
   workspaceImportBundle: () => Promise<void>
 }
 
-type TabId = 'general' | 'user' | 'agents' | 'connections' | 'updates'
+type PageId =
+  | 'general'
+  | 'appearance'
+  | 'models'
+  | 'browser'
+  | 'accounts'
+  | 'a2a'
+  | 'cloud'
+  | 'connections'
+  | 'updates'
 
 /** Which edition is rendering this panel: the desktop app (full surface) or
  * the Server Edition canvas in a browser (only what the server actually
@@ -113,74 +123,163 @@ type TabId = 'general' | 'user' | 'agents' | 'connections' | 'updates'
  * integrations). Read from the bridge's runtime hint. */
 type EditionKind = 'desktop' | 'server'
 
-interface SettingsTab {
-  id: TabId
+interface SettingsPage {
+  id: PageId
   title: string
+  /** One line under the page title saying what the page is for. Omitted when
+   * the title already says it — the reference does the same ("Model settings"
+   * carries a line, "General" does not). */
+  description?: string
   icon: React.JSX.Element
-  /** Editions this tab applies to (undefined = both). */
+  /** Editions this page applies to (undefined = both). */
   editions?: EditionKind[]
 }
 
-const TABS: SettingsTab[] = [
+/** Sidebar groups, in reading order: what the app is (Basics), what it does
+ * for your agents (Agent capabilities), what it keeps for you (Data and
+ * statistics). Labels are sentence case and muted — an uppercase eyebrow over
+ * every group would shout on every page. */
+interface NavGroup {
+  label: string
+  pages: SettingsPage[]
+}
+
+const NAV_GROUPS: NavGroup[] = [
   {
-    id: 'general',
-    title: 'General',
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-        <circle cx="12" cy="12" r="3" />
-      </svg>
-    )
+    label: 'Basics',
+    pages: [
+      {
+        id: 'general',
+        title: 'General',
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <line x1="21" y1="6" x2="15" y2="6" />
+            <line x1="10" y1="6" x2="3" y2="6" />
+            <line x1="21" y1="12" x2="13" y2="12" />
+            <line x1="8" y1="12" x2="3" y2="12" />
+            <line x1="21" y1="18" x2="16" y2="18" />
+            <line x1="11" y1="18" x2="3" y2="18" />
+            <line x1="13" y1="4" x2="13" y2="8" />
+            <line x1="11" y1="10" x2="11" y2="14" />
+            <line x1="14" y1="16" x2="14" y2="20" />
+          </svg>
+        )
+      },
+      {
+        id: 'appearance',
+        title: 'Appearance',
+        description: 'How the workspace looks: theme, canvas, and node styling.',
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M12 21a9 9 0 1 1 0-18c4.97 0 9 3.58 9 8 0 2.2-1.8 3.5-3.6 3.5h-1.6a1.9 1.9 0 0 0-1.4 3.1A1.8 1.8 0 0 1 12 21z" />
+            <circle cx="8" cy="11" r="1" />
+            <circle cx="11" cy="7.5" r="1" />
+            <circle cx="15.5" cy="8" r="1" />
+          </svg>
+        )
+      },
+      {
+        id: 'models',
+        title: 'Model settings',
+        description: 'Manage custom model providers. Once configured, they can be selected in chat nodes.',
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M21 8l-9-5-9 5 9 5 9-5z" />
+            <path d="M3 8v8l9 5 9-5V8" />
+            <path d="M12 13v8" />
+          </svg>
+        )
+      },
+      {
+        id: 'browser',
+        title: 'Browser',
+        description: 'Embedded browser nodes: where they start, and whether agents may drive them.',
+        editions: ['desktop'],
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M3 12h18" />
+            <path d="M12 3c2.5 2.6 3.8 5.6 3.8 9S14.5 18.4 12 21c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z" />
+          </svg>
+        )
+      }
+    ]
   },
   {
-    id: 'user',
-    title: 'User',
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <circle cx="12" cy="8" r="3.5" />
-        <path d="M4.5 20a7.5 7.5 0 0 1 15 0" />
-      </svg>
-    )
+    label: 'Agent capabilities',
+    pages: [
+      {
+        id: 'accounts',
+        title: 'Agent accounts',
+        description: 'Managed logins for the agent CLIs, and the permission mode each one runs with.',
+        editions: ['desktop'],
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="16" rx="2" />
+            <path d="M7 9l3 3-3 3" />
+            <path d="M13 15h4" />
+          </svg>
+        )
+      },
+      {
+        id: 'a2a',
+        title: 'A2A peers',
+        description: 'Agent-to-agent endpoints: which peers you trust, and whether your own nodes are exposed.',
+        editions: ['desktop'],
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M10 13a5 5 0 0 0 7.07 0l3-3A5 5 0 0 0 13 3l-1.5 1.5" />
+            <path d="M14 11a5 5 0 0 0-7.07 0l-3 3A5 5 0 0 0 11 21l1.5-1.5" />
+          </svg>
+        )
+      }
+    ]
   },
   {
-    id: 'agents',
-    title: 'Agents',
-    /** Managed agent accounts + preset/permission machinery are desktop-main
-     * features; the canvas has chat-model defaults instead (Connections). */
-    editions: ['desktop'],
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <rect x="3" y="4" width="18" height="16" rx="2" />
-        <path d="M7 9l3 3-3 3" />
-        <path d="M13 15h4" />
-      </svg>
-    )
-  },
-  {
-    id: 'connections',
-    title: 'Connections',
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <circle cx="6" cy="12" r="2.5" />
-        <circle cx="18" cy="12" r="2.5" />
-        <path d="M8.5 12h7" />
-      </svg>
-    )
-  },
-  {
-    id: 'updates',
-    title: 'Updates',
-    /** Auto-update is an Electron/OS-level feature — a container's canvas has
-     * nothing to update (the operator rebuilds the image). */
-    editions: ['desktop'],
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-        <path d="M21 4v5h-5" />
-      </svg>
-    )
+    label: 'Data and statistics',
+    pages: [
+      {
+        id: 'cloud',
+        title: 'Cloud & backup',
+        description: 'Your account, encrypted workspace backups, and the hosted canvas space.',
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M17.5 19a4.5 4.5 0 0 0 .4-8.98A6 6 0 0 0 6.2 9.2 4 4 0 0 0 7 19h10.5z" />
+          </svg>
+        )
+      },
+      {
+        id: 'connections',
+        title: 'Connections',
+        description: 'Telegram and the relay service: how this machine talks to your phone and to other machines.',
+        editions: ['desktop'],
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M9 7V3" />
+            <path d="M15 7V3" />
+            <path d="M6 7h12v4a6 6 0 0 1-12 0V7z" />
+            <path d="M12 17v4" />
+          </svg>
+        )
+      },
+      {
+        id: 'updates',
+        title: 'Updates',
+        description: 'Release channel, download behaviour, and what changed.',
+        editions: ['desktop'],
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+            <path d="M21 4v5h-5" />
+          </svg>
+        )
+      }
+    ]
   }
 ]
+
+/** Every page, in nav order — the lookup the renderer uses per page id. */
+const PAGES: SettingsPage[] = NAV_GROUPS.flatMap((g) => g.pages)
 
 export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanelProps): React.JSX.Element {
   const [settings, setSettings] = useState<AppSettings>({
@@ -191,8 +290,6 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
     a2aPeers: [],
     apiProviders: [],
     theme: 'system',
-    agentPreset: 'standard',
-    defaultPermission: 'workspaceWrite',
     enterBehavior: 'queue',
     agentBrowserControl: false,
     agentA2aServer: false
@@ -209,7 +306,7 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
   const [spaceError, setSpaceError] = useState<string | null>(null)
   const [spaceNote, setSpaceNote] = useState<string | null>(null)
   const [spaceLoaded, setSpaceLoaded] = useState(false)
-  const [tab, setTab] = useState<TabId>('general')
+  const [tab, setTab] = useState<PageId>('general')
   // Which edition is serving this renderer — the bridge carries the hint.
   const edition: EditionKind = window.termsprawl.runtime?.kind === 'server' ? 'server' : 'desktop'
   const isDesktop = edition === 'desktop'
@@ -594,78 +691,18 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
   // hosts the sections that actually belong to it; a section whose `editions`
   // omits the current one is dropped — the canvas panel only shows controls
   // the Server Edition actually implements.
-  const allSections: Record<TabId, SettingsSection[]> = {
+  const allSections: Record<PageId, SettingsSection[]> = {
     general: [
       {
-        id: 'prefs',
-        title: 'Preferences',
+        id: 'interaction',
+        title: 'Interaction',
         render: (c) => (
           <>
-            {/* Canvas: the agent preset + permission selects are desktop-side
-                spawn defaults (they gate desktop agent-node launches); the
-                server has no agent-node spawning UI, so they hide there. */}
-            {isDesktop && (
-              <div className="settings-pref-row">
-                <div className="settings-pref-copy">
-                  <span className="settings-pref-label">Agent preset</span>
-                  <span className="settings-pref-sub">Tuning for new agent sessions (standard / fast / full)</span>
-                </div>
-                <select
-                  className="settings-select"
-                  value={c.settings.agentPreset ?? 'standard'}
-                  aria-label="Agent preset"
-                  onChange={(e) => void c.update({ agentPreset: e.target.value })}
-                >
-                  {PRESET_MODES.map((m) => (
-                    <option key={m.value} value={m.value}>{m.label}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {isDesktop && (
-              <div className="settings-pref-row">
-                <div className="settings-pref-copy">
-                  <span className="settings-pref-label">Permission</span>
-                  <span className="settings-pref-sub">Default permission mode for new agent sessions (when the CLI supports it)</span>
-                </div>
-                <select
-                  className="settings-select"
-                  value={c.settings.defaultPermission ?? 'workspaceWrite'}
-                  aria-label="Default permission mode"
-                  onChange={(e) => void c.update({ defaultPermission: e.target.value })}
-                >
-                  {PERMISSION_MODES.map((m) => (
-                    <option key={m.value} value={m.value}>{m.label}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            <div className="settings-group">
-              <div className="settings-group-title">Appearance</div>
-              <div className="settings-theme-cards">
-                {THEMES.map((t) => (
-                  <button
-                    key={t.value}
-                    type="button"
-                    className={`settings-theme-card${(c.settings.theme ?? 'system') === t.value ? ' is-active' : ''}`}
-                    onClick={() => void c.update({ theme: t.value })}
-                  >
-                    <span className="settings-theme-icon">{themeIcon(t.value)}</span>
-                    <span className="settings-theme-label">{t.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="settings-pref-row">
-              <div className="settings-pref-copy">
-                <span className="settings-pref-label">Enter behavior while busy</span>
-                <span className="settings-pref-sub">In chat nodes: Enter sends; busy sessions queue, send, or prompt. Shift+Enter breaks the line</span>
-              </div>
-              <select
-                className="settings-select"
+            <PrefRow
+              label="Enter behavior while busy"
+              sub="In chat nodes: Enter sends; a busy session queues, sends, or prompts. Shift+Enter breaks the line"
+            >
+              <Select
                 value={c.settings.enterBehavior ?? 'queue'}
                 aria-label="Enter behavior while busy"
                 onChange={(e) => void c.update({ enterBehavior: e.target.value })}
@@ -673,116 +710,124 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
                 {ENTER_BEHAVIORS.map((b) => (
                   <option key={b.value} value={b.value}>{b.label}</option>
                 ))}
-              </select>
-            </div>
+              </Select>
+            </PrefRow>
 
-            {/* Browser nodes are Electron-only (sandboxed <webview> guests) —
-                a browser-based canvas cannot render one, so the whole browser
-                section (agent control + home page) is desktop-only. */}
-            {isDesktop && (
-              <>
-                <div className="settings-pref-row">
-                  <div className="settings-pref-copy">
-                    <span className="settings-pref-label">Allow agents to control browser nodes</span>
-                    <span className="settings-pref-sub">
-                      Off (default): embedded browsers work normally but no agent endpoint exists. On: an external
-                      agent can open and drive browser nodes over a localhost-only CDP endpoint
-                    </span>
-                  </div>
-                  <label className="app-settings-toggle">
-                    <input
-                      type="checkbox"
-                      checked={c.settings.agentBrowserControl === true}
-                      onChange={(e) => void c.update({ agentBrowserControl: e.target.checked })}
-                    />
-                  </label>
-                </div>
-
-                <div className="settings-pref-row">
-                  <div className="settings-pref-copy">
-                    <span className="settings-pref-label">Expose agent nodes to A2A peers</span>
-                    <span className="settings-pref-sub">
-                      Off (default): no A2A endpoint exists. On: your live agent terminals are listed
-                      as agents at a localhost-only endpoint — peers send tasks via the Google A2A
-                      protocol (token in userData/a2a-agent.json)
-                    </span>
-                  </div>
-                  <label className="app-settings-toggle">
-                    <input
-                      type="checkbox"
-                      checked={c.settings.agentA2aServer === true}
-                      onChange={(e) => void c.update({ agentA2aServer: e.target.checked })}
-                    />
-                  </label>
-                </div>
-
-                <div className="settings-pref-row">
-                  <div className="settings-pref-copy">
-                    <span className="settings-pref-label">Search provider / browser home</span>
-                    <span className="settings-pref-sub">
-                      URL opened when a browser node or new tab starts — point this at
-                      your own SearXNG (e.g. http://127.0.0.1:8080 or a LAN host) for
-                      private search. Empty = DuckDuckGo
-                    </span>
-                  </div>
-                  <input
-                    type="text"
-                    className="settings-text-input"
-                    placeholder="https://duckduckgo.com"
-                    spellCheck={false}
-                    value={c.settings.browserHomeUrl ?? ''}
-                    onChange={(e) => void c.update({ browserHomeUrl: e.target.value })}
-                  />
-                </div>
-              </>
-            )}
-
-            <div className="settings-pref-row">
-              <div className="settings-pref-copy">
-                <span className="settings-pref-label">Show first-run guide again</span>
-                <span className="settings-pref-sub">
-                  Replays the 3-step welcome (create a project, spawn a terminal, arrange) on
-                  the next launch with no projects — or right now if the canvas is empty
-                </span>
-              </div>
-              <button
-                className="settings-btn"
-                onClick={() => void c.update({ onboardedAt: undefined })}
-              >
-                reset
-              </button>
-            </div>
-
-            <div className="settings-pref-row">
-              <div className="settings-pref-copy">
-                <span className="settings-pref-label">Invert mousewheel zoom</span>
-                <span className="settings-pref-sub">
-                  Off (default): scroll up zooms in. On: scroll up zooms out
-                </span>
-              </div>
-              <label className="app-settings-toggle">
-                <input
-                  type="checkbox"
-                  checked={c.settings.invertWheelZoom === true}
-                  onChange={(e) => void c.update({ invertWheelZoom: e.target.checked })}
-                />
-              </label>
-            </div>
+            <PrefRow
+              label="Invert mousewheel zoom"
+              sub="Off (default): scroll up zooms in. On: scroll up zooms out"
+            >
+              <Toggle
+                checked={c.settings.invertWheelZoom === true}
+                onChange={(v) => void c.update({ invertWheelZoom: v })}
+                ariaLabel="Invert mousewheel zoom"
+              />
+            </PrefRow>
           </>
+        )
+      },
+      {
+        id: 'firstrun',
+        title: 'First run',
+        render: (c) => (
+          <PrefRow
+            label="Show the welcome guide again"
+            sub="Replays the 3-step welcome (create a project, spawn a terminal, arrange) the next time the canvas is empty"
+          >
+            <Button onClick={() => void c.update({ onboardedAt: undefined })}>Reset</Button>
+          </PrefRow>
         )
       }
     ],
-    user: [
+    appearance: [
       {
-        id: 'user',
-        title: isDesktop ? 'User & cloud' : 'Cloud',
-        render: (c) => <UserSection ctx={c} />
+        id: 'theme',
+        title: 'Theme',
+        render: (c) => (
+          <div className="grid grid-cols-3 gap-2.5 py-3" role="group" aria-label="Theme">
+            {THEMES.map((t) => {
+              const selected = (c.settings.theme ?? 'system') === t.value
+              return (
+                <button
+                  key={t.value}
+                  type="button"
+                  aria-pressed={selected}
+                  className={`flex flex-col items-center gap-2 rounded-xl border px-3 py-3.5 transition-[color,background-color,border-color,transform] duration-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ink active:scale-[0.98] ${
+                    selected
+                      ? 'border-ink bg-raised text-ink'
+                      : 'border-edge text-mute hover:border-raised hover:bg-hover hover:text-ink'
+                  }`}
+                  onClick={() => void c.update({ theme: t.value })}
+                >
+                  <span className="flex h-[22px] items-center justify-center">{themeIcon(t.value)}</span>
+                  <span className="text-xs">{t.label}</span>
+                </button>
+              )
+            })}
+          </div>
+        )
       }
     ],
-    agents: [
-      // Canvas: the agents tab carries the account/permission machinery which
-      // is desktop-main-only — but chat-node defaults ARE server-relevant,
-      // and they live in Connections → Chat models on both editions.
+    models: [
+      {
+        id: 'providers',
+        title: 'Providers',
+        render: (c) => (
+          <ApiSection
+            providers={c.settings.apiProviders ?? []}
+            providerName={providerName}
+            providerBaseUrl={providerBaseUrl}
+            setProviderName={setProviderName}
+            setProviderBaseUrl={setProviderBaseUrl}
+            addProvider={addProvider}
+            removeProvider={removeProvider}
+          />
+        )
+      },
+      {
+        id: 'chat',
+        title: 'Defaults and keys',
+        render: (c) => <ChatSection ctx={c} />
+      }
+    ],
+    browser: [
+      {
+        id: 'home',
+        title: 'Start page',
+        render: (c) => (
+          <PrefRow
+            label="Home page"
+            sub="URL opened when a browser node or new tab starts — point this at your own SearXNG (e.g. http://127.0.0.1:8080 or a LAN host) for private search. Empty = DuckDuckGo"
+          >
+            <TextInput
+              placeholder="https://duckduckgo.com"
+              spellCheck={false}
+              value={c.settings.browserHomeUrl ?? ''}
+              onChange={(e) => void c.update({ browserHomeUrl: e.target.value })}
+            />
+          </PrefRow>
+        )
+      },
+      {
+        id: 'agentcontrol',
+        title: 'Agent control',
+        render: (c) => (
+          <PrefRow
+            label="Allow agents to control browser nodes"
+            sub="Off (default): embedded browsers work normally but no agent endpoint exists. On: an external agent can open and drive browser nodes over a localhost-only CDP endpoint"
+          >
+            <Toggle
+              checked={c.settings.agentBrowserControl === true}
+              onChange={(v) => void c.update({ agentBrowserControl: v })}
+              ariaLabel="Allow agents to control browser nodes"
+            />
+          </PrefRow>
+        )
+      }
+    ],
+    accounts: [
+      // Canvas: the agent registry is desktop-main-only — chat-node defaults
+      // live in Model settings on both editions.
       { id: 'agents', title: 'Agents', editions: ['desktop'], render: () => <AgentsSection /> },
       {
         id: 'accounts',
@@ -805,10 +850,27 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
         )
       }
     ],
-    connections: [
+    a2a: [
+      {
+        id: 'expose',
+        title: 'Your nodes',
+        editions: ['desktop'],
+        render: (c) => (
+          <PrefRow
+            label="Expose agent nodes to A2A peers"
+            sub="Off (default): no A2A endpoint exists. On: your live agent terminals are listed as agents at a localhost-only endpoint — peers send tasks via the Google A2A protocol (token in userData/a2a-agent.json)"
+          >
+            <Toggle
+              checked={c.settings.agentA2aServer === true}
+              onChange={(v) => void c.update({ agentA2aServer: v })}
+              ariaLabel="Expose agent nodes to A2A peers"
+            />
+          </PrefRow>
+        )
+      },
       {
         id: 'a2a',
-        title: 'A2A peers',
+        title: 'Peers',
         editions: ['desktop'],
         render: (c) => (
           <A2ASection
@@ -826,22 +888,16 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
             peerTestNote={peerTestNote}
           />
         )
-      },
+      }
+    ],
+    cloud: [
       {
-        id: 'api',
-        title: 'API providers',
-        render: (c) => (
-          <ApiSection
-            providers={c.settings.apiProviders ?? []}
-            providerName={providerName}
-            providerBaseUrl={providerBaseUrl}
-            setProviderName={setProviderName}
-            setProviderBaseUrl={setProviderBaseUrl}
-            addProvider={addProvider}
-            removeProvider={removeProvider}
-          />
-        )
-      },
+        id: 'user',
+        title: isDesktop ? 'Account' : 'Cloud',
+        render: (c) => <UserSection ctx={c} />
+      }
+    ],
+    connections: [
       {
         id: 'telegram',
         title: 'Telegram bot',
@@ -853,58 +909,127 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
         title: 'Relay',
         editions: ['desktop'],
         render: (c) => <RelaySection ctx={c} />
-      },
-      {
-        id: 'chat',
-        title: 'Chat models',
-        render: (c) => <ChatSection ctx={c} />
       }
     ],
     updates: [
-      { id: 'updates', title: 'Updates', render: (c) => <UpdatesSection ctx={c} isPackaged={isPackaged} /> }
+      { id: 'updates', title: 'Release', render: (c) => <UpdatesSection ctx={c} isPackaged={isPackaged} /> }
     ]
   }
 
-  // Filter the visible tab list by edition, then each tab's sections.
-  const visibleTabs = TABS.filter((t) => !t.editions || t.editions.includes(edition))
-  const tabSections: Record<TabId, SettingsSection[]> = allSections
-  // If the active tab vanished for this edition, snap back to General.
-  const activeTab: TabId = visibleTabs.some((t) => t.id === tab) ? tab : 'general'
+  // Pages this edition can render, and the one actually on screen: a page the
+  // edition hides (Browser on a canvas, Updates in a container) snaps back to
+  // the first visible page rather than rendering an empty shell.
+  const visiblePages = PAGES.filter((p) => !p.editions || p.editions.includes(edition))
+  const activePage = visiblePages.find((p) => p.id === tab) ?? visiblePages[0]
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="settings-sheet" role="dialog" aria-modal="true" aria-label="settings">
-        <div className="settings-sheet-head">
-          <span className="settings-sheet-title">Settings</span>
-          <div className="settings-sheet-head-actions">
-            <button className="settings-modal-close" onClick={onClose} title="Close settings">×</button>
-          </div>
-        </div>
+      <div
+        className="settings-panel relative flex h-[min(720px,calc(100vh-48px))] w-[min(1040px,calc(100vw-48px))] flex-col overflow-hidden rounded-2xl border border-edge bg-page shadow-[0_24px_64px_rgba(0,0,0,0.6)]"
+        role="dialog"
+        aria-modal="true"
+        aria-label="settings"
+      >
+        {/* No title bar: the page title is the title, and Escape / "Back to
+            workspace" / the window controls are the ways out (the reference has
+            native window chrome in that corner). A visible close stays for
+            pointer users, floating over the content gutter. */}
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close settings"
+          title="Close settings"
+          className="absolute right-3 top-3 z-10 flex h-7 w-7 items-center justify-center rounded-[7px] border border-transparent text-[15px] leading-none text-mute transition-colors hover:border-edge hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ink"
+        >
+          ×
+        </button>
 
-        <div className="settings-sheet-body">
-          <nav className="settings-nav" aria-label="settings sections">
-            {visibleTabs.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                className={`settings-nav-item${activeTab === t.id ? ' is-active' : ''}`}
-                onClick={() => setTab(t.id)}
-              >
-                <span className="settings-nav-icon">{t.icon}</span>
-                <span>{t.title}</span>
-              </button>
-            ))}
+        <div className="flex min-h-0 flex-1">
+          <nav
+            className="settings-scroll flex w-[232px] shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-edge px-3 pb-3 pt-2"
+            aria-label="settings sections"
+          >
+            <button
+              type="button"
+              onClick={onClose}
+              className="group mb-1 flex items-center gap-2.5 rounded-lg py-2 pl-3.5 pr-2.5 text-left text-[13px] text-mute transition-colors hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ink"
+            >
+              <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M19 12H5" />
+                  <path d="M11 18l-6-6 6-6" />
+                </svg>
+              </span>
+              <span className="truncate">Back to workspace</span>
+            </button>
+            {NAV_GROUPS.map((group) => {
+              const pages = group.pages.filter(
+                (p) => !p.editions || p.editions.includes(edition)
+              )
+              if (pages.length === 0) return null
+              return (
+                <div key={group.label} className="flex flex-col gap-0.5">
+                  <div className="px-3 pb-1 pt-3 text-[11px] font-medium leading-none text-mute">
+                    {group.label}
+                  </div>
+                  {pages.map((p) => {
+                    const active = activePage.id === p.id
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        aria-current={active ? 'page' : undefined}
+                        className={`group relative flex items-center gap-2.5 rounded-lg py-2 pl-3.5 pr-2.5 text-left text-[13px] transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ink ${
+                          active
+                            ? 'bg-raised font-medium text-ink'
+                            : 'text-mute hover:bg-hover hover:text-ink'
+                        }`}
+                        onClick={() => setTab(p.id)}
+                      >
+                        {/* Active indicator: a short ink bar at the item's left
+                            edge, so the current page reads at a glance. */}
+                        <span
+                          aria-hidden="true"
+                          className={`absolute left-1 top-1/2 h-3.5 w-[2px] -translate-y-1/2 rounded-full bg-ink transition-opacity ${
+                            active ? 'opacity-100' : 'opacity-0'
+                          }`}
+                        />
+                        <span
+                          className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center transition-colors ${
+                            active ? 'text-ink' : 'text-mute group-hover:text-ink'
+                          }`}
+                        >
+                          {p.icon}
+                        </span>
+                        <span className="truncate">{p.title}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )
+            })}
           </nav>
 
-          <div className="settings-content">
-            {tabSections[activeTab]
-              .filter((s) => !s.editions || s.editions.includes(edition))
-              .map((section) => (
-                <div key={section.id} className="settings-section">
-                  <div className="settings-section-title">{section.title}</div>
-                  {section.render(ctx)}
-                </div>
-              ))}
+          <div className="settings-scroll flex min-w-0 flex-1 flex-col overflow-y-auto px-8 py-7">
+            <div className="flex min-w-0 max-w-[720px] flex-col gap-7">
+              <header className="flex flex-col gap-1.5">
+                <h1 className="text-[22px] font-semibold leading-tight tracking-[-0.02em] text-ink">
+                  {activePage.title}
+                </h1>
+                {activePage.description && (
+                  <p className="max-w-[68ch] text-[13px] leading-relaxed text-mute [text-wrap:pretty]">
+                    {activePage.description}
+                  </p>
+                )}
+              </header>
+              {allSections[activePage.id]
+                .filter((s) => !s.editions || s.editions.includes(edition))
+                .map((section) => (
+                  <Section key={section.id} title={section.title}>
+                    {section.render(ctx)}
+                  </Section>
+                ))}
+            </div>
           </div>
         </div>
       </div>
@@ -963,134 +1088,119 @@ function UserSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
   // feature (the space imports repos via the broker) but the shim's github
   // stub rejects, so it only shows on desktop for now.
   const isDesktop = window.termsprawl.runtime?.kind !== 'server'
-  const [draft, setDraft] = useState(settings.displayName ?? '')
-  useEffect(() => setDraft(settings.displayName ?? ''), [settings.displayName])
   // The upsell lands on the web dashboard's billing page — the same surface the
   // Stripe checkout/portal flows live on.
   const openBilling = (): void => {
     void window.termsprawl.openExternal(`${(settings.cloudApiBase ?? 'https://termsprawl.com').replace(/\/$/, '')}/dashboard/billing`)
   }
   return (
-    <div className="settings-section">
+    <>
       {device && (
-        <p className="app-settings-hint">
+        <Hint>
           open <strong>{device.verification_uri}</strong> and enter code <strong>{device.user_code}</strong> to link this device.
-        </p>
+        </Hint>
       )}
       {cloudUser ? (
         <>
-          <p className="app-settings-hint">
+          <Hint>
             signed in as {cloudUser.github_login} · {cloudUser.plan} plan. Backups are encrypted server-side with your key.
-          </p>
-          <div className="account-row">
-            <button className="settings-btn accent" onClick={() => void cloudBackupNow()}>back up now</button>
-            {lastBackup && <span className="account-id">backup {lastBackup.id.slice(0, 8)} · {lastBackup.size_bytes} bytes</span>}
-            <button className="settings-btn danger" onClick={() => void cloudSignOut()}>sign out</button>
-          </div>
+          </Hint>
+          <Row>
+            <Button variant="primary" onClick={() => void cloudBackupNow()}>back up now</Button>
+            {lastBackup && <Status>backup {lastBackup.id.slice(0, 8)} · {lastBackup.size_bytes} bytes</Status>}
+            <Button variant="danger" onClick={() => void cloudSignOut()}>sign out</Button>
+          </Row>
           {isDesktop && (cloudUser.plan === 'pro' || cloudUser.plan === 'canvas') ? (
             <>
-              <div className="account-row">
-                <button className="settings-btn accent" disabled={spaceBusy} onClick={() => void cloudOpenSpace()}>
+              <Row>
+                <Button variant="primary" disabled={spaceBusy} onClick={() => void cloudOpenSpace()}>
                   {spaceBusy ? 'opening…' : 'open your online canvas'}
-                </button>
-                {space && <span className="account-id">{spaceUrlLabel(space)} · {space.status}</span>}
-                {spaceError && <span className="account-confirm-text">{spaceError}</span>}
-                {spaceNote && <span className="account-id">{spaceNote}</span>}
-              </div>
-              <div className="account-row">
+                </Button>
+                {space && <Status>{spaceUrlLabel(space)} · {space.status}</Status>}
+                {spaceError && <Status className="text-danger">{spaceError}</Status>}
+                {spaceNote && <Status>{spaceNote}</Status>}
+              </Row>
+              <Row>
                 {/* D1 — pull the online snapshot into a NEW local project and
                     switch to it. Disabled while busy; a space with nothing
                     online yet shows the note instead of failing. */}
-                <button
-                  className="settings-btn accent"
+                <Button
+                  variant="primary"
                   disabled={spaceBusy || !spaceLoaded}
                   title={spaceLoaded ? undefined : 'checking your space…'}
                   onClick={() => void cloudOpenSnapshot()}
                 >
                   {spaceBusy ? 'working…' : 'open online snapshot'}
-                </button>
+                </Button>
                 {/* D2 — push the active project's nodes + scrollbacks. Provisions
                     the space first when the user has none. */}
-                <button
-                  className="settings-btn accent"
+                <Button
+                  variant="primary"
                   disabled={spaceBusy || !spaceLoaded}
                   title={spaceLoaded ? undefined : 'checking your space…'}
                   onClick={() => void cloudSyncProject()}
                 >
                   {spaceBusy ? 'working…' : 'sync this project online'}
-                </button>
-              </div>
+                </Button>
+              </Row>
               {/* Phase 16 — the whole workspace as ONE json file: save/open
                   dialogs live in main; the same busy/error/note surface as the
                   spaces rows above. Works signed-in or not. */}
-              <div className="account-row">
-                <button
-                  className="settings-btn accent"
+              <Row>
+                <Button
+                  variant="primary"
                   disabled={spaceBusy}
                   onClick={() => void workspaceExportBundle()}
                 >
                   {spaceBusy ? 'working…' : 'export workspace…'}
-                </button>
-                <button
-                  className="settings-btn accent"
+                </Button>
+                <Button
+                  variant="primary"
                   disabled={spaceBusy}
                   onClick={() => void workspaceImportBundle()}
                 >
                   {spaceBusy ? 'working…' : 'open workspace…'}
-                </button>
-              </div>
+                </Button>
+              </Row>
             </>
           ) : !isDesktop ? null : (
-            <div className="account-row">
-              <button className="settings-btn accent" onClick={openBilling}>upgrade to pro</button>
-              <span className="account-id">pro adds an online canvas space that syncs with this desktop</span>
-            </div>
+            <Row>
+              <Button variant="primary" onClick={openBilling}>upgrade to pro</Button>
+              <Status>pro adds an online canvas space that syncs with this desktop</Status>
+            </Row>
           )}
         </>
       ) : (
-        <div className="account-row">
-          <button className="settings-btn accent" disabled={cloudBusy} onClick={() => void cloudSignIn()}>
+        <Row>
+          <Button variant="primary" disabled={cloudBusy} onClick={() => void cloudSignIn()}>
             {cloudBusy ? 'waiting for github…' : 'sign in with github'}
-          </button>
-          {!isDesktop && <span className="account-id">sign in to sync this canvas with your desktop</span>}
-        </div>
+          </Button>
+          {!isDesktop && <Status>sign in to sync this canvas with your desktop</Status>}
+        </Row>
       )}
       {cloudUser && isDesktop && (
-        <div className="account-row">
+        <Row>
           {ghConnected ? (
             <>
-              <span className="account-id">GitHub connected</span>
-              <button className="settings-btn danger" disabled={ghBusy} onClick={() => void ghDisconnect()}>
+              <Status>GitHub connected</Status>
+              <Button variant="danger" disabled={ghBusy} onClick={() => void ghDisconnect()}>
                 {ghBusy ? 'working…' : 'disconnect'}
-              </button>
+              </Button>
             </>
           ) : (
-            <button className="settings-btn accent" disabled={ghBusy || cloudBusy} onClick={() => void ghConnect()}>
+            <Button variant="primary" disabled={ghBusy || cloudBusy} onClick={() => void ghConnect()}>
               {ghBusy || cloudBusy ? 'waiting for github…' : 'Connect GitHub'}
-            </button>
+            </Button>
           )}
-          {ghNote && <span className="account-confirm-text">{ghNote}</span>}
-        </div>
+          {ghNote && <Status className="text-danger">{ghNote}</Status>}
+        </Row>
       )}
-      <label className="app-settings-toggle">
-        display name
-        <input
-          type="text"
-          value={draft}
-          placeholder="your name"
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={() => {
-            const v = draft.trim()
-            if (v && v !== settings.displayName) void update({ displayName: v })
-          }}
-        />
-      </label>
-      <p className="app-settings-hint">
+      <Hint>
         {isDesktop
-          ? 'Termsprawl Cloud account (sign in to back up projects) and a basic display name. Settings live in settings.json in the config directory.'
+          ? 'Termsprawl Cloud account (sign in to back up projects). Settings live in settings.json in the config directory.'
           : 'Sign in with the same GitHub account as your desktop to sync projects between them. Cloud settings for this canvas are managed here; everything else lives on your desktop.'}
-      </p>
-    </div>
+      </Hint>
+    </>
   )
 }
 
@@ -1100,49 +1210,51 @@ function UpdatesSection({ ctx, isPackaged }: { ctx: SectionCtx; isPackaged: bool
   // nothing. The Updates TAB itself is already desktop-only.
   if (!isPackaged) {
     return (
-      <div className="settings-section">
-        <p className="app-settings-hint">
-          Updates come from GitHub Releases. This build is unpackaged (dev), so the
-          updater is inactive — launch the installed AppImage/.deb to manage updates.
-        </p>
-      </div>
+      <Hint>
+        Updates come from GitHub Releases. This build is unpackaged (dev), so the
+        updater is inactive. Launch the installed AppImage or .deb to manage
+        updates.
+      </Hint>
     )
   }
   return (
-    <div className="settings-section">
-      <label className="app-settings-toggle">
-        <input
-          type="checkbox"
-          checked={ctx.settings.autoDownloadUpdates}
-          onChange={(e) => void ctx.update({ autoDownloadUpdates: e.target.checked })}
-        />
-        auto download updates when available
-        <HelpBadge
-          label="about auto download"
-          text="Off (default): a toast appears when a newer GitHub release exists; you choose when to download. On: the AppImage/.deb downloads in the background, then the toast asks you to restart."
-        />
-      </label>
-      <p className="app-settings-hint">When off, you get a toast and choose when to download. When on, updates download in the background and you restart to install.</p>
-    </div>
+    <PrefRow
+      label={
+        <span className="inline-flex items-center gap-1.5">
+          Auto download updates when available
+          <HelpBadge
+            label="about auto download"
+            text="Off (default): a toast appears when a newer GitHub release exists; you choose when to download. On: the AppImage/.deb downloads in the background, then the toast asks you to restart."
+          />
+        </span>
+      }
+      sub="When off, you get a toast and choose when to download. When on, updates download in the background and you restart to install."
+    >
+      <Toggle
+        checked={ctx.settings.autoDownloadUpdates}
+        onChange={(v) => void ctx.update({ autoDownloadUpdates: v })}
+        ariaLabel="auto download updates when available"
+      />
+    </PrefRow>
   )
 }
 
 function AgentsSection(): React.JSX.Element {
   return (
-    <div className="settings-section">
-      <p className="app-settings-hint">Primary agents: codex and grok. Open them from the canvas context menu (Open agent ▸). Claude stays registered but is optional.</p>
+    <>
+      <Hint>Primary agents: codex and grok. Open them from the canvas context menu (Open agent ▸). Claude stays registered but is optional.</Hint>
       {PRIMARY_AGENTS.map((id) => {
         const config = AGENT_REGISTRY[id]
         if (!config) return null
         return (
-          <div key={id} className="account-row">
-            <span className="account-label">{config.name}</span>
-            <span className="account-id">{config.command}</span>
-            <span className="account-id">{config.capabilities.hooks ? 'hooks' : 'no hooks'}</span>
-          </div>
+          <Row key={id}>
+            <span className="text-ink">{config.name}</span>
+            <Status>{config.command}</Status>
+            <Status>{config.capabilities.hooks ? 'hooks' : 'no hooks'}</Status>
+          </Row>
         )
       })}
-    </div>
+    </>
   )
 }
 
@@ -1161,40 +1273,51 @@ function AccountsSection(props: {
 }): React.JSX.Element {
   const { settings, permissionSupported, addAccount, deleteAccount, setActive, setPermissionMode, loginInto, newLabel, setNewLabel, confirmDelete, setConfirmDelete } = props
   return (
-    <div className="settings-section">
-      <p className="app-settings-hint">Each account is its own local agent config directory. Pick the active account for new agents; none means the default. Inherited API keys are stripped from its spawns.</p>
-      {settings.accounts.length === 0 && <p className="app-settings-hint">no accounts yet — add one below.</p>}
+    <>
+      <Hint>Each account is its own local agent config directory. Pick the active account for new agents; none means the default. Inherited API keys are stripped from its spawns.</Hint>
+      {settings.accounts.length === 0 && <Hint>no accounts yet — add one below.</Hint>}
       {settings.accounts.map((acc) => (
-        <div key={acc.id} className="account-row">
-          <label className="account-radio">
-            <input type="radio" name="activeAccount" checked={settings.activeAccountId === acc.id} onChange={() => void setActive(acc.id)} />
-            <span className="account-label">{acc.label}</span>
-            <span className="account-id">{acc.id}</span>
+        <Row key={acc.id}>
+          <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
+            <input
+              type="radio"
+              name="activeAccount"
+              className="accent-ink"
+              checked={settings.activeAccountId === acc.id}
+              onChange={() => void setActive(acc.id)}
+            />
+            <span className="overflow-hidden text-ellipsis whitespace-nowrap text-ink">{acc.label}</span>
+            <Status>{acc.id}</Status>
           </label>
           {permissionSupported && (
-            <select className="account-permission" value={acc.permissionMode ?? 'default'} title="permission mode" onChange={(e) => void setPermissionMode(acc.id, e.target.value as AgentAccount['permissionMode'])}>
+            <Select
+              selectClassName="max-w-[130px]"
+              value={acc.permissionMode ?? 'default'}
+              title="permission mode"
+              onChange={(e) => void setPermissionMode(acc.id, e.target.value as AgentAccount['permissionMode'])}
+            >
               <option value="default">default</option>
               <option value="acceptEdits">accept edits</option>
               <option value="bypassPermissions">bypass</option>
-            </select>
+            </Select>
           )}
-          {!confirmDelete && <button className="settings-btn accent" title="open a login terminal for this account" onClick={() => void loginInto(acc)}>login</button>}
+          {!confirmDelete && <Button variant="primary" title="open a login terminal for this account" onClick={() => void loginInto(acc)}>login</Button>}
           {confirmDelete === acc.id ? (
-            <span className="account-confirm">
-              <span className="account-confirm-text">removes its local config dir</span>
-              <button className="settings-btn danger armed" onClick={() => void deleteAccount(acc.id)}>confirm delete</button>
-              <button onClick={() => setConfirmDelete(null)}>keep</button>
+            <span className="flex items-center gap-2">
+              <Status className="text-danger">removes its local config dir</Status>
+              <Button variant="danger" armed onClick={() => void deleteAccount(acc.id)}>confirm delete</Button>
+              <button className="text-xs text-mute transition-colors hover:text-ink" onClick={() => setConfirmDelete(null)}>keep</button>
             </span>
           ) : (
-            <button className="settings-btn danger" title="delete this account" onClick={() => setConfirmDelete(acc.id)}>delete</button>
+            <Button variant="danger" title="delete this account" onClick={() => setConfirmDelete(acc.id)}>delete</Button>
           )}
-        </div>
+        </Row>
       ))}
-      <div className="account-new">
-        <input className="account-label-input" value={newLabel} placeholder="account label" onChange={(e) => setNewLabel(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void addAccount() }} />
-        <button className="settings-btn accent" onClick={() => void addAccount()}>add account</button>
-      </div>
-    </div>
+      <FieldRow>
+        <TextInput grow value={newLabel} placeholder="account label" onChange={(e) => setNewLabel(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void addAccount() }} />
+        <Button variant="primary" onClick={() => void addAccount()}>add account</Button>
+      </FieldRow>
+    </>
   )
 }
 
@@ -1217,45 +1340,47 @@ function A2ASection(props: {
     addPeer, removePeer, testPeer, peerTestId, peerTestNote
   } = props
   return (
-    <div className="settings-section">
-      <p className="app-settings-hint">Agent-to-agent peers you can route tasks to (canvas right-click → “A2A send to peer”). Peers speak the Google A2A protocol (JSON-RPC over HTTP).</p>
+    <>
+      <Hint>Agent-to-agent peers you can route tasks to (canvas right-click → “A2A send to peer”). Peers speak the Google A2A protocol (JSON-RPC over HTTP).</Hint>
       {peers.map((p) => (
-        <div key={p.id} className="account-row">
-          <span className="account-label">{p.label}</span>
-          <span className="account-id">{p.endpoint}</span>
-          <button className="settings-btn" title="discover the peer's agent card" onClick={() => void testPeer(p)}>test</button>
-          <button className="settings-btn danger" onClick={() => void removePeer(p.id)}>remove</button>
-          {peerTestId === p.id && peerTestNote && <span className="a2a-test-note">{peerTestNote}</span>}
-        </div>
+        <Row key={p.id}>
+          <span className="text-ink">{p.label}</span>
+          <Status>{p.endpoint}</Status>
+          <Button title="discover the peer's agent card" onClick={() => void testPeer(p)}>test</Button>
+          <Button variant="danger" onClick={() => void removePeer(p.id)}>remove</Button>
+          {peerTestId === p.id && peerTestNote && (
+            <Status className={peerTestNote.startsWith('✓') ? '' : 'text-danger'}>{peerTestNote}</Status>
+          )}
+        </Row>
       ))}
-      <div className="account-new">
-        <input className="account-label-input" value={peerLabel} placeholder="peer label" onChange={(e) => setPeerLabel(e.target.value)} />
-        <input className="account-label-input" value={peerEndpoint} placeholder="http://127.0.0.1:8787" onChange={(e) => setPeerEndpoint(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void addPeer() }} />
-        <input className="account-label-input" value={peerToken} placeholder="bearer token (optional)" onChange={(e) => setPeerToken(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void addPeer() }} />
-        <button className="settings-btn accent" onClick={() => void addPeer()}>add peer</button>
-      </div>
-    </div>
+      <FieldRow>
+        <TextInput grow value={peerLabel} placeholder="peer label" onChange={(e) => setPeerLabel(e.target.value)} />
+        <TextInput grow value={peerEndpoint} placeholder="http://127.0.0.1:8787" onChange={(e) => setPeerEndpoint(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void addPeer() }} />
+        <TextInput grow value={peerToken} placeholder="bearer token (optional)" onChange={(e) => setPeerToken(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void addPeer() }} />
+        <Button variant="primary" onClick={() => void addPeer()}>add peer</Button>
+      </FieldRow>
+    </>
   )
 }
 
 function ApiSection(props: { providers: ApiProviderConfig[]; providerName: string; providerBaseUrl: string; setProviderName: (v: string) => void; setProviderBaseUrl: (v: string) => void; addProvider: () => Promise<void>; removeProvider: (id: string) => Promise<void> }): React.JSX.Element {
   const { providers, providerName, providerBaseUrl, setProviderName, setProviderBaseUrl, addProvider, removeProvider } = props
   return (
-    <div className="settings-section">
-      <p className="app-settings-hint">OSS/provider API endpoints for the chat and agent drivers. API keys are NOT stored here — add a keychain-backed field later if needed.</p>
+    <>
+      <Hint>OSS/provider API endpoints for the chat and agent drivers. API keys are NOT stored here — add a keychain-backed field later if needed.</Hint>
       {providers.map((p) => (
-        <div key={p.id} className="account-row">
-          <span className="account-label">{p.name}</span>
-          <span className="account-id">{p.baseUrl}</span>
-          <button className="settings-btn danger" onClick={() => void removeProvider(p.id)}>remove</button>
-        </div>
+        <Row key={p.id}>
+          <span className="text-ink">{p.name}</span>
+          <Status>{p.baseUrl}</Status>
+          <Button variant="danger" onClick={() => void removeProvider(p.id)}>remove</Button>
+        </Row>
       ))}
-      <div className="account-new">
-        <input className="account-label-input" value={providerName} placeholder="provider (e.g. xAI)" onChange={(e) => setProviderName(e.target.value)} />
-        <input className="account-label-input" value={providerBaseUrl} placeholder="https://api.x.ai/v1" onChange={(e) => setProviderBaseUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void addProvider() }} />
-        <button className="settings-btn accent" onClick={() => void addProvider()}>add provider</button>
-      </div>
-    </div>
+      <FieldRow>
+        <TextInput grow value={providerName} placeholder="provider (e.g. xAI)" onChange={(e) => setProviderName(e.target.value)} />
+        <TextInput grow value={providerBaseUrl} placeholder="https://api.x.ai/v1" onChange={(e) => setProviderBaseUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void addProvider() }} />
+        <Button variant="primary" onClick={() => void addProvider()}>add provider</Button>
+      </FieldRow>
+    </>
   )
 }
 
@@ -1285,40 +1410,27 @@ function TelegramSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
   }
 
   return (
-    <div className="settings-section">
-      <p className="app-settings-hint">
+    <>
+      <Hint>
         Control termsprawl from your phone. Pair by messaging the bot with /start from
         the phone; the first chat becomes the owner unless you list chats below. The bot
         token is stored on this machine only — never committed to the repo (the
         TERMSPRAWL_TELEGRAM_TOKEN env var overrides it).
-      </p>
+      </Hint>
 
-      <div className="settings-pref-row">
-        <div className="settings-pref-copy">
-          <span className="settings-pref-label">Enable Telegram bot</span>
-          <span className="settings-pref-sub">
-            On: the bot starts and watches for messages. Off (default): nothing runs
-          </span>
-        </div>
-        <label className="app-settings-toggle">
-          <input
-            type="checkbox"
-            checked={tg.enabled === true}
-            onChange={(e) => void save({ enabled: e.target.checked })}
-          />
-        </label>
-      </div>
+      <PrefRow
+        label="Enable Telegram bot"
+        sub="On: the bot starts and watches for messages. Off (default): nothing runs"
+      >
+        <Toggle checked={tg.enabled === true} onChange={(v) => void save({ enabled: v })} ariaLabel="Enable Telegram bot" />
+      </PrefRow>
 
-      <div className="settings-pref-row">
-        <div className="settings-pref-copy">
-          <span className="settings-pref-label">Bot token</span>
-          <span className="settings-pref-sub">
-            {tg.token ? `a token is set (${tg.token.slice(-4)})` : 'no token — get one from @BotFather'}
-          </span>
-        </div>
-        <input
+      <PrefRow
+        label="Bot token"
+        sub={tg.token ? `a token is set (${tg.token.slice(-4)})` : 'no token — get one from @BotFather'}
+      >
+        <TextInput
           type="password"
-          className="settings-text-input"
           placeholder={tg.token ? '••••••••' : '123:bot-token'}
           spellCheck={false}
           value={draft.token}
@@ -1327,18 +1439,13 @@ function TelegramSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
             if (draft.token.trim() && draft.token !== (tg.token ?? '')) void save({ token: draft.token.trim() })
           }}
         />
-      </div>
+      </PrefRow>
 
-      <div className="settings-pref-row">
-        <div className="settings-pref-copy">
-          <span className="settings-pref-label">Allowed chat ids</span>
-          <span className="settings-pref-sub">
-            empty = the first chat to /start becomes the owner; otherwise only these chats
-            may issue commands
-          </span>
-        </div>
-        <textarea
-          className="settings-text-input"
+      <PrefRow
+        label="Allowed chat ids"
+        sub="empty = the first chat to /start becomes the owner; otherwise only these chats may issue commands"
+      >
+        <TextArea
           rows={3}
           placeholder="one chat id per line"
           spellCheck={false}
@@ -1353,8 +1460,8 @@ function TelegramSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
             })
           }
         />
-      </div>
-    </div>
+      </PrefRow>
+    </>
   )
 }
 
@@ -1502,21 +1609,19 @@ function RelaySection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
   const peerName = pairing?.peerLogin ?? 'peer'
 
   return (
-    <div className="settings-section">
-      <p className="app-settings-hint">
+    <>
+      <Hint>
         Pair two termsprawl instances through the E2E-encrypted relay. A host mints a
         single-use invite once the peers are paired; the other instance joins with that
         code as a client. Traffic is end-to-end encrypted — the relay only routes
         ciphertext. Both sides confirm the peer&apos;s key fingerprint before trusting it.
-      </p>
+      </Hint>
 
-      <div className="settings-pref-row">
-        <div className="settings-pref-copy">
-          <span className="settings-pref-label">Relay URL</span>
-          <span className="settings-pref-sub">wss:// address of the relay service</span>
-        </div>
-        <input
-          className="settings-text-input"
+      <PrefRow
+        label="Relay URL"
+        sub="wss:// address of the relay service"
+      >
+        <TextInput
           placeholder="wss://relay.example.com"
           spellCheck={false}
           value={draft.url}
@@ -1525,71 +1630,64 @@ function RelaySection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
             if (draft.url.trim() !== (relay.url ?? '')) void saveRelay({ url: draft.url.trim() })
           }}
         />
-      </div>
+      </PrefRow>
 
-      <div className="settings-pref-row">
-        <div className="settings-pref-copy">
-          <span className="settings-pref-label">Role</span>
-          <span className="settings-pref-sub">host exposes this machine; client connects out to a host</span>
-        </div>
-        <select
-          className="settings-select"
+      <PrefRow
+        label="Role"
+        sub="host exposes this machine; client connects out to a host"
+      >
+        <Select
           value={relay.role === 'client' ? 'client' : 'host'}
           aria-label="Relay role"
           onChange={(e) => void saveRelay({ role: e.target.value as 'host' | 'client' })}
         >
           <option value="host">host</option>
           <option value="client">client</option>
-        </select>
-      </div>
+        </Select>
+      </PrefRow>
 
       {isHost ? (
         <>
-          <div className="settings-pref-row">
-            <div className="settings-pref-copy">
-              <span className="settings-pref-label">Invite a peer</span>
-              <span className="settings-pref-sub">
-                {paired && !deciding
-                  ? 'pairing ready — generate a single-use invite to share'
-                  : paired && deciding
-                    ? 'confirm the peer’s fingerprint above before inviting'
-                    : 'a peer must pair with this host before an invite can be minted'}
-              </span>
-            </div>
-            <div className="settings-pref-actions">
-              <button
-                className="settings-btn accent"
-                disabled={!paired || deciding || mint.busy || busy}
-                onClick={() => void mintInvite()}
-              >
-                {mint.busy ? 'Generating…' : 'Generate invite'}
-              </button>
-            </div>
-          </div>
-          {mint.error && <p className="relay-error">{mint.error}</p>}
+          <PrefRow
+            label="Invite a peer"
+            sub={
+              paired && !deciding
+                ? 'pairing ready — generate a single-use invite to share'
+                : paired && deciding
+                  ? 'confirm the peer’s fingerprint above before inviting'
+                  : 'a peer must pair with this host before an invite can be minted'
+            }
+          >
+            <Button
+              variant="primary"
+              disabled={!paired || deciding || mint.busy || busy}
+              onClick={() => void mintInvite()}
+            >
+              {mint.busy ? 'Generating…' : 'Generate invite'}
+            </Button>
+          </PrefRow>
+          {mint.error && <Hint className="text-danger">{mint.error}</Hint>}
           {mint.code && (
             <>
-              <div className="relay-invite-code">
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-edge bg-raised px-3 py-2 font-mono text-[15px] tracking-[0.08em] text-ink">
                 <span>{mint.code}</span>
-                <button className="settings-btn" onClick={() => void copyInvite(mint.code as string)}>
+                <Button onClick={() => void copyInvite(mint.code as string)}>
                   {copied ? 'Copied' : 'Copy'}
-                </button>
+                </Button>
               </div>
-              <p className="app-settings-hint">Single-use, expires in 7 days. Share it out of band with the peer.</p>
+              <Hint>Single-use, expires in 7 days. Share it out of band with the peer.</Hint>
             </>
           )}
         </>
       ) : (
-        <div className="settings-pref-row">
-          <div className="settings-pref-copy">
-            <span className="settings-pref-label">Invite code</span>
-            <span className="settings-pref-sub">
-              {relay.invite ? `an invite is set (${relay.invite.slice(-4)})` : 'paste the invite code the host shared'}
-            </span>
-          </div>
-          <input
+        <PrefRow
+          label="Invite code"
+          sub={
+            relay.invite ? `an invite is set (${relay.invite.slice(-4)})` : 'paste the invite code the host shared'
+          }
+        >
+          <TextInput
             type="password"
-            className="settings-text-input"
             placeholder={relay.invite ? '••••••••' : 'invite code'}
             spellCheck={false}
             value={draft.invite}
@@ -1598,7 +1696,7 @@ function RelaySection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
               if (draft.invite.trim() !== (relay.invite ?? '')) void saveRelay({ invite: draft.invite.trim() })
             }}
           />
-        </div>
+        </PrefRow>
       )}
 
       {!isHost && paired && !!trusted && !deciding && !busy && (
@@ -1609,70 +1707,72 @@ function RelaySection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
       )}
 
       {pairing && pairing.decision === 'confirm' && (
-        <div className="relay-card">
-          <span className="relay-card-title">Confirm this peer</span>
-          <span className="relay-card-sub">
-            {peerName} — fingerprint:
-          </span>
-          <span className="relay-fp">{pairing.fingerprint}</span>
-          <div className="relay-actions">
-            <button className="settings-btn" onClick={teardown}>
+        <Card
+          title="Confirm this peer"
+          sub={<>{peerName} — fingerprint:</>}
+        >
+          <span className="break-all font-mono text-xs text-ink">{pairing.fingerprint}</span>
+          <div className="flex justify-end gap-2">
+            <Button onClick={teardown}>
               Disconnect
-            </button>
-            <button className="settings-btn accent" onClick={trustPeer}>
+            </Button>
+            <Button variant="primary" onClick={trustPeer}>
               Trust this peer
-            </button>
+            </Button>
           </div>
-        </div>
+        </Card>
       )}
 
       {pairing && pairing.decision === 'mismatch' && (
-        <div className="relay-card danger">
-          <span className="relay-card-title">Peer key changed — not trusted</span>
-          <span className="relay-card-sub">
-            {peerName} now presents a different key than the fingerprint this machine
-            trusted ({trusted ? shortFp(trusted) : 'none'}). You may be talking to a
-            different machine. Re-trust only if you are certain.
-          </span>
-          <span className="relay-fp">{pairing.fingerprint}</span>
-          <div className="relay-actions">
-            <button className="settings-btn danger" onClick={teardown}>
+        <Card
+          title="Peer key changed — not trusted"
+          danger
+          sub={
+            <>
+              {peerName} now presents a different key than the fingerprint this machine
+              trusted ({trusted ? shortFp(trusted) : 'none'}). You may be talking to a
+              different machine. Re-trust only if you are certain.
+            </>
+          }
+        >
+          <span className="break-all font-mono text-xs text-ink">{pairing.fingerprint}</span>
+          <div className="flex justify-end gap-2">
+            <Button variant="danger" onClick={teardown}>
               Disconnect
-            </button>
-            <button className="settings-btn accent" onClick={trustPeer}>
+            </Button>
+            <Button variant="primary" onClick={trustPeer}>
               Trust this peer
-            </button>
+            </Button>
           </div>
-        </div>
+        </Card>
       )}
 
-      <div className="settings-pref-row">
-        <div className="settings-pref-copy">
-          <span className="settings-pref-label">Connection</span>
-          <span className="settings-pref-sub">
+      <PrefRow
+        label="Connection"
+        sub={
+          <>
             {conn.state}
             {paired && trusted ? ` — trusted peer (${shortFp(trusted)})` : ''}
             {conn.error ? ` — ${conn.error}` : ''}
-          </span>
-        </div>
-        <div className="settings-pref-actions">
-          {trusted && (
-            <button className="settings-btn danger" onClick={forget} title="Forget the trusted peer and disconnect">
-              Forget
-            </button>
-          )}
-          {paired || conn.state === 'connecting' ? (
-            <button className="settings-btn accent" disabled={busy} onClick={teardown}>
-              Disconnect
-            </button>
-          ) : (
-            <button className="settings-btn accent" disabled={busy || !relay.url} onClick={() => void connect()}>
-              Connect
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
+          </>
+        }
+      >
+        {trusted && (
+          <Button variant="danger" onClick={forget} title="Forget the trusted peer and disconnect">
+            Forget
+          </Button>
+        )}
+        {paired || conn.state === 'connecting' ? (
+          <Button variant="primary" disabled={busy} onClick={teardown}>
+            Disconnect
+          </Button>
+        ) : (
+          <Button variant="primary" disabled={busy || !relay.url} onClick={() => void connect()}>
+            Connect
+          </Button>
+        )}
+      </PrefRow>
+    </>
   )
 }
 
@@ -1723,30 +1823,31 @@ function RelayTerminalList(): React.JSX.Element {
   }
 
   return (
-    <div className="relay-card">
-      <span className="relay-card-title">Remote terminals</span>
-      <span className="relay-card-sub">terminals the trusted host is currently serving</span>
-      <div className="relay-actions">
-        <button className="settings-btn" disabled={listing} onClick={list}>
+    <Card
+      title="Remote terminals"
+      sub="terminals the trusted host is currently serving"
+    >
+      <div className="flex justify-end gap-2">
+        <Button disabled={listing} onClick={list}>
           {listing ? 'Listing…' : 'List host terminals'}
-        </button>
+        </Button>
       </div>
-      {note && <p className="relay-error">{note}</p>}
+      {note && <Hint className="text-danger">{note}</Hint>}
       {terms.length > 0 && (
-        <ul className="relay-term-list">
+        <ul className="m-0 flex list-none flex-col gap-1 p-0">
           {terms.map((t) => (
-            <li key={t.id} className="relay-term-row">
-              <span className="relay-term-name" title={t.id}>
+            <li key={t.id} className="flex items-center justify-between gap-3 border-b border-edge py-1.5 last:border-b-0">
+              <span className="truncate font-mono text-xs text-ink" title={t.id}>
                 {t.title || t.id}
               </span>
-              <button className="settings-btn accent" onClick={() => open(t)}>
+              <Button variant="primary" onClick={() => open(t)}>
                 Open
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
       )}
-    </div>
+    </Card>
   )
 }
 
@@ -1774,20 +1875,20 @@ function ChatSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
   }
 
   return (
-    <div className="settings-section">
-      <p className="app-settings-hint">
+    <>
+      <Hint>
         Chat nodes talk to an OpenAI-compatible or Anthropic endpoint. Add a provider under
         API providers, then paste its key below. Keys are stored on this machine only —
         never committed (the {providers.length > 0 ? envName(providers[0].id) : 'TERMSPRAWL_PROVIDER_KEY_<ID>'} env var overrides a stored key).
-      </p>
+      </Hint>
 
-      <div className="settings-pref-row">
-        <div className="settings-pref-copy">
-          <span className="settings-pref-label">Default provider</span>
-          <span className="settings-pref-sub">which configured provider new chat nodes use</span>
-        </div>
-        <select
-          className="settings-text-input"
+      <PrefRow
+        label="Default provider"
+        sub="which configured provider new chat nodes use"
+      >
+        <Select
+          className="w-[200px]"
+          selectClassName="w-full"
           value={chat.defaultProvider ?? ''}
           onChange={(e) => void saveChat({ defaultProvider: e.target.value || undefined })}
         >
@@ -1797,40 +1898,35 @@ function ChatSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
               {p.name || p.id}
             </option>
           ))}
-        </select>
-      </div>
+        </Select>
+      </PrefRow>
 
-      <div className="settings-pref-row">
-        <div className="settings-pref-copy">
-          <span className="settings-pref-label">Default model</span>
-          <span className="settings-pref-sub">e.g. gpt-4o-mini, claude-sonnet-4-5, llama3 — /model overrides per chat</span>
-        </div>
-        <input
-          className="settings-text-input"
+      <PrefRow
+        label="Default model"
+        sub="e.g. gpt-4o-mini, claude-sonnet-4-5, llama3 — /model overrides per chat"
+      >
+        <TextInput
           placeholder="model id"
           spellCheck={false}
           value={chat.defaultModel ?? ''}
           onChange={(e) => void saveChat({ defaultModel: e.target.value || undefined })}
         />
-      </div>
+      </PrefRow>
 
       {providers.length === 0 ? (
-        <p className="app-settings-hint">No providers configured yet — add one under “API providers” above.</p>
+        <Hint>No providers configured yet — add one under “API providers” above.</Hint>
       ) : (
         providers.map((p) => {
           const stored = keyFor(p.id)
           const draft = drafts[p.id] ?? ''
           return (
-            <div className="settings-pref-row" key={p.id}>
-              <div className="settings-pref-copy">
-                <span className="settings-pref-label">{p.name || p.id} API key</span>
-                <span className="settings-pref-sub">
-                  {stored ? `a key is set (…${stored.slice(-4)})` : `no key — or set ${envName(p.id)}`}
-                </span>
-              </div>
-              <input
+            <PrefRow
+              key={p.id}
+              label={`${p.name || p.id} API key`}
+              sub={stored ? `a key is set (…${stored.slice(-4)})` : `no key — or set ${envName(p.id)}`}
+            >
+              <TextInput
                 type="password"
-                className="settings-text-input"
                 placeholder={stored ? '••••••••' : 'sk-…'}
                 spellCheck={false}
                 value={draft}
@@ -1839,10 +1935,10 @@ function ChatSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
                   if (draft.trim() && draft !== stored) saveKey(p.id, draft)
                 }}
               />
-            </div>
+            </PrefRow>
           )
         })
       )}
-    </div>
+    </>
   )
 }

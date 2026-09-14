@@ -213,15 +213,42 @@ export async function discardChanges(repoRoot: string, paths: string[]): Promise
   return runGit(repoRoot, ['checkout', '--', ...paths])
 }
 
+/**
+ * Reject ref/branch names that could be parsed as git OPTIONS (leading dash)
+ * or are otherwise invalid (audit 2026-09-06: `checkout -b <name>` with a
+ * user-controlled name beginning with `-` is classic git argument injection,
+ * e.g. `--upload-pack=...`). Inline guard — no extra spawn — matching the
+ * subset of git's own check-ref-format rules that matter for argv safety.
+ */
+export function isValidGitRefName(name: string): boolean {
+  if (typeof name !== 'string' || name.length === 0) return false
+  if (name.startsWith('-')) return false // option injection
+  if (name.includes('..') || name.includes('@{')) return false
+  if (name.includes('//') || name.endsWith('/') || name.endsWith('.')) return false
+  // git forbids these anywhere in a ref name
+  if (/[\x00-\x20\x7f~^:?*[\\]/.test(name)) return false
+  if (name === '@') return false
+  return true
+}
+
 export async function createBranch(repoRoot: string, name: string): Promise<GitResult> {
+  if (!isValidGitRefName(name)) {
+    return { code: 128, stdout: '', stderr: `invalid branch name: ${name}` }
+  }
   return runGit(repoRoot, ['checkout', '-b', name])
 }
 
 export async function checkoutBranch(repoRoot: string, name: string): Promise<GitResult> {
+  if (!isValidGitRefName(name)) {
+    return { code: 128, stdout: '', stderr: `invalid branch name: ${name}` }
+  }
   return runGit(repoRoot, ['checkout', name])
 }
 
 export async function deleteBranch(repoRoot: string, name: string): Promise<GitResult> {
+  if (!isValidGitRefName(name)) {
+    return { code: 128, stdout: '', stderr: `invalid branch name: ${name}` }
+  }
   return runGit(repoRoot, ['branch', '-D', name])
 }
 
@@ -329,6 +356,9 @@ export async function addWorktree(
   path: string,
   branch?: string
 ): Promise<GitResult> {
+  if (branch !== undefined && !isValidGitRefName(branch)) {
+    return { code: 128, stdout: '', stderr: `invalid branch name: ${branch}` }
+  }
   const args = ['worktree', 'add']
   if (branch) args.push('-b', branch)
   args.push(path)

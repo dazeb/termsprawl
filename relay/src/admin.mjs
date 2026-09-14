@@ -14,14 +14,14 @@ function authorized(req, adminToken) {
 }
 
 /**
- * createAdminHandler({ store, hub, adminToken }) → (req, res).
+ * createAdminHandler({ store, hub, adminToken, persist }) → (req, res).
  * Routes:
  *   GET    /healthz                     → 200 {ok:true}            (no auth)
  *   GET    /admin/stats                 → hub.stats() + store counts
  *   POST   /admin/invites/:code/revoke  → revoke an invite
  *   DELETE /admin/users/:login          → remove user + their invites
  */
-export function createAdminHandler({ store, hub, adminToken }) {
+export function createAdminHandler({ store, hub, adminToken, persist = () => {} }) {
   return function adminHandler(req, res) {
     const url = new URL(req.url, 'http://localhost')
     const p = url.pathname
@@ -48,6 +48,7 @@ export function createAdminHandler({ store, hub, adminToken }) {
       const code = decodeURIComponent(revokeMatch[1])
       try {
         const invite = revokeInvite(store, code)
+        persist()
         return json(res, 200, { ok: true, code: invite.code, revoked: true })
       } catch (err) {
         if (err instanceof StoreError && err.code === 'UNKNOWN') {
@@ -70,6 +71,7 @@ export function createAdminHandler({ store, hub, adminToken }) {
           removedInvites++
         }
       }
+      persist()
       return json(res, 200, { ok: true, removed: login, removedInvites })
     }
 

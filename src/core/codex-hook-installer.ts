@@ -89,8 +89,25 @@ function blockContainsMarker(lines: string[], start: number, end: number): boole
  * (audit B8, same as the Claude installer). Creates the parent dir if needed.
  */
 export function installCodexHooks(configPath: string, baseUrl: string, secretKey?: string): void {
-  const raw = existsSync(configPath) ? readFileSync(configPath, 'utf8') : ''
-  if (raw.includes(MANAGED_KEY)) return // double-install guard
+  let raw = existsSync(configPath) ? readFileSync(configPath, 'utf8') : ''
+  if (raw.includes(MANAGED_KEY)) {
+    // Legacy repair (v0.22–v0.25 wrote INVALID config that kills codex at
+    // startup): (1) command values were TOML literal strings with shell-style
+    // doubled single quotes (''Content-Type'') — a parse error; (2) after
+    // 0.25.0's partial fix, the tables still lacked the [[hooks.<Event>]]
+    // level codex requires ("invalid type: map, expected a sequence").
+    // Signature of the CORRECT managed block: a marked event table directly
+    // followed by its [[hooks.<Event>.hooks]] header. Anything else with our
+    // marker is legacy — drop our tables and reinstall fresh.
+    const legacyDoubledQuotes = raw.includes("''Content-Type")
+    const legacyStructure = !raw.includes('__termsprawl = true\n[[hooks.')
+    if (legacyDoubledQuotes || legacyStructure) {
+      uninstallCodexHooks(configPath)
+      raw = existsSync(configPath) ? readFileSync(configPath, 'utf8') : ''
+    } else {
+      return
+    }
+  }
 
   const command = handlerCommand(baseUrl, secretKey)
   const lines: string[] = raw.split('\n')
@@ -98,8 +115,16 @@ export function installCodexHooks(configPath: string, baseUrl: string, secretKey
 
   lines.push('', '# termsprawl agent-status hooks (managed — do not edit)', '')
   for (const event of EVENTS) {
-    lines.push(`[[hooks.${event}.hooks]]`)
+    // Codex schema: [[hooks.<Event>]] (a SEQUENCE of tables, matcher on the
+    // event table) with a nested [[hooks.<Event>.hooks]] sequence. Writing
+    // [[hooks.<Event>.hooks]] alone makes hooks.<Event> an implicit map and
+    // codex rejects it: "invalid type: map, expected a sequence in hooks".
+    // The marker rides BOTH levels so uninstall (which is marker-keyed) can
+    // remove the event table and its hooks together.
+    lines.push(`[[hooks.${event}]]`)
     lines.push(`matcher = "*"`)
+    lines.push(`${MANAGED_KEY} = true`)
+    lines.push(`[[hooks.${event}.hooks]]`)
     lines.push(`type = "command"`)
     lines.push(`command = ${tomlString(command)}`)
     lines.push(`timeout = 3`)
@@ -134,8 +159,13 @@ export function uninstallCodexHooks(configPath: string): void {
 }
 
 function tomlString(v: string): string {
-  // Single-quoted TOML literal string: no escapes needed for our URL/secret.
-  return `'${v.replace(/'/g, "''")}'`
+  // TOML basic string (double-quoted). JSON string escaping is a compatible
+  // subset (\" \\ \n \t …), and inner single quotes — which our curl command
+  // uses for the Content-Type header and URL — stay literal. TOML literal
+  // strings (single-quoted) cannot contain single quotes at all; the old
+  // shell-style doubling (''…'') is a parse error that killed codex at
+  // startup (seen in the wild across v0.22–v0.25).
+  return JSON.stringify(v)
 }
 
 /** Path to Codex CLI's config (~/.codex/config.toml). */

@@ -19,9 +19,10 @@ sprawls, nothing hides in tabs.
   scrollback intact (cold starts replay a byte-capped scrollback snapshot).
 - **Projects & persistence** — tabs, one project per tab; layouts persist to a
   git-shareable project file, so you can commit and share a workspace.
-- **Agent nodes** — spawn Claude / Codex / Gemini / Grok right on the canvas,
-  with hook-driven status badges (RUNNING / NEEDS YOU), unread dots, and OS
-  notifications when an agent finishes.
+- **Agent nodes** — spawn Claude / Codex / Antigravity / Grok / OpenClaude
+  right on the canvas, with hook-driven status badges (RUNNING / NEEDS YOU),
+  unread dots, and OS notifications when an agent finishes. OpenClaude points
+  at any OpenAI-compatible endpoint, including local models.
 - **Sticky, group, editor, and diff nodes** — notes, frames, and Monaco-based
   editors/diffs as first-class canvas citizens.
 - **Embedded browser nodes** — a real sandboxed Chromium browser on the canvas,
@@ -32,11 +33,12 @@ sprawls, nothing hides in tabs.
   size.
 - **Source control** — stage, commit, branch, push/pull, and manage worktrees
   from a panel bound to the active project.
-- **Undo/redo, command palette, dark lime-on-black UI.**
+- **Undo/redo, keyboard canvas navigation, dark lime-on-black UI.**
 
 ## Status
 
-Actively developed. Phases 0–12 of [PLAN.md](PLAN.md) are shipped:
+Feature-complete — every phase of [PLAN.md](PLAN.md) (0–19 plus
+user-directed deviations) is shipped:
 
 - **Desktop app** — terminal canvas, tmux session continuity, projects &
   persistence, sticky/group/editor/diff nodes, agents with context links
@@ -44,17 +46,19 @@ Actively developed. Phases 0–12 of [PLAN.md](PLAN.md) are shipped:
   branches, sync, worktrees, AI commit messages), SSH remote projects,
   embedded browser nodes (opt-in agent control via CDP), Telegram bot v2,
   provider-agnostic chat nodes (OpenAI-compatible + Anthropic, streaming,
-  thinking blocks, slash commands), and auto-update with announcements.
+  thinking blocks, permission cards, slash commands), keyboard canvas
+  navigation, named node links, first-run onboarding, and auto-update
+  with announcements.
 - **Server Edition** — the same app runs in a browser via plain `node:http`
   + WebSocket RPC. Serves the built renderer, tunnels all core services
   (terminals, projects, git, agent hooks, file tree, chat), with auto-save
   and shutdown safety.
 - **Standalone relay service** (`relay/`) — E2E-encrypted host↔client frames
   (the relay sees ciphertext only), GitHub device-flow auth, single-use
-  invites with expiry/revocation/quotas, admin API. App-side client seam
-  shipped; in-app pairing UI is a follow-up.
+  invites with expiry/revocation/quotas, admin API. In-app pairing with
+  fingerprint confirm and remote terminal frames over the tunnel.
 
-Current version: **0.23.0**.
+Current version: **0.25.2**.
 
 Linux only — AppImage and `.deb` artifacts. No macOS support, by design.
 

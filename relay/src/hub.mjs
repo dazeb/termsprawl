@@ -30,7 +30,7 @@ function sendErrorAndClose(ws, code) {
   try { ws.close() } catch { /* already gone */ }
 }
 
-export function createHub({ store, requireAuth = true, devAuth = false } = {}) {
+export function createHub({ store, requireAuth = true, devAuth = false, persist = () => {} } = {}) {
   if (devAuth && process.env.NODE_ENV === 'production') {
     throw new HubError('DEV-AUTH-FORBIDDEN', 'devAuth bypass is forbidden when NODE_ENV=production')
   }
@@ -157,8 +157,11 @@ export function createHub({ store, requireAuth = true, devAuth = false } = {}) {
       return existing
     }
 
-    // Fresh pairing: redeem the invite (typed errors propagate).
+    // Fresh pairing: redeem the invite and persist the single-use transition
+    // before doing anything else. A crash or restart after redemption must
+    // never resurrect an invite that has already been consumed.
     const inv = redeemInvite(store, msg.invite)
+    persist()
 
     // find the host session the invite belongs to (devAuth prefixes logins)
     const hostSession =
@@ -207,10 +210,12 @@ export function createHub({ store, requireAuth = true, devAuth = false } = {}) {
       return
     }
     if (msg.t === 'invite-create') {
-      // hosts only: mint an invite for their own account.
+      // hosts only: mint an invite for their own account. Persist before the
+      // code is returned so a successful response is always durable.
       if (session.kind !== 'host') return sendErrorAndClose(ws, 'AUTH')
       try {
         const invite = createInvite(store, session.login)
+        persist()
         send(ws, { t: 'invite', code: invite.code })
       } catch (err) {
         if (err instanceof StoreError) return send(ws, { t: 'error', code: err.code })

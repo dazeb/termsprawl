@@ -6,6 +6,7 @@ allowBuilds:
 overrides:
   dompurify@<3.4.14: 3.4.14
   fast-uri@<3.1.6: 3.1.7
+  js-yaml@<4.3.2: 4.3.2
   '@xmldom/xmldom@<0.8.15': 0.8.15
 minimumReleaseAgeExclude:
   - zustand@5.0.15

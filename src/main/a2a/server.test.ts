@@ -33,10 +33,16 @@ describe('A2A server', () => {
     rmSync(userData, { recursive: true, force: true })
   })
 
-  it('serves the agent card listing live agent nodes (open path)', async () => {
+  it('requires the bearer token for the agent card (audit 2026-09-06: was open)', async () => {
     const { deps } = makeDeps()
     const handle = await startA2aServer({ userDataPath: userData, ...deps })
-    const res = await fetch(`http://127.0.0.1:${handle.port}/.well-known/agent-card.json`)
+    // Unauth
+    const denied = await fetch(`http://127.0.0.1:${handle.port}/.well-known/agent-card.json`)
+    expect(denied.status).toBe(401)
+    // Authed
+    const res = await fetch(`http://127.0.0.1:${handle.port}/.well-known/agent-card.json`, {
+      headers: { authorization: `Bearer ${handle.token}` }
+    })
     expect(res.status).toBe(200)
     const card = (await res.json()) as { name: string; skills: Array<{ id: string; name: string }> }
     expect(card.name).toBe('termsprawl agents')
@@ -137,9 +143,9 @@ describe('A2A server', () => {
       body: '{}'
     })
     expect(badAuth.status).toBe(401)
-    // The agent card is intentionally open (discovery), message/send is not.
+    // The agent card is token-gated too (audit 2026-09-06).
     const card = await fetch(`http://127.0.0.1:${handle.port}/.well-known/agent-card.json`)
-    expect(card.status).toBe(200)
+    expect(card.status).toBe(401)
     await handle.close()
   })
 

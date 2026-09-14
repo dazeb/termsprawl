@@ -3,8 +3,9 @@
 //
 // Security posture (mirrors browser agent-server):
 // - Bound to 127.0.0.1 only (never a LAN address).
-// - `message/send` requires `Authorization: Bearer <token>` (random per start).
-// - The agent card is open (discovery by design — it lists titles only).
+// - Every request requires `Authorization: Bearer <per-boot-token>` (random
+//   per start), agent card included (audit 2026-09-06: it was open and leaked
+//   agent node titles + commands to any local process).
 // - The whole surface is opt-in: `agentA2aServer` setting, default OFF.
 //
 // Delivery: inbound text is bracketed-pasted into the target node's PTY —
@@ -82,8 +83,15 @@ export async function startA2aServer(opts: {
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     const path = (req.url ?? '/').split('?')[0]
 
-    // Discovery: open by design (titles only, no tokens, no node ids' data).
+    // Discovery card — token-gated (audit 2026-09-06: was open, leaking agent
+    // node titles + commands to any local process). Peers read the token from
+    // the discovery file (a2a-agent.json) first, exactly as they do for
+    // message/send, so gating the card breaks nothing.
     if (req.method === 'GET' && path === '/.well-known/agent-card.json') {
+      if (req.headers.authorization !== `Bearer ${token}`) {
+        json(res, 401, { ok: false, error: 'unauthorized' })
+        return
+      }
       const nodes = opts.agentNodes()
       json(res, 200, {
         name: 'termsprawl agents',
@@ -206,6 +214,7 @@ export async function startA2aServer(opts: {
   })
 
   // Discovery file — peers/agents read this to find the endpoint + token.
+  // Mode 0600: carries the bearer token; never world-readable.
   mkdirSync(opts.userDataPath, { recursive: true })
   const endpointFile = join(opts.userDataPath, 'a2a-agent.json')
   writeFileSync(
@@ -218,7 +227,8 @@ export async function startA2aServer(opts: {
       },
       null,
       2
-    )
+    ),
+    { mode: 0o600 }
   )
 
   return {

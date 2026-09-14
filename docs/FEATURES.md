@@ -34,7 +34,7 @@ macOS-specific features are in scope, ever.
 - Closing a project detaches terminals; tmux sessions keep running.
 - Reopen restores nodes and reattaches sessions.
 
-## 4. Agents (Claude / Codex / Gemini / Grok / custom)
+## 4. Agents (Claude / Codex / Antigravity / Grok / OpenClaude / custom)
 
 - Agent node = terminal preset that launches an agent CLI once.
 - Registry of agents + capability lists (hooks, resume, subagents, recurring,
@@ -45,6 +45,10 @@ macOS-specific features are in scope, ever.
 - Context links between agent nodes (read each other's transcripts on demand).
 - Managed accounts (per-account config dirs, Claude).
 - Permission mode selection with CLI version gating.
+- OpenClaude preset — a Claude-Code-compatible TUI for any OpenAI-compatible
+  endpoint, including LOCAL models (Ollama, llama.cpp, LM Studio).
+- Missing CLI? The node shows a notice naming the binary and where to install
+  it, instead of a silent "[exited]".
 
 ## 5. Chat node **[own concept, reimplemented]** ✅ SHIPPED (11.4)
 

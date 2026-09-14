@@ -253,3 +253,36 @@ describe('worktrees', () => {
     expect(force.code, force.stderr).toBe(0)
   })
 })
+
+describe('branch-name validation (audit 2026-09-06 — git argument injection)', () => {
+  it('accepts normal branch names', async () => {
+    const ok = await createBranch(repoRoot, 'feature/nice')
+    expect(ok.code, ok.stderr).toBe(0)
+    await checkoutBranch(repoRoot, 'main')
+    expect((await deleteBranch(repoRoot, 'feature/nice')).code).toBe(0)
+  })
+
+  it('rejects leading-dash names (option injection) without spawning git', async () => {
+    const evil = '--upload-pack=sh -c "touch /tmp/pwned"'
+    const res = await createBranch(repoRoot, evil)
+    expect(res.code).toBe(128)
+    expect(res.stderr).toContain('invalid branch name')
+    // git must never have run with the injected argv
+    expect(execFileSync('git', ['branch'], { cwd: repoRoot, encoding: 'utf8' })).toBe('* main\n')
+  })
+
+  it('rejects malformed refs (dot-dot, @, spaces, control chars, trailing slash)', async () => {
+    for (const bad of ['a..b', '@', 'a b', 'a@{x}', 'a\\b', 'a~1', 'a^1', 'a:1', 'a?1', 'a*', 'a[1]', 'a/', '//a', 'a.', '']) {
+      const res = await checkoutBranch(repoRoot, bad)
+      expect(res.code, `name: ${JSON.stringify(bad)}`).toBe(128)
+      expect(res.stderr).toContain('invalid branch name')
+    }
+  })
+
+  it('guards remote branch ops too', async () => {
+    // remote-git re-exports the guard; verify the shared validator is exported
+    const { isValidGitRefName } = await import('./git-service')
+    expect(isValidGitRefName('--upload-pack=x')).toBe(false)
+    expect(isValidGitRefName('feature/ok')).toBe(true)
+  })
+})

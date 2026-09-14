@@ -401,8 +401,8 @@ extension, one feature at a time.**
 - Renderer keeps using the terminal transport interface — remote is a second
   implementation, canvas untouched.
 - Verify: open project on a test host; terminal/git/file ops run remotely.
-- **Status: PARTIAL (transport stack + remote-project surface DONE; commits
-  75dd7b3/…/0e3e78a).** `core/ssh.ts` (remote spec + runSsh), `core/remote-git.ts`
+- **Status: DONE — superseded by Task 9.1b (full remote git/file/pty surface,
+  verified live 2026-08-27). Transport stack: commits 75dd7b3/…/0e3e78a.** `core/ssh.ts` (remote spec + runSsh), `core/remote-git.ts`
   (`git -C`), `core/remote-file.ts` (quoted remote read), `core/remote-pty.ts` +
   PtyManager remote routing (`ssh -tt` + remote tmux; create/destroy/fresh over
   ssh, local spawn cwd fixed, remote sessions skip local scrollback) — all
@@ -676,12 +676,10 @@ concepts, not a porting source.*
   actrunner). This task added the GitHub Actions mirror
   (`.github/workflows/ci.yml`, PR #6): same verify job + tag release publishing
   the three assets (AppImage/.deb/latest-linux.yml). **Caveat:** GitHub Actions
-  runs do NOT trigger on this repo/account (0 runs, 0 actions check-suites,
-  while third-party deploy apps respond — Actions disabled at the account or
-  org level for dazeb). The workflow is committed and correct; PR #6 stays open
-  until the user enables Actions at https://github.com/settings/actions (or the
-  org settings), after which the PR check will run on its next synchronize.
-  Release publishing remains guaranteed by the Gitea pipeline.
+  is disabled at the account/org level for dazeb (verified: 0 runs ever,
+  including on main) — this workflow never ran. Per the 2026-08-29 decision,
+  GitHub Actions is permanently dead: the workflow file was removed and PR #6
+  closed. Release publishing is guaranteed by the Gitea pipeline alone.
 
 ---
 
@@ -1160,9 +1158,11 @@ pnpm run dist        # AppImage + .deb
 
 - **O-1** ~~Final project name?~~ → **DECIDED: termsprawl**
 - **O-2** ~~License~~ → **DECIDED: MIT**
-- **O-3** Keep the hosted relay feature in v1, or ship desktop-only first and
-  add relay later? (Scope knob — post-MVP decision.)
-- **O-4** Minimum supported tmux version?
+- **O-3** ~~Keep the hosted relay feature in v1, or ship desktop-only first and
+  add relay later?~~ → **DECIDED: relay ships standalone with in-app pairing +
+  terminal frames (v0.23.0); hosting rides the cloud canvas-spaces infra.**
+- **O-4** ~~Minimum supported tmux version?~~ → **DECIDED: >= 3.2
+  (AGENTS.md "Runtime prerequisites").**
 - **O-5** Electron vs Tauri: Electron chosen (node-pty + Monaco maturity);
   revisit only if a concrete constraint appears.
 
@@ -1265,6 +1265,6 @@ and can push a project back up. One writer at a time; no merge logic.*
   90-second broker URLs (`POST /api/v1/github/import-url`, session OR
   space-sync JWT, 30/min/user) and never sees the token. Imported projects
   install with pnpm 11.22.0 from a shared per-user store
-  (/data/pnpm-store + `pnpmi` helper in the ts-space image). Branch state:
-  app 4 commits (749 tests), web 4 commits (99 tests); merge + release pending
-  user go-ahead.
+  (/data/pnpm-store + `pnpmi` helper in the ts-space image). **Status: MERGED
+  + SHIPPED** — github-import fully wired in the app (core/github-import.ts,
+  cloud vault, spaces RPC + broker URLs); see the v0.24.0-era release notes.

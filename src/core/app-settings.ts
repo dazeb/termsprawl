@@ -16,8 +16,6 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   a2aPeers: [],
   apiProviders: [],
   theme: 'system',
-  agentPreset: 'standard',
-  defaultPermission: 'workspaceWrite',
   enterBehavior: 'queue',
   // Browser nodes are usable by the user out of the box; the agent-control
   // surface (CDP facade + /open server) is opt-in, off by default.
@@ -196,16 +194,9 @@ export function normalizeAppSettings(raw: unknown): AppSettings {
       typeof obj.dismissedAnnouncementVersion === 'string'
         ? obj.dismissedAnnouncementVersion
         : null,
-    ...(typeof obj.displayName === 'string' && obj.displayName.length > 0 ? { displayName: obj.displayName } : {}),
     a2aPeers,
     apiProviders,
     theme: obj.theme === 'light' || obj.theme === 'dark' || obj.theme === 'system' ? obj.theme : 'system',
-    agentPreset:
-      typeof obj.agentPreset === 'string' && obj.agentPreset.length > 0 ? obj.agentPreset : 'standard',
-    defaultPermission:
-      typeof obj.defaultPermission === 'string' && obj.defaultPermission.length > 0
-        ? obj.defaultPermission
-        : 'workspaceWrite',
     enterBehavior:
       typeof obj.enterBehavior === 'string' && obj.enterBehavior.length > 0 ? obj.enterBehavior : 'queue',
     agentBrowserControl: obj.agentBrowserControl === true,

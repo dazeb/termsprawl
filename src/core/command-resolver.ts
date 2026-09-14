@@ -12,17 +12,16 @@ import { homedir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 
 /**
- * Resolve a command name to an absolute path. Checks, in order:
- *   1. already-absolute input → returned as-is
- *   2. each dir on $PATH
- *   3. known user-local install locations (~/.local/bin for agent CLIs,
- *      ~/.druk/bin for the druk TUI, ~/bin) — GUI apps won't see these on a
- *      minimal PATH)
- * Returns null when nothing matches.
+ * Legacy command-name aliases: some CLIs renamed but the registry (and
+ * persisted project files) keep the old spawn name. `gemini` → Antigravity,
+ * which ships as `agy` (and `antigravity`) on modern installs; the space
+ * image carries a `gemini` shim, the desktop doesn't.
  */
-export function findExecutable(name: string, home: string = homedir()): string | null {
-  if (isAbsolute(name)) return name
+const COMMAND_ALIASES: Record<string, string[]> = {
+  gemini: ['agy', 'antigravity']
+}
 
+function findInDirs(name: string, home: string): string | null {
   const pathEnv = process.env.PATH ?? ''
   for (const dir of pathEnv.split(':')) {
     if (!dir) continue
@@ -37,6 +36,55 @@ export function findExecutable(name: string, home: string = homedir()): string |
   }
 
   return null
+}
+
+/**
+ * Resolve a command name to an absolute path. Checks, in order:
+ *   1. already-absolute input → returned as-is
+ *   2. each dir on $PATH
+ *   3. known user-local install locations (~/.local/bin for agent CLIs,
+ *      ~/.druk/bin for the druk TUI, ~/bin) — GUI apps won't see these on a
+ *      minimal PATH)
+ *   4. legacy aliases of the name (COMMAND_ALIASES)
+ * Returns null when nothing matches.
+ */
+export function findExecutable(name: string, home: string = homedir()): string | null {
+  if (isAbsolute(name)) return name
+  const direct = findInDirs(name, home)
+  if (direct) return direct
+  for (const alias of COMMAND_ALIASES[name] ?? []) {
+    const resolved = findInDirs(alias, home)
+    if (resolved) return resolved
+  }
+  return null
+}
+
+/**
+ * A user-facing notice when a preset command's first token cannot be resolved
+ * to an executable anywhere (PATH + user install dirs + aliases). The PTY
+ * still shows the shell's own "command not found" and exits; this tells the
+ * user the reason and the fix. Null when resolvable or already absolute.
+ */
+export function unresolvedNotice(line: string, home: string = homedir()): string | null {
+  const trimmed = line.trim()
+  if (!trimmed) return null
+  const space = trimmed.indexOf(' ')
+  const name = space === -1 ? trimmed : trimmed.slice(0, space)
+  if (isAbsolute(name)) return null
+  if (findExecutable(name, home)) return null
+  return `termsprawl: '${name}' not found — install it, or add its bin dir to PATH (GUI launches check ~/.local/bin). Close and reopen this node once it's available.`
+}
+
+/**
+ * The line to exec in place of a missing preset command. Written raw into an
+ * INTERACTIVE shell, the notice text would be parsed by the line editor
+ * (unmatched quotes → `quote>` prompts, echoed garbage). Instead we exec a
+ * non-interactive /bin/sh that prints the notice and exits cleanly — the
+ * message is the whole story, no shell mangling.
+ */
+export function missingCommandExec(notice: string): string {
+  const script = `printf '%s\\n' ${JSON.stringify(notice)}; exit 1`
+  return `exec /bin/sh -c ${JSON.stringify(script)}`
 }
 
 /**

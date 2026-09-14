@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { App } from './App'
 import { isResizeObserverNoise } from './ro-noise'
 import './styles.css'
+import './settings.css'
 
 // Keep Chromium's benign ResizeObserver loop report out of the DevTools
 // console (see ro-noise.ts for why it's benign and how it's matched). The
