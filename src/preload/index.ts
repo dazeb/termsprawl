@@ -45,8 +45,9 @@ import type {
   ChatSettings,
   SettingsSkill,
   SettingsHook,
-  SettingsCommand
-} from '../shared/types'
+  SettingsCommand,
+  SettingsCapabilities,
+  UsageStats} from '../shared/types'
 import type { ChatEvent } from '../core/chat/types'
 import { chatEventChannel } from '../shared/ipc'
 import type { UpdateStatus } from '../shared/update-status'
@@ -77,7 +78,8 @@ const api = {
       ipcRenderer.invoke(IPC.accountDelete, id),
     permissionSupported: (): Promise<boolean> => ipcRenderer.invoke(IPC.permissionProbe),
     loginCommand: (): Promise<string> => ipcRenderer.invoke(IPC.loginCommand),
-    capabilities: (): Promise<{ skills: SettingsSkill[]; hooks: SettingsHook[]; commands: SettingsCommand[] }> => ipcRenderer.invoke(IPC.settingsCapabilitiesGet)
+    capabilities: (): Promise<SettingsCapabilities> => ipcRenderer.invoke(IPC.settingsCapabilitiesGet),
+    usage: (): Promise<UsageStats> => ipcRenderer.invoke(IPC.settingsUsageGet)
   },
 
   updates: {

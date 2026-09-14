@@ -149,7 +149,8 @@
       deleteAccount: notAvailable('managed accounts'),
       permissionSupported: function () { return Promise.resolve(false) },
       loginCommand: function () { return Promise.resolve('') },
-      capabilities: function () { return invoke('settings:capabilities-get') }
+      capabilities: function () { return invoke('settings:capabilities-get') },
+      usage: function () { return invoke('settings:usage-get') }
     },
 
     updates: {

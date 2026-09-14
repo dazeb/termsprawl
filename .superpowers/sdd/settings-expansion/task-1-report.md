@@ -1,0 +1,34 @@
+# Settings expansion Task 1 report
+
+## Current settings composition and persistence
+
+- `src/renderer/src/components/AppSettingsPanel.tsx` is the navigation/composition root. `TabId` currently has `general`, `user`, `agents`, `connections`, and `updates`; sections are rendered through `SettingsSection`/`SectionCtx`. The panel loads via `window.termsprawl.settings.get()`, writes via `settings.set(patch)`, and calls `onSettingsChange` so the parent can apply live settings.
+- `src/shared/types.ts:315` defines `AppSettings`. Existing persisted fields include theme, agent preset/permission/enter behavior, accounts, display name, API providers, chat defaults/keys/price overrides, Telegram, relay, browser home URL, and invert-wheel zoom. There are no font, inherited terminal profile, or proxy fields.
+- `src/core/app-settings.ts` owns `settings.json` load/save and normalization. `saveAppSettings()` merges the patch with the loaded settings, normalizes, writes, and returns the full settings object. New fields must be added to `AppSettings`, defaults, and normalization while preserving unknown-compatible fields (current normalization reconstructs a known shape).
+- `src/main/index.ts` keeps `appSettings.current`, handles settings get/set, and updates runtime consumers through the existing settings path. `src/preload/index.ts` exposes `settings.get/set`; `src/renderer/src/env.d.ts` declares the same typed bridge. IPC names are centralized in `src/shared/ipc.ts` (`appSettingsGet`, `appSettingsSet`, plus existing account channels).
+
+## Existing capability APIs and data
+
+- Agent capability metadata is static in `src/shared/agents/config.ts`: `AGENT_REGISTRY`, `agentIds`, `agentName`, `agentTitle`, and `agentCommand`. Registry records include capability booleans such as `hooks`; the renderer currently displays registry entries in the Agents page. There is no IPC discovery/list API for installed skills or available commands.
+- Hooks are installed at startup in `src/main/index.ts:1604+`: a `HookServer` receives normalized events; `installClaudeHooks(claudeSettingsPath(homedir()), hookServer.url, hookServer.secret)` and `installCodexHooks(codexConfigPath(homedir()), hookServer.url, hookServer.secret)` modify user config. Existing installers are `installClaudeHooks/uninstallClaudeHooks` in `src/core/hook-installer.ts` (Claude settings JSON) and `installCodexHooks/uninstallCodexHooks/codexConfigPath` in `src/core/codex-hook-installer.ts` (Codex TOML). No status/list/read API reports managed versus legacy entries; no safe settings action currently exposes install/uninstall.
+- Agent runtime status is push-only per session: `IPC.agentStatus` and `IPC.agentSessionName` are exposed by preload subscriptions. `HookServer` and `agent-status.ts` normalize incoming lifecycle events, but they do not provide global hook inventory.
+- Slash command parsing exists in `src/core/chat/conversation.ts` (`parseSlashCommand`) with four known commands covered by tests; Telegram has a separate command table in `src/core/telegram/commands.ts`. `src/core/agent-cli.ts` detects CLI auth/login capabilities. There is no serialized command catalog or project/agent command discovery API. Terminal commands are launched through `PtyCreateRequest.command`, with desktop scope validation in `project-scope.ts` and path resolution in `command-resolver.ts`.
+- Chat usage exists only in-memory on messages/events: `src/core/chat/types.ts` carries token usage and cost fields; `src/core/chat/cost.ts` provides pure `costOf()` and `totalCost()` calculations. `chat:send/stop/approve/event` are the only chat IPC channels. Transcript readers/indexes (`src/core/transcript.ts`, `transcript-index.ts`) read agent JSONL transcripts and paths, but there is no persisted usage ledger, cross-session aggregation API, or storage-byte accounting seam.
+
+## General runtime seams and gaps
+
+- Terminal xterm instances are created in `src/renderer/src/nodes/TerminalNode.tsx:126` with a hardcoded `fontFamily: 'Geist Mono, JetBrains Mono, monospace'`. The node gets settings only indirectly; changing the setting requires passing the current font through existing app settings propagation and applying it when constructing/resizing terminal instances. No font setting API exists.
+- Local PTYs are spawned in `src/core/pty-manager.ts`; environment starts from `process.env` plus request env, then strips auth variables. tmux is configured there through the existing tmux seam. There is no explicit “inherit system terminal profile” toggle or profile snapshot; the likely seam is `PtyCreateRequest`/pty-manager environment construction, with care not to duplicate settings storage.
+- Model/agent egress currently uses provider configuration and keys in `src/main/index.ts`/`src/core/chat` and environment variables (`TERMSPRAWL_PROVIDER_KEY_*`). No proxy field, URL validation, proxy agent/fetch integration, or shared egress abstraction is present. Adding proxy support requires a single configured HTTP proxy path used by chat/provider and agent HTTP requests, with invalid URLs rejected and empty values disabling it.
+- General currently contains existing theme, update, agent defaults, enter behavior, browser home, and zoom controls. The three requested rows (font family, inherited terminal profile, HTTP proxy) have no persistence, IPC, renderer bridge, or runtime consumer yet.
+
+## Follow-up seams for Tasks 2–5
+
+1. Add typed shared records and read-only IPC/preload methods for skill discovery, hook inventory/status, and command catalog. Filesystem scanning belongs in main/core; use existing registry/installers/chat command definitions.
+2. Add a pure usage aggregation input/record seam. Existing chat messages/transcripts are not a durable activity database, so Task 4 must define where records come from and return explicit no-data zeros; do not infer activity from transient UI state.
+3. Extend `AppSettings`/defaults/normalization and the existing app settings handler for the three General fields. Reuse the current update callback for live consumers.
+4. Thread font into `TerminalNode` construction; thread profile inheritance through `pty-manager`/tmux spawn environment; centralize proxy-aware HTTP egress for chat and agent requests. No duplicate settings store is needed.
+
+## Read-only/action safety conclusion
+
+Skills, Hooks, Commands, and Usage can initially be read-only with refresh/list IPC. Existing safe actions are settings refresh, existing account/provider management, and the already-backed hook installers in main; exposing hook install/uninstall should be a separate explicit action with status/error reporting. No existing skill installer or command mutation API was found. Usage has no existing persistence, so only a truthful zero/no-data page is safe until an aggregation source is established.
