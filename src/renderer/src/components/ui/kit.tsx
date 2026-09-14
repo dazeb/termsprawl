@@ -17,15 +17,37 @@ import type {
    radius on controls, 8px on cards, focus rings in ink via :focus-visible.
    ------------------------------------------------------------------------- */
 
-export function Section({ title, children }: { title?: string; children: ReactNode }): React.JSX.Element {
+/** A titled group of rows, rendered as a card.
+ *
+ * Title above the card in sentence case (13px medium) with an optional count —
+ * not an uppercase eyebrow, and not a heading inside the card: the row labels
+ * are the headings, so a second one would compete with them. Rows keep their
+ * own hairline separators; the last one is trimmed so the card does not end on
+ * a stray rule. */
+export function Section({
+  title,
+  count,
+  children,
+  className = ''
+}: {
+  title?: string
+  count?: number
+  children: ReactNode
+  className?: string
+}): React.JSX.Element {
   return (
-    <section className="flex flex-col gap-2.5">
+    <section className={`flex flex-col gap-2.5 ${className}`}>
       {title && (
-        <h2 className="text-[10px] font-semibold uppercase leading-none tracking-[0.14em] text-mute">
-          {title}
-        </h2>
+        <div className="flex items-baseline gap-2 px-0.5">
+          <h2 className="text-[13px] font-medium leading-none text-ink">{title}</h2>
+          {count !== undefined && (
+            <span className="text-[12px] leading-none text-mute tabular-nums">{count}</span>
+          )}
+        </div>
       )}
-      {children}
+      <div className="overflow-hidden rounded-[10px] border border-edge bg-panel px-4 [&>*:last-child]:border-b-0">
+        {children}
+      </div>
     </section>
   )
 }
@@ -122,7 +144,9 @@ export function Toggle({
   ariaLabel?: string
   title?: string
 }): React.JSX.Element {
-  const trackClass = checked ? 'border-ink bg-ink' : 'border-edge bg-transparent'
+  // Off must still read as a track: a transparent track left only the grey
+  // knob visible against a dark card, so "off" looked like a stray dot.
+  const trackClass = checked ? 'border-ink bg-ink' : 'border-edge bg-raised'
   const knobClass = checked ? 'left-[17px] bg-page' : 'left-[3px] bg-mute'
   return (
     <button

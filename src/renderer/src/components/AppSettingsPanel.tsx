@@ -106,7 +106,16 @@ interface SectionCtx {
   workspaceImportBundle: () => Promise<void>
 }
 
-type TabId = 'general' | 'user' | 'agents' | 'connections' | 'updates'
+type PageId =
+  | 'general'
+  | 'appearance'
+  | 'models'
+  | 'browser'
+  | 'accounts'
+  | 'a2a'
+  | 'cloud'
+  | 'connections'
+  | 'updates'
 
 /** Which edition is rendering this panel: the desktop app (full surface) or
  * the Server Edition canvas in a browser (only what the server actually
@@ -114,74 +123,163 @@ type TabId = 'general' | 'user' | 'agents' | 'connections' | 'updates'
  * integrations). Read from the bridge's runtime hint. */
 type EditionKind = 'desktop' | 'server'
 
-interface SettingsTab {
-  id: TabId
+interface SettingsPage {
+  id: PageId
   title: string
+  /** One line under the page title saying what the page is for. Omitted when
+   * the title already says it — the reference does the same ("Model settings"
+   * carries a line, "General" does not). */
+  description?: string
   icon: React.JSX.Element
-  /** Editions this tab applies to (undefined = both). */
+  /** Editions this page applies to (undefined = both). */
   editions?: EditionKind[]
 }
 
-const TABS: SettingsTab[] = [
+/** Sidebar groups, in reading order: what the app is (Basics), what it does
+ * for your agents (Agent capabilities), what it keeps for you (Data and
+ * statistics). Labels are sentence case and muted — an uppercase eyebrow over
+ * every group would shout on every page. */
+interface NavGroup {
+  label: string
+  pages: SettingsPage[]
+}
+
+const NAV_GROUPS: NavGroup[] = [
   {
-    id: 'general',
-    title: 'General',
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-        <circle cx="12" cy="12" r="3" />
-      </svg>
-    )
+    label: 'Basics',
+    pages: [
+      {
+        id: 'general',
+        title: 'General',
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <line x1="21" y1="6" x2="15" y2="6" />
+            <line x1="10" y1="6" x2="3" y2="6" />
+            <line x1="21" y1="12" x2="13" y2="12" />
+            <line x1="8" y1="12" x2="3" y2="12" />
+            <line x1="21" y1="18" x2="16" y2="18" />
+            <line x1="11" y1="18" x2="3" y2="18" />
+            <line x1="13" y1="4" x2="13" y2="8" />
+            <line x1="11" y1="10" x2="11" y2="14" />
+            <line x1="14" y1="16" x2="14" y2="20" />
+          </svg>
+        )
+      },
+      {
+        id: 'appearance',
+        title: 'Appearance',
+        description: 'How the workspace looks: theme, canvas, and node styling.',
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M12 21a9 9 0 1 1 0-18c4.97 0 9 3.58 9 8 0 2.2-1.8 3.5-3.6 3.5h-1.6a1.9 1.9 0 0 0-1.4 3.1A1.8 1.8 0 0 1 12 21z" />
+            <circle cx="8" cy="11" r="1" />
+            <circle cx="11" cy="7.5" r="1" />
+            <circle cx="15.5" cy="8" r="1" />
+          </svg>
+        )
+      },
+      {
+        id: 'models',
+        title: 'Model settings',
+        description: 'Manage custom model providers. Once configured, they can be selected in chat nodes.',
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M21 8l-9-5-9 5 9 5 9-5z" />
+            <path d="M3 8v8l9 5 9-5V8" />
+            <path d="M12 13v8" />
+          </svg>
+        )
+      },
+      {
+        id: 'browser',
+        title: 'Browser',
+        description: 'Embedded browser nodes: where they start, and whether agents may drive them.',
+        editions: ['desktop'],
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M3 12h18" />
+            <path d="M12 3c2.5 2.6 3.8 5.6 3.8 9S14.5 18.4 12 21c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z" />
+          </svg>
+        )
+      }
+    ]
   },
   {
-    id: 'user',
-    title: 'User',
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <circle cx="12" cy="8" r="3.5" />
-        <path d="M4.5 20a7.5 7.5 0 0 1 15 0" />
-      </svg>
-    )
+    label: 'Agent capabilities',
+    pages: [
+      {
+        id: 'accounts',
+        title: 'Agent accounts',
+        description: 'Managed logins for the agent CLIs, and the permission mode each one runs with.',
+        editions: ['desktop'],
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="16" rx="2" />
+            <path d="M7 9l3 3-3 3" />
+            <path d="M13 15h4" />
+          </svg>
+        )
+      },
+      {
+        id: 'a2a',
+        title: 'A2A peers',
+        description: 'Agent-to-agent endpoints: which peers you trust, and whether your own nodes are exposed.',
+        editions: ['desktop'],
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M10 13a5 5 0 0 0 7.07 0l3-3A5 5 0 0 0 13 3l-1.5 1.5" />
+            <path d="M14 11a5 5 0 0 0-7.07 0l-3 3A5 5 0 0 0 11 21l1.5-1.5" />
+          </svg>
+        )
+      }
+    ]
   },
   {
-    id: 'agents',
-    title: 'Agents',
-    /** Managed agent accounts + preset/permission machinery are desktop-main
-     * features; the canvas has chat-model defaults instead (Connections). */
-    editions: ['desktop'],
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <rect x="3" y="4" width="18" height="16" rx="2" />
-        <path d="M7 9l3 3-3 3" />
-        <path d="M13 15h4" />
-      </svg>
-    )
-  },
-  {
-    id: 'connections',
-    title: 'Connections',
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <circle cx="6" cy="12" r="2.5" />
-        <circle cx="18" cy="12" r="2.5" />
-        <path d="M8.5 12h7" />
-      </svg>
-    )
-  },
-  {
-    id: 'updates',
-    title: 'Updates',
-    /** Auto-update is an Electron/OS-level feature — a container's canvas has
-     * nothing to update (the operator rebuilds the image). */
-    editions: ['desktop'],
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-        <path d="M21 4v5h-5" />
-      </svg>
-    )
+    label: 'Data and statistics',
+    pages: [
+      {
+        id: 'cloud',
+        title: 'Cloud & backup',
+        description: 'Your account, encrypted workspace backups, and the hosted canvas space.',
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M17.5 19a4.5 4.5 0 0 0 .4-8.98A6 6 0 0 0 6.2 9.2 4 4 0 0 0 7 19h10.5z" />
+          </svg>
+        )
+      },
+      {
+        id: 'connections',
+        title: 'Connections',
+        description: 'Telegram and the relay service: how this machine talks to your phone and to other machines.',
+        editions: ['desktop'],
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M9 7V3" />
+            <path d="M15 7V3" />
+            <path d="M6 7h12v4a6 6 0 0 1-12 0V7z" />
+            <path d="M12 17v4" />
+          </svg>
+        )
+      },
+      {
+        id: 'updates',
+        title: 'Updates',
+        description: 'Release channel, download behaviour, and what changed.',
+        editions: ['desktop'],
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+            <path d="M21 4v5h-5" />
+          </svg>
+        )
+      }
+    ]
   }
 ]
+
+/** Every page, in nav order — the lookup the renderer uses per page id. */
+const PAGES: SettingsPage[] = NAV_GROUPS.flatMap((g) => g.pages)
 
 export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanelProps): React.JSX.Element {
   const [settings, setSettings] = useState<AppSettings>({
@@ -192,8 +290,6 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
     a2aPeers: [],
     apiProviders: [],
     theme: 'system',
-    agentPreset: 'standard',
-    defaultPermission: 'workspaceWrite',
     enterBehavior: 'queue',
     agentBrowserControl: false,
     agentA2aServer: false
@@ -210,7 +306,7 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
   const [spaceError, setSpaceError] = useState<string | null>(null)
   const [spaceNote, setSpaceNote] = useState<string | null>(null)
   const [spaceLoaded, setSpaceLoaded] = useState(false)
-  const [tab, setTab] = useState<TabId>('general')
+  const [tab, setTab] = useState<PageId>('general')
   // Which edition is serving this renderer — the bridge carries the hint.
   const edition: EditionKind = window.termsprawl.runtime?.kind === 'server' ? 'server' : 'desktop'
   const isDesktop = edition === 'desktop'
@@ -595,78 +691,16 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
   // hosts the sections that actually belong to it; a section whose `editions`
   // omits the current one is dropped — the canvas panel only shows controls
   // the Server Edition actually implements.
-  const allSections: Record<TabId, SettingsSection[]> = {
+  const allSections: Record<PageId, SettingsSection[]> = {
     general: [
       {
-        id: 'prefs',
-        title: 'Preferences',
+        id: 'interaction',
+        title: 'Interaction',
         render: (c) => (
           <>
-            {/* Canvas: the agent preset + permission selects are desktop-side
-                spawn defaults (they gate desktop agent-node launches); the
-                server has no agent-node spawning UI, so they hide there. */}
-            {isDesktop && (
-              <PrefRow
-                label="Agent preset"
-                sub="Tuning for new agent sessions (standard / fast / full)"
-              >
-                <Select
-                  value={c.settings.agentPreset ?? 'standard'}
-                  aria-label="Agent preset"
-                  onChange={(e) => void c.update({ agentPreset: e.target.value })}
-                >
-                  {PRESET_MODES.map((m) => (
-                    <option key={m.value} value={m.value}>{m.label}</option>
-                  ))}
-                </Select>
-              </PrefRow>
-            )}
-
-            {isDesktop && (
-              <PrefRow
-                label="Permission"
-                sub="Default permission mode for new agent sessions (when the CLI supports it)"
-              >
-                <Select
-                  value={c.settings.defaultPermission ?? 'workspaceWrite'}
-                  aria-label="Default permission mode"
-                  onChange={(e) => void c.update({ defaultPermission: e.target.value })}
-                >
-                  {PERMISSION_MODES.map((m) => (
-                    <option key={m.value} value={m.value}>{m.label}</option>
-                  ))}
-                </Select>
-              </PrefRow>
-            )}
-
-            <div className="border-b border-edge py-3">
-              <div className="mb-3 text-[13px] font-medium leading-tight text-ink">Appearance</div>
-              <div className="grid grid-cols-3 gap-2.5" role="group" aria-label="Theme">
-                {THEMES.map((t) => {
-                  const selected = (c.settings.theme ?? 'system') === t.value
-                  return (
-                    <button
-                      key={t.value}
-                      type="button"
-                      aria-pressed={selected}
-                      className={`flex flex-col items-center gap-2 rounded-xl border px-3 py-3.5 transition-[color,background-color,border-color,transform] duration-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ink active:scale-[0.98] ${
-                        selected
-                          ? 'border-ink bg-raised text-ink'
-                          : 'border-edge text-mute hover:border-raised hover:bg-hover hover:text-ink'
-                      }`}
-                      onClick={() => void c.update({ theme: t.value })}
-                    >
-                      <span className="flex h-[22px] items-center justify-center">{themeIcon(t.value)}</span>
-                      <span className="text-xs">{t.label}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
             <PrefRow
               label="Enter behavior while busy"
-              sub="In chat nodes: Enter sends; busy sessions queue, send, or prompt. Shift+Enter breaks the line"
+              sub="In chat nodes: Enter sends; a busy session queues, sends, or prompts. Shift+Enter breaks the line"
             >
               <Select
                 value={c.settings.enterBehavior ?? 'queue'}
@@ -677,54 +711,6 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
                   <option key={b.value} value={b.value}>{b.label}</option>
                 ))}
               </Select>
-            </PrefRow>
-
-            {/* Browser nodes are Electron-only (sandboxed <webview> guests) —
-                a browser-based canvas cannot render one, so the whole browser
-                section (agent control + home page) is desktop-only. */}
-            {isDesktop && (
-              <>
-                <PrefRow
-                  label="Allow agents to control browser nodes"
-                  sub="Off (default): embedded browsers work normally but no agent endpoint exists. On: an external agent can open and drive browser nodes over a localhost-only CDP endpoint"
-                >
-                  <Toggle
-                    checked={c.settings.agentBrowserControl === true}
-                    onChange={(v) => void c.update({ agentBrowserControl: v })}
-                    ariaLabel="Allow agents to control browser nodes"
-                  />
-                </PrefRow>
-
-                <PrefRow
-                  label="Expose agent nodes to A2A peers"
-                  sub="Off (default): no A2A endpoint exists. On: your live agent terminals are listed as agents at a localhost-only endpoint — peers send tasks via the Google A2A protocol (token in userData/a2a-agent.json)"
-                >
-                  <Toggle
-                    checked={c.settings.agentA2aServer === true}
-                    onChange={(v) => void c.update({ agentA2aServer: v })}
-                    ariaLabel="Expose agent nodes to A2A peers"
-                  />
-                </PrefRow>
-
-                <PrefRow
-                  label="Search provider / browser home"
-                  sub="URL opened when a browser node or new tab starts — point this at your own SearXNG (e.g. http://127.0.0.1:8080 or a LAN host) for private search. Empty = DuckDuckGo"
-                >
-                  <TextInput
-                    placeholder="https://duckduckgo.com"
-                    spellCheck={false}
-                    value={c.settings.browserHomeUrl ?? ''}
-                    onChange={(e) => void c.update({ browserHomeUrl: e.target.value })}
-                  />
-                </PrefRow>
-              </>
-            )}
-
-            <PrefRow
-              label="Show first-run guide again"
-              sub="Replays the 3-step welcome (create a project, spawn a terminal, arrange) on the next launch with no projects — or right now if the canvas is empty"
-            >
-              <Button onClick={() => void c.update({ onboardedAt: undefined })}>reset</Button>
             </PrefRow>
 
             <PrefRow
@@ -739,19 +725,109 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
             </PrefRow>
           </>
         )
-      }
-    ],
-    user: [
+      },
       {
-        id: 'user',
-        title: isDesktop ? 'User & cloud' : 'Cloud',
-        render: (c) => <UserSection ctx={c} />
+        id: 'firstrun',
+        title: 'First run',
+        render: (c) => (
+          <PrefRow
+            label="Show the welcome guide again"
+            sub="Replays the 3-step welcome (create a project, spawn a terminal, arrange) the next time the canvas is empty"
+          >
+            <Button onClick={() => void c.update({ onboardedAt: undefined })}>Reset</Button>
+          </PrefRow>
+        )
       }
     ],
-    agents: [
-      // Canvas: the agents tab carries the account/permission machinery which
-      // is desktop-main-only — but chat-node defaults ARE server-relevant,
-      // and they live in Connections → Chat models on both editions.
+    appearance: [
+      {
+        id: 'theme',
+        title: 'Theme',
+        render: (c) => (
+          <div className="grid grid-cols-3 gap-2.5 py-3" role="group" aria-label="Theme">
+            {THEMES.map((t) => {
+              const selected = (c.settings.theme ?? 'system') === t.value
+              return (
+                <button
+                  key={t.value}
+                  type="button"
+                  aria-pressed={selected}
+                  className={`flex flex-col items-center gap-2 rounded-xl border px-3 py-3.5 transition-[color,background-color,border-color,transform] duration-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ink active:scale-[0.98] ${
+                    selected
+                      ? 'border-ink bg-raised text-ink'
+                      : 'border-edge text-mute hover:border-raised hover:bg-hover hover:text-ink'
+                  }`}
+                  onClick={() => void c.update({ theme: t.value })}
+                >
+                  <span className="flex h-[22px] items-center justify-center">{themeIcon(t.value)}</span>
+                  <span className="text-xs">{t.label}</span>
+                </button>
+              )
+            })}
+          </div>
+        )
+      }
+    ],
+    models: [
+      {
+        id: 'providers',
+        title: 'Providers',
+        render: (c) => (
+          <ApiSection
+            providers={c.settings.apiProviders ?? []}
+            providerName={providerName}
+            providerBaseUrl={providerBaseUrl}
+            setProviderName={setProviderName}
+            setProviderBaseUrl={setProviderBaseUrl}
+            addProvider={addProvider}
+            removeProvider={removeProvider}
+          />
+        )
+      },
+      {
+        id: 'chat',
+        title: 'Defaults and keys',
+        render: (c) => <ChatSection ctx={c} />
+      }
+    ],
+    browser: [
+      {
+        id: 'home',
+        title: 'Start page',
+        render: (c) => (
+          <PrefRow
+            label="Home page"
+            sub="URL opened when a browser node or new tab starts — point this at your own SearXNG (e.g. http://127.0.0.1:8080 or a LAN host) for private search. Empty = DuckDuckGo"
+          >
+            <TextInput
+              placeholder="https://duckduckgo.com"
+              spellCheck={false}
+              value={c.settings.browserHomeUrl ?? ''}
+              onChange={(e) => void c.update({ browserHomeUrl: e.target.value })}
+            />
+          </PrefRow>
+        )
+      },
+      {
+        id: 'agentcontrol',
+        title: 'Agent control',
+        render: (c) => (
+          <PrefRow
+            label="Allow agents to control browser nodes"
+            sub="Off (default): embedded browsers work normally but no agent endpoint exists. On: an external agent can open and drive browser nodes over a localhost-only CDP endpoint"
+          >
+            <Toggle
+              checked={c.settings.agentBrowserControl === true}
+              onChange={(v) => void c.update({ agentBrowserControl: v })}
+              ariaLabel="Allow agents to control browser nodes"
+            />
+          </PrefRow>
+        )
+      }
+    ],
+    accounts: [
+      // Canvas: the agent registry is desktop-main-only — chat-node defaults
+      // live in Model settings on both editions.
       { id: 'agents', title: 'Agents', editions: ['desktop'], render: () => <AgentsSection /> },
       {
         id: 'accounts',
@@ -774,10 +850,27 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
         )
       }
     ],
-    connections: [
+    a2a: [
+      {
+        id: 'expose',
+        title: 'Your nodes',
+        editions: ['desktop'],
+        render: (c) => (
+          <PrefRow
+            label="Expose agent nodes to A2A peers"
+            sub="Off (default): no A2A endpoint exists. On: your live agent terminals are listed as agents at a localhost-only endpoint — peers send tasks via the Google A2A protocol (token in userData/a2a-agent.json)"
+          >
+            <Toggle
+              checked={c.settings.agentA2aServer === true}
+              onChange={(v) => void c.update({ agentA2aServer: v })}
+              ariaLabel="Expose agent nodes to A2A peers"
+            />
+          </PrefRow>
+        )
+      },
       {
         id: 'a2a',
-        title: 'A2A peers',
+        title: 'Peers',
         editions: ['desktop'],
         render: (c) => (
           <A2ASection
@@ -795,22 +888,16 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
             peerTestNote={peerTestNote}
           />
         )
-      },
+      }
+    ],
+    cloud: [
       {
-        id: 'api',
-        title: 'API providers',
-        render: (c) => (
-          <ApiSection
-            providers={c.settings.apiProviders ?? []}
-            providerName={providerName}
-            providerBaseUrl={providerBaseUrl}
-            setProviderName={setProviderName}
-            setProviderBaseUrl={setProviderBaseUrl}
-            addProvider={addProvider}
-            removeProvider={removeProvider}
-          />
-        )
-      },
+        id: 'user',
+        title: isDesktop ? 'Account' : 'Cloud',
+        render: (c) => <UserSection ctx={c} />
+      }
+    ],
+    connections: [
       {
         id: 'telegram',
         title: 'Telegram bot',
@@ -822,88 +909,120 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
         title: 'Relay',
         editions: ['desktop'],
         render: (c) => <RelaySection ctx={c} />
-      },
-      {
-        id: 'chat',
-        title: 'Chat models',
-        render: (c) => <ChatSection ctx={c} />
       }
     ],
     updates: [
-      { id: 'updates', title: 'Updates', render: (c) => <UpdatesSection ctx={c} isPackaged={isPackaged} /> }
+      { id: 'updates', title: 'Release', render: (c) => <UpdatesSection ctx={c} isPackaged={isPackaged} /> }
     ]
   }
 
-  // Filter the visible tab list by edition, then each tab's sections.
-  const visibleTabs = TABS.filter((t) => !t.editions || t.editions.includes(edition))
-  const tabSections: Record<TabId, SettingsSection[]> = allSections
-  // If the active tab vanished for this edition, snap back to General.
-  const activeTab: TabId = visibleTabs.some((t) => t.id === tab) ? tab : 'general'
+  // Pages this edition can render, and the one actually on screen: a page the
+  // edition hides (Browser on a canvas, Updates in a container) snaps back to
+  // the first visible page rather than rendering an empty shell.
+  const visiblePages = PAGES.filter((p) => !p.editions || p.editions.includes(edition))
+  const activePage = visiblePages.find((p) => p.id === tab) ?? visiblePages[0]
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div
-        className="settings-panel flex h-[min(660px,calc(100vh-48px))] w-[min(880px,calc(100vw-48px))] flex-col overflow-hidden rounded-2xl border border-edge bg-page shadow-[0_24px_64px_rgba(0,0,0,0.6)]"
+        className="settings-panel relative flex h-[min(720px,calc(100vh-48px))] w-[min(1040px,calc(100vw-48px))] flex-col overflow-hidden rounded-2xl border border-edge bg-page shadow-[0_24px_64px_rgba(0,0,0,0.6)]"
         role="dialog"
         aria-modal="true"
         aria-label="settings"
       >
-        <div className="flex items-center gap-3 border-b border-edge px-4 py-3">
-          <span className="mr-auto text-sm font-semibold tracking-[-0.01em] text-ink">Settings</span>
-          <div className="flex items-center gap-2">
-            <button
-              className="flex h-[22px] w-[22px] items-center justify-center rounded-[5px] border border-transparent text-[15px] leading-none text-mute transition-colors hover:border-edge hover:text-ink"
-              onClick={onClose}
-              title="Close settings"
-            >
-              ×
-            </button>
-          </div>
-        </div>
+        {/* No title bar: the page title is the title, and Escape / "Back to
+            workspace" / the window controls are the ways out (the reference has
+            native window chrome in that corner). A visible close stays for
+            pointer users, floating over the content gutter. */}
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close settings"
+          title="Close settings"
+          className="absolute right-3 top-3 z-10 flex h-7 w-7 items-center justify-center rounded-[7px] border border-transparent text-[15px] leading-none text-mute transition-colors hover:border-edge hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ink"
+        >
+          ×
+        </button>
 
         <div className="flex min-h-0 flex-1">
           <nav
-            className="settings-scroll flex w-[196px] shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-edge p-3"
+            className="settings-scroll flex w-[232px] shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-edge px-3 pb-3 pt-2"
             aria-label="settings sections"
           >
-            {visibleTabs.map((t) => {
-              const active = activeTab === t.id
+            <button
+              type="button"
+              onClick={onClose}
+              className="group mb-1 flex items-center gap-2.5 rounded-lg py-2 pl-3.5 pr-2.5 text-left text-[13px] text-mute transition-colors hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ink"
+            >
+              <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M19 12H5" />
+                  <path d="M11 18l-6-6 6-6" />
+                </svg>
+              </span>
+              <span className="truncate">Back to workspace</span>
+            </button>
+            {NAV_GROUPS.map((group) => {
+              const pages = group.pages.filter(
+                (p) => !p.editions || p.editions.includes(edition)
+              )
+              if (pages.length === 0) return null
               return (
-                <button
-                  key={t.id}
-                  type="button"
-                  aria-current={active ? 'page' : undefined}
-                  className={`group relative flex items-center gap-2.5 rounded-lg py-2 pl-3.5 pr-2.5 text-left text-[13px] transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ink ${
-                    active
-                      ? 'bg-raised font-medium text-ink'
-                      : 'text-mute hover:bg-hover hover:text-ink'
-                  }`}
-                  onClick={() => setTab(t.id)}
-                >
-                  {/* Active indicator: a short ink bar at the item's left edge,
-                      so the current section reads at a glance. */}
-                  <span
-                    aria-hidden="true"
-                    className={`absolute left-1 top-1/2 h-3.5 w-[2px] -translate-y-1/2 rounded-full bg-ink transition-opacity ${
-                      active ? 'opacity-100' : 'opacity-0'
-                    }`}
-                  />
-                  <span
-                    className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center transition-colors ${
-                      active ? 'text-ink' : 'text-mute group-hover:text-ink'
-                    }`}
-                  >
-                    {t.icon}
-                  </span>
-                  <span>{t.title}</span>
-                </button>
+                <div key={group.label} className="flex flex-col gap-0.5">
+                  <div className="px-3 pb-1 pt-3 text-[11px] font-medium leading-none text-mute">
+                    {group.label}
+                  </div>
+                  {pages.map((p) => {
+                    const active = activePage.id === p.id
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        aria-current={active ? 'page' : undefined}
+                        className={`group relative flex items-center gap-2.5 rounded-lg py-2 pl-3.5 pr-2.5 text-left text-[13px] transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ink ${
+                          active
+                            ? 'bg-raised font-medium text-ink'
+                            : 'text-mute hover:bg-hover hover:text-ink'
+                        }`}
+                        onClick={() => setTab(p.id)}
+                      >
+                        {/* Active indicator: a short ink bar at the item's left
+                            edge, so the current page reads at a glance. */}
+                        <span
+                          aria-hidden="true"
+                          className={`absolute left-1 top-1/2 h-3.5 w-[2px] -translate-y-1/2 rounded-full bg-ink transition-opacity ${
+                            active ? 'opacity-100' : 'opacity-0'
+                          }`}
+                        />
+                        <span
+                          className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center transition-colors ${
+                            active ? 'text-ink' : 'text-mute group-hover:text-ink'
+                          }`}
+                        >
+                          {p.icon}
+                        </span>
+                        <span className="truncate">{p.title}</span>
+                      </button>
+                    )
+                  })}
+                </div>
               )
             })}
           </nav>
 
-          <div className="settings-scroll flex min-w-0 flex-1 flex-col overflow-y-auto px-7 py-6">
-            <div className="flex min-w-0 max-w-[640px] flex-col gap-6">
-              {tabSections[activeTab]
+          <div className="settings-scroll flex min-w-0 flex-1 flex-col overflow-y-auto px-8 py-7">
+            <div className="flex min-w-0 max-w-[720px] flex-col gap-7">
+              <header className="flex flex-col gap-1.5">
+                <h1 className="text-[22px] font-semibold leading-tight tracking-[-0.02em] text-ink">
+                  {activePage.title}
+                </h1>
+                {activePage.description && (
+                  <p className="max-w-[68ch] text-[13px] leading-relaxed text-mute [text-wrap:pretty]">
+                    {activePage.description}
+                  </p>
+                )}
+              </header>
+              {allSections[activePage.id]
                 .filter((s) => !s.editions || s.editions.includes(edition))
                 .map((section) => (
                   <Section key={section.id} title={section.title}>
@@ -969,8 +1088,6 @@ function UserSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
   // feature (the space imports repos via the broker) but the shim's github
   // stub rejects, so it only shows on desktop for now.
   const isDesktop = window.termsprawl.runtime?.kind !== 'server'
-  const [draft, setDraft] = useState(settings.displayName ?? '')
-  useEffect(() => setDraft(settings.displayName ?? ''), [settings.displayName])
   // The upsell lands on the web dashboard's billing page — the same surface the
   // Stripe checkout/portal flows live on.
   const openBilling = (): void => {
@@ -1078,20 +1195,9 @@ function UserSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
           {ghNote && <Status className="text-danger">{ghNote}</Status>}
         </Row>
       )}
-      <PrefRow label="Display name" sub="your name on backups and cloud surfaces">
-        <TextInput
-          value={draft}
-          placeholder="your name"
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={() => {
-            const v = draft.trim()
-            if (v && v !== settings.displayName) void update({ displayName: v })
-          }}
-        />
-      </PrefRow>
       <Hint>
         {isDesktop
-          ? 'Termsprawl Cloud account (sign in to back up projects) and a basic display name. Settings live in settings.json in the config directory.'
+          ? 'Termsprawl Cloud account (sign in to back up projects). Settings live in settings.json in the config directory.'
           : 'Sign in with the same GitHub account as your desktop to sync projects between them. Cloud settings for this canvas are managed here; everything else lives on your desktop.'}
       </Hint>
     </>
@@ -1106,7 +1212,8 @@ function UpdatesSection({ ctx, isPackaged }: { ctx: SectionCtx; isPackaged: bool
     return (
       <Hint>
         Updates come from GitHub Releases. This build is unpackaged (dev), so the
-        updater is inactive — launch the installed AppImage/.deb to manage updates.
+        updater is inactive. Launch the installed AppImage or .deb to manage
+        updates.
       </Hint>
     )
   }

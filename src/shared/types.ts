@@ -322,8 +322,6 @@ export interface AppSettings {
   dismissedAnnouncementVersion: string | null
   /** Termsprawl Cloud origin for the in-app sign-in + backup. Unset = https://termsprawl.com */
   cloudApiBase?: string
-  /** Basic user profile: a display name shown in the user section. */
-  displayName?: string
   /** Agent-to-agent peers (settings: A2A details). Config only — orchestration
    * is a later feature; the panel just manages the peer list. */
   a2aPeers?: A2APeer[]
@@ -332,10 +330,6 @@ export interface AppSettings {
   apiProviders?: ApiProviderConfig[]
   /** UI theme. 'system' follows the OS preference. Defaults to 'system'. */
   theme?: 'light' | 'dark' | 'system'
-  /** Default agent preset mode for new agents (e.g. 'standard'). */
-  agentPreset?: string
-  /** Default permission mode for new sessions. */
-  defaultPermission?: string
   /** Enter behavior while an agent is busy: 'queue' | 'send' | 'prompt'. */
   enterBehavior?: string
   /** Allow external agents to control embedded browser nodes (13.4): when on,
