@@ -53,6 +53,22 @@ describe('server handlers', () => {
     expect(res?.result).toMatchObject({ autoDownloadUpdates: expect.any(Boolean), accounts: [] })
   })
 
+  it('settings:usage-get reports unsupported usage with zeroed fields', async () => {
+    const res = await dispatch({ id: 2.1, method: IPC.settingsUsageGet, args: [] })
+    expect(res?.ok).toBe(true)
+    expect(res?.result).toEqual({
+      supported: false,
+      reason: 'Usage collection is unavailable in Server Edition.',
+      hasData: false,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      totalCost: 0,
+      sessions: 0,
+      longestSessionSeconds: 0,
+      daily: [],
+      models: []
+    })
+  })
   it('workspace:snapshot returns an empty index and no projects', async () => {
     const res = await dispatch({ id: 3, method: IPC.workspaceSnapshot, args: [] })
     expect(res?.ok).toBe(true)

@@ -200,7 +200,7 @@ export function buildHandlers(platform: CorePlatform): Record<string, RpcHandler
     [IPC.updateInstall]: () => idleUpdateStatus(),
     [IPC.updateDismiss]: () => idleUpdateStatus(),
     [IPC.settingsCapabilitiesGet]: () => ({ supported: false, reason: 'Capability discovery is unavailable in Server Edition.', skills: [], hooks: [], commands: [] }),
-    [IPC.settingsUsageGet]: () => ({ hasData: false, totalInputTokens: 0, totalOutputTokens: 0, totalCost: 0, sessions: 0, longestSessionSeconds: 0, daily: [], models: [] }),
+    [IPC.settingsUsageGet]: () => ({ supported: false, reason: 'Usage collection is unavailable in Server Edition.', hasData: false, totalInputTokens: 0, totalOutputTokens: 0, totalCost: 0, sessions: 0, longestSessionSeconds: 0, daily: [], models: [] }),
     [IPC.announcementGet]: () => null,
 
     [IPC.workspaceSnapshot]: () => workspaceStore.snapshot(),
