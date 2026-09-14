@@ -22,3 +22,7 @@ Validation completed:
 - `git diff --check` passed.
 
 No additional focused contract test was added because these interfaces and constant declarations have no runtime behavior to exercise; typecheck provides the relevant validation for this task.
+
+## Fix report
+
+The corrective commit adds the five requested shared interfaces in `src/shared/types.ts`, both requested IPC constants in `src/shared/ipc.ts`, and `src/shared/settings-contracts.test.ts` covering empty results, enum values, JSON serialization, and secrecy-oriented field checks.

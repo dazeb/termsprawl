@@ -13,6 +13,8 @@ export const IPC = {
   updateInstall: 'update:install',
   updateDismiss: 'update:dismiss',
   announcementGet: 'announcement:get',
+  settingsCapabilitiesGet: 'settings:capabilities-get',
+  settingsUsageGet: 'settings:usage-get',
 
   // Workspace / projects (Phase 5)
   workspaceSnapshot: 'workspace:snapshot',

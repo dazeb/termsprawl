@@ -1,5 +1,11 @@
 // Shared types across main / preload / renderer.
 
+export interface SettingsSkill { id: string; name: string; description: string; source: string; path: string; enabled: boolean }
+export interface SettingsHook { id: string; event: string; agent: string; source: 'managed' | 'legacy'; command: string; enabled: boolean }
+export interface SettingsCommand { name: string; description: string; source: 'built-in' | 'project' | 'agent'; available: boolean }
+export interface SettingsCapabilities { skills: SettingsSkill[]; hooks: SettingsHook[]; commands: SettingsCommand[] }
+export interface UsageStats { hasData: boolean; totalInputTokens: number; totalOutputTokens: number; totalCost: number; sessions: number; longestSessionSeconds: number; daily: Array<{ date: string; inputTokens: number; outputTokens: number; cost: number }>; models: Array<{ provider: string; model: string; inputTokens: number; outputTokens: number; cost: number }> }
+
 export interface PtyCreateRequest {
   /** Stable per-node id; also the tmux session key (Phase 4). */
   id: string
