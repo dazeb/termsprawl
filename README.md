@@ -58,7 +58,7 @@ user-directed deviations) is shipped:
   invites with expiry/revocation/quotas, admin API. In-app pairing with
   fingerprint confirm and remote terminal frames over the tunnel.
 
-Current version: **0.25.6**.
+Current version: **0.25.7**.
 
 Linux only — AppImage and `.deb` artifacts. No macOS support, by design.
 
