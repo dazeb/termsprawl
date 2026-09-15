@@ -129,8 +129,10 @@ function Toolbar({
   extra?: React.ReactNode
 }): React.JSX.Element {
   return (
-    <div className="flex items-center gap-3">
-      <div className="flex items-center gap-1" role="tablist" aria-label="Scope">
+    // Wraps rather than clipping: marketplace and agent names are user data,
+    // and a long one used to push the Refresh button off the edge.
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <div className="flex min-w-0 flex-wrap items-center gap-1" role="tablist" aria-label="Scope">
         {scopes.map((s) => {
           const active = s.id === scope
           return (
@@ -140,7 +142,7 @@ function Toolbar({
               role="tab"
               aria-selected={active}
               onClick={() => onScope(s.id)}
-              className={`flex items-center gap-1.5 rounded-[7px] px-2.5 py-1.5 text-[12px] leading-none transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ink ${
+              className={`flex items-center gap-1.5 whitespace-nowrap rounded-[7px] px-2.5 py-1.5 text-[12px] leading-none transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ink ${
                 active ? 'border border-edge bg-raised text-ink' : 'border border-transparent text-mute hover:text-ink'
               }`}
             >
@@ -150,9 +152,9 @@ function Toolbar({
           )
         })}
       </div>
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex shrink-0 items-center gap-2">
         <TextInput
-          className="w-[220px]"
+          className="w-[200px]"
           placeholder={placeholder}
           spellCheck={false}
           value={query}
@@ -177,6 +179,7 @@ function useCapabilities(): {
   busy: string | null
   reload: () => void
   toggleSkill: (id: string, enabled: boolean) => void
+  togglePlugin: (id: string, enabled: boolean) => void
   reinstallHooks: (agent: string) => void
 } {
   const [data, setData] = useState<SettingsCapabilities | null>(null)
@@ -201,8 +204,22 @@ function useCapabilities(): {
     busy,
     reload,
     toggleSkill: (id, enabled) => run(`skill:${id}`, () => window.termsprawl.settings.setSkillEnabled(id, enabled)),
+    togglePlugin: (id, enabled) => run(`plugin:${id}`, () => window.termsprawl.settings.setPluginEnabled(id, enabled)),
     reinstallHooks: (agent) => run(`hooks:${agent}`, () => window.termsprawl.settings.reinstallHooks(agent))
   }
+}
+
+/** A small bordered chip — provenance, version, transport, tool count. */
+function Chip({ children, mono = false }: { children: React.ReactNode; mono?: boolean }): React.JSX.Element {
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center rounded-md border border-edge px-2 py-[3px] text-[11px] leading-none text-mute ${
+        mono ? 'font-mono tabular-nums' : ''
+      }`}
+    >
+      {children}
+    </span>
+  )
 }
 
 const matches = (query: string, ...fields: string[]): boolean => {
@@ -516,11 +533,7 @@ export function McpServersPage(): React.JSX.Element {
                     key={s.id}
                     name={s.name}
                     description={s.detail}
-                    chip={
-                      <span className="inline-flex shrink-0 items-center rounded-md border border-edge px-2 py-[3px] font-mono text-[11px] leading-none text-mute">
-                        {s.transport}
-                      </span>
-                    }
+                    chip={<Chip mono>{s.transport}</Chip>}
                   />
                 ))
               )}
@@ -531,6 +544,165 @@ export function McpServersPage(): React.JSX.Element {
       <Hint>
         Read-only: termsprawl reports the MCP servers your agent CLIs will start. Edit them in the CLI's own
         config file so nothing is out of sync with what actually launches.
+      </Hint>
+    </>
+  )
+}
+
+/* ── Plugins ─────────────────────────────────────────────────────────────── */
+
+/** Cached plugin bundles.
+ *
+ * "Installed" is the CLI's own plugin cache — a real inventory — and the
+ * toggle edits the CLI's `[plugins."name@marketplace"] enabled` key, which is
+ * the same flag the CLI reads. Nothing else in that config is touched. */
+export function PluginsPage(): React.JSX.Element {
+  const { data, error, busy, reload, togglePlugin } = useCapabilities()
+  const [scope, setScope] = useState('all')
+  const [query, setQuery] = useState('')
+
+  const plugins = data?.plugins ?? []
+  const counts = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const p of plugins) map.set(p.marketplace, (map.get(p.marketplace) ?? 0) + 1)
+    return map
+  }, [plugins])
+  const visible = plugins.filter(
+    (p) => (scope === 'all' || p.marketplace === scope) && matches(query, p.name, p.description, p.marketplace)
+  )
+  const marketplaces = [...new Set(visible.map((p) => p.marketplace))].sort()
+
+  if (error) return <ErrorCard error={error} onRetry={reload} />
+  if (!data) return <LoadingCard />
+  if (!data.supported) return <UnavailableCard reason={data.reason} />
+
+  return (
+    <>
+      <Toolbar
+        scopes={[
+          { id: 'all', label: 'All marketplaces', count: plugins.length },
+          ...[...counts.keys()].sort().map((m) => ({ id: m, label: m, count: counts.get(m) ?? 0 }))
+        ]}
+        scope={scope}
+        onScope={setScope}
+        query={query}
+        onQuery={setQuery}
+        placeholder="Search plugins…"
+        onRefresh={reload}
+      />
+      {visible.length === 0 ? (
+        <EmptyGroup
+          title="No plugins installed"
+          body="Plugins arrive from a CLI's own marketplace and land in its plugin cache. Install one with the CLI and it appears here with whatever it ships."
+        />
+      ) : (
+        marketplaces.map((marketplace) => {
+          const rows = visible.filter((p) => p.marketplace === marketplace)
+          return (
+            <CapabilityGroup key={marketplace} title={marketplace} count={rows.length}>
+              {rows.map((p) => (
+                <CapabilityRow
+                  key={p.id}
+                  name={p.name}
+                  description={p.description}
+                  chip={
+                    <>
+                      {p.version && <Chip mono>{p.version}</Chip>}
+                      <Chip>
+                        {p.skills} {p.skills === 1 ? 'skill' : 'skills'}
+                        {p.agents > 0 ? ` · ${p.agents} ${p.agents === 1 ? 'agent' : 'agents'}` : ''}
+                      </Chip>
+                    </>
+                  }
+                  control={
+                    <Toggle
+                      checked={p.enabled}
+                      disabled={busy === `plugin:${p.id}`}
+                      ariaLabel={`${p.enabled ? 'Disable' : 'Enable'} ${p.name}`}
+                      title={`Writes enabled = ${p.enabled ? 'false' : 'true'} for ${p.name}@${p.marketplace} in the CLI config`}
+                      onChange={(next) => togglePlugin(p.id, next)}
+                    />
+                  }
+                />
+              ))}
+            </CapabilityGroup>
+          )
+        })
+      )}
+      <Hint>
+        The toggle writes the CLI's own <code>enabled</code> flag for that plugin and nothing else. A plugin cached
+        but never enabled shows as off.
+      </Hint>
+    </>
+  )
+}
+
+/* ── Subagents ───────────────────────────────────────────────────────────── */
+
+/** Reusable subagent definitions the CLIs load from their own config.
+ *
+ * Read-only: the model and tool grants a subagent runs with belong to the CLI
+ * that owns the file, so the row reports them instead of offering a picker
+ * that would not mean anything. */
+export function SubagentsPage(): React.JSX.Element {
+  const { data, error, reload } = useCapabilities()
+  const [scope, setScope] = useState('all')
+  const [query, setQuery] = useState('')
+
+  const agents = data?.subagents ?? []
+  const counts = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const a of agents) map.set(a.agent, (map.get(a.agent) ?? 0) + 1)
+    return map
+  }, [agents])
+  const visible = agents.filter((a) => (scope === 'all' || a.agent === scope) && matches(query, a.name, a.description))
+  const groups = [...new Set(visible.map((a) => a.agent))].sort()
+
+  if (error) return <ErrorCard error={error} onRetry={reload} />
+  if (!data) return <LoadingCard />
+  if (!data.supported) return <UnavailableCard reason={data.reason} />
+
+  return (
+    <>
+      <Toolbar
+        scopes={scopeOptions(agents.map((a) => a.agent), counts)}
+        scope={scope}
+        onScope={setScope}
+        query={query}
+        onQuery={setQuery}
+        placeholder="Search subagents…"
+        onRefresh={reload}
+      />
+      {groups.length === 0 ? (
+        <EmptyGroup
+          title="No subagents defined"
+          body="A subagent is a file in the CLI's own agents directory (~/.claude/agents, ~/.codex/agents) that declares what it may do. Add one there and it shows up here."
+        />
+      ) : (
+        groups.map((agent) => {
+          const rows = visible.filter((a) => a.agent === agent)
+          return (
+            <CapabilityGroup key={agent} title={agentLabel(agent)} count={rows.length}>
+              {rows.map((a) => (
+                <CapabilityRow
+                  key={a.id}
+                  name={a.name}
+                  description={a.description}
+                  chip={
+                    <>
+                      <Chip>{a.tools === 0 ? 'All tools' : `${a.tools} ${a.tools === 1 ? 'tool' : 'tools'}`}</Chip>
+                      {a.detail && <Chip mono>{a.detail}</Chip>}
+                    </>
+                  }
+                />
+              ))}
+            </CapabilityGroup>
+          )
+        })
+      )}
+      <Hint>
+        Subagents come from the agent's own config tree. The model and permissions stay with the CLI, so this page
+        reports them rather than offering controls that wouldn't reach it.
       </Hint>
     </>
   )

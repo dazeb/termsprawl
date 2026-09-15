@@ -9,7 +9,15 @@ import { useProjects } from '../state/projects'
 import { applyTheme } from '../state/theme'
 import { trustState, type TrustState } from './relay-trust'
 import { Button, Card, FieldRow, Hint, PrefRow, Row, Section, Select, Status, TextArea, TextInput, Toggle } from './ui/kit'
-import { CommandsPage, HooksPage, McpServersPage, SkillsPage, UsagePage } from './CapabilityPages'
+import {
+  CommandsPage,
+  HooksPage,
+  McpServersPage,
+  PluginsPage,
+  SkillsPage,
+  SubagentsPage,
+  UsagePage
+} from './CapabilityPages'
 
 interface AppSettingsPanelProps {
   onClose: () => void
@@ -120,6 +128,8 @@ type PageId =
   | 'skills'
   | 'hooks'
   | 'commands'
+  | 'plugins'
+  | 'subagents'
   | 'mcp'
   | 'accounts'
   | 'a2a'
@@ -262,6 +272,32 @@ const NAV_GROUPS: NavGroup[] = [
             <rect x="3" y="4" width="18" height="7" rx="2" />
             <rect x="3" y="13" width="18" height="7" rx="2" />
             <path d="M7 7.5h.01M7 16.5h.01" />
+          </svg>
+        )
+      },
+      {
+        id: 'subagents',
+        title: 'Subagents',
+        description: 'Reusable subagent definitions the CLIs load, and what each one may do.',
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="14" rx="2" />
+            <path d="M8 9h4" />
+            <path d="M8 13h7" />
+            <path d="M9 21h6" />
+          </svg>
+        )
+      },
+      {
+        id: 'plugins',
+        title: 'Plugins',
+        description: 'Plugin bundles cached by the agent CLIs, and whether each one is enabled.',
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="3" y="3" width="8" height="8" rx="1.5" />
+            <rect x="13" y="3" width="8" height="8" rx="1.5" />
+            <rect x="3" y="13" width="8" height="8" rx="1.5" />
+            <rect x="13" y="13" width="8" height="8" rx="1.5" />
           </svg>
         )
       },
@@ -1021,6 +1057,8 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
     hooks: [{ id: 'hooks', bare: true, render: () => <HooksPage /> }],
     commands: [{ id: 'commands', bare: true, render: () => <CommandsPage /> }],
     mcp: [{ id: 'mcp', bare: true, render: () => <McpServersPage /> }],
+    plugins: [{ id: 'plugins', bare: true, render: () => <PluginsPage /> }],
+    subagents: [{ id: 'subagents', bare: true, render: () => <SubagentsPage /> }],
     usage: [{ id: 'usage', bare: true, render: () => <UsagePage /> }]
   }
 

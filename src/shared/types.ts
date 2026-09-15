@@ -41,6 +41,37 @@ export interface SettingsMcpServer {
   configPath: string
 }
 
+/** One plugin cached by an agent CLI.
+ *
+ * `enabled` is the CLI's own flag from its config — the toggle on the Plugins
+ * page edits that key and nothing else. The skill/agent counts are read from
+ * the plugin's own directory, so a row says what the bundle actually ships. */
+export interface SettingsPlugin {
+  id: string
+  name: string
+  description: string
+  marketplace: string
+  version: string
+  enabled: boolean
+  skills: number
+  agents: number
+  /** The CLI config whose plugin table holds the enabled flag. */
+  configPath: string
+}
+
+/** A reusable subagent definition the CLI will load (`agents/*.md|toml`). */
+export interface SettingsSubagent {
+  id: string
+  name: string
+  description: string
+  agent: string
+  /** Declared tool count. 0 means the CLI's full default toolset. */
+  tools: number
+  /** Permission/sandbox mode and MCP servers it brings, if declared. */
+  detail: string
+  path: string
+}
+
 export interface SettingsCapabilities {
   supported: boolean
   reason?: string
@@ -48,6 +79,8 @@ export interface SettingsCapabilities {
   hooks: SettingsHook[]
   commands: SettingsCommand[]
   mcp: SettingsMcpServer[]
+  plugins: SettingsPlugin[]
+  subagents: SettingsSubagent[]
 }
 export interface UsageStats { hasData: boolean; supported: boolean; reason?: string; totalInputTokens: number; totalOutputTokens: number; totalCost: number; sessions: number; longestSessionSeconds: number; daily: Array<{ date: string; inputTokens: number; outputTokens: number; cost: number }>; models: Array<{ provider: string; model: string; inputTokens: number; outputTokens: number; cost: number }> }
 

@@ -81,6 +81,8 @@ const api = {
     capabilities: (): Promise<SettingsCapabilities> => ipcRenderer.invoke(IPC.settingsCapabilitiesGet),
     setSkillEnabled: (id: string, enabled: boolean): Promise<SettingsCapabilities> =>
       ipcRenderer.invoke(IPC.settingsSetSkillEnabled, id, enabled),
+    setPluginEnabled: (id: string, enabled: boolean): Promise<SettingsCapabilities> =>
+      ipcRenderer.invoke(IPC.settingsSetPluginEnabled, id, enabled),
     reinstallHooks: (agent: string): Promise<SettingsCapabilities> =>
       ipcRenderer.invoke(IPC.settingsReinstallHooks, agent),
     usage: (): Promise<UsageStats> => ipcRenderer.invoke(IPC.settingsUsageGet)

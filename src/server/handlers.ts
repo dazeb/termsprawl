@@ -199,7 +199,7 @@ export function buildHandlers(platform: CorePlatform): Record<string, RpcHandler
     [IPC.updateDownload]: () => idleUpdateStatus(),
     [IPC.updateInstall]: () => idleUpdateStatus(),
     [IPC.updateDismiss]: () => idleUpdateStatus(),
-    [IPC.settingsCapabilitiesGet]: () => ({ supported: false, reason: 'Capability discovery is unavailable in Server Edition.', skills: [], hooks: [], commands: [], mcp: [] }),
+    [IPC.settingsCapabilitiesGet]: () => ({ supported: false, reason: 'Capability discovery is unavailable in Server Edition.', skills: [], hooks: [], commands: [], mcp: [], plugins: [], subagents: [] }),
     // A space has no host config tree to move skills around in, and no hook
     // installer of its own — both are desktop-only by construction.
     [IPC.settingsSetSkillEnabled]: () => {
@@ -207,6 +207,9 @@ export function buildHandlers(platform: CorePlatform): Record<string, RpcHandler
     },
     [IPC.settingsReinstallHooks]: () => {
       throw new Error('Hook repair is unavailable in Server Edition.')
+    },
+    [IPC.settingsSetPluginEnabled]: () => {
+      throw new Error('Plugin management is unavailable in Server Edition.')
     },
     [IPC.settingsUsageGet]: () => ({ supported: false, reason: 'Usage collection is unavailable in Server Edition.', hasData: false, totalInputTokens: 0, totalOutputTokens: 0, totalCost: 0, sessions: 0, longestSessionSeconds: 0, daily: [], models: [] }),
     [IPC.announcementGet]: () => null,

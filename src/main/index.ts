@@ -55,6 +55,8 @@ import { discoverSkills, setSkillEnabled, skillRoots } from '../core/settings-sk
 import { inventoryHooks } from '../core/settings-hooks'
 import { discoverCommands } from '../core/settings-commands'
 import { inventoryMcp, mcpFiles } from '../core/settings-mcp'
+import { discoverPlugins, pluginRoots, setPluginEnabled } from '../core/settings-plugins'
+import { agentRoots, discoverSubagents } from '../core/settings-subagents'
 import { aggregateUsage, chatUsageSamples } from '../core/settings-usage'
 import { costOf } from '../core/chat/cost'
 import { agentSessionNameChannel } from '../shared/ipc'
@@ -1073,11 +1075,20 @@ function registerUpdateIpc(): void {
     ]),
     commands: discoverCommands(),
     mcp: inventoryMcp(mcpFiles(homedir())),
+    plugins: discoverPlugins(pluginRoots(homedir()), codexConfigPath(homedir())),
+    subagents: discoverSubagents(agentRoots(homedir())),
   })
   ipcMain.handle(IPC.settingsCapabilitiesGet, capabilitySnapshot)
   // The one write in this surface, and it is a rename: see settings-skills.ts.
   ipcMain.handle(IPC.settingsSetSkillEnabled, (_event, id: string, enabled: boolean) => {
     setSkillEnabled(skillRoots(homedir()), String(id), Boolean(enabled))
+    return capabilitySnapshot()
+  })
+  // Plugin enable/disable writes one key in the CLI's own plugin table; the
+  // id carries the `<name>@<marketplace>` key the CLI itself uses.
+  ipcMain.handle(IPC.settingsSetPluginEnabled, (_event, id: string, enabled: boolean) => {
+    const key = String(id).replace(/^[a-z]+:/, '')
+    setPluginEnabled(codexConfigPath(homedir()), key, Boolean(enabled))
     return capabilitySnapshot()
   })
   // Hook repair: re-run the installer we already run at boot. Idempotent by

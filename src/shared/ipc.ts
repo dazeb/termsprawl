@@ -18,6 +18,8 @@ export const IPC = {
   /** Toggle a skill by moving its folder between the scanned and the
    * `skills-disabled/` root — the only state a CLI actually respects. */
   settingsSetSkillEnabled: 'settings:set-skill-enabled',
+  /** Flip one plugin's `enabled` key in the CLI's own config. */
+  settingsSetPluginEnabled: 'settings:set-plugin-enabled',
   /** Re-run our hook installer for one agent CLI (idempotent repair). */
   settingsReinstallHooks: 'settings:reinstall-hooks',
 
