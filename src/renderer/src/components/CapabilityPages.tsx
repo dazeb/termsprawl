@@ -47,7 +47,7 @@ function CapabilityRow({
   muted?: boolean
 }): React.JSX.Element {
   return (
-    <div className="flex items-center gap-3 border-b border-edge py-3 last:border-b-0">
+    <div className="flex items-center gap-3 border-b border-edge px-4 py-3 last:border-b-0">
       <span
         aria-hidden="true"
         className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] border border-edge bg-raised text-[13px] text-mute"
@@ -84,7 +84,8 @@ function CapabilityGroup({
         <h2 className="text-[13px] font-medium leading-none text-ink">{title}</h2>
         <span className="text-[12px] leading-none text-mute tabular-nums">{count}</span>
       </div>
-      <div className="overflow-hidden rounded-[10px] border border-edge bg-panel px-4">{children}</div>
+      {/* No card padding — rows carry `px-4` so dividers meet the card border. */}
+      <div className="overflow-hidden rounded-[10px] border border-edge bg-panel">{children}</div>
     </section>
   )
 }
@@ -178,6 +179,8 @@ function useCapabilities(): {
   error: string | null
   busy: string | null
   reload: () => void
+  /** Same, but forces the main process to re-scan instead of using its cache. */
+  refresh: () => void
   toggleSkill: (id: string, enabled: boolean) => void
   togglePlugin: (id: string, enabled: boolean) => void
   reinstallHooks: (agent: string) => void
@@ -195,14 +198,19 @@ function useCapabilities(): {
       .finally(() => setBusy(null))
   }
 
-  const reload = (): void => run('reload', () => window.termsprawl.settings.capabilities())
+  // A plain mount uses the main process's cached snapshot (a fresh scan walks
+  // the plugin cache and reads every SKILL.md on the main thread); only an
+  // explicit Refresh asks for a re-scan.
+  const reload = (refresh = false): void =>
+    run('reload', () => window.termsprawl.settings.capabilities({ refresh }))
   useEffect(reload, [])
 
   return {
     data,
     error,
     busy,
-    reload,
+    reload: () => reload(false),
+    refresh: () => reload(true),
     toggleSkill: (id, enabled) => run(`skill:${id}`, () => window.termsprawl.settings.setSkillEnabled(id, enabled)),
     togglePlugin: (id, enabled) => run(`plugin:${id}`, () => window.termsprawl.settings.setPluginEnabled(id, enabled)),
     reinstallHooks: (agent) => run(`hooks:${agent}`, () => window.termsprawl.settings.reinstallHooks(agent))
@@ -240,7 +248,7 @@ function scopeOptions(agents: string[], counts: Map<string, number>): { id: stri
 /* ── Skills ──────────────────────────────────────────────────────────────── */
 
 export function SkillsPage(): React.JSX.Element {
-  const { data, error, busy, reload, toggleSkill } = useCapabilities()
+  const { data, error, busy, refresh, toggleSkill } = useCapabilities()
   const [scope, setScope] = useState('all')
   const [query, setQuery] = useState('')
 
@@ -254,7 +262,7 @@ export function SkillsPage(): React.JSX.Element {
   const enabled = visible.filter((s) => s.enabled)
   const disabled = visible.filter((s) => !s.enabled)
 
-  if (error) return <ErrorCard error={error} onRetry={reload} />
+  if (error) return <ErrorCard error={error} onRetry={refresh} />
   if (!data) return <LoadingCard />
   if (!data.supported) return <UnavailableCard reason={data.reason} />
 
@@ -267,11 +275,11 @@ export function SkillsPage(): React.JSX.Element {
         query={query}
         onQuery={setQuery}
         placeholder="Search skills…"
-        onRefresh={reload}
+        onRefresh={refresh}
       />
       <CapabilityGroup title="Enabled" count={enabled.length}>
         {enabled.length === 0 ? (
-          <div className="py-1">
+          <div className="px-4 py-3">
             <EmptyGroup
               title={skills.length === 0 ? 'No skills installed' : 'No enabled skills match'}
               body="Skills are folders with a SKILL.md inside the agent CLI's own skills directory (~/.claude/skills, ~/.codex/skills). termsprawl lists them; the CLI loads them."
@@ -330,7 +338,7 @@ export function SkillsPage(): React.JSX.Element {
 /* ── Hooks ───────────────────────────────────────────────────────────────── */
 
 export function HooksPage(): React.JSX.Element {
-  const { data, error, busy, reload, reinstallHooks } = useCapabilities()
+  const { data, error, busy, refresh, reinstallHooks } = useCapabilities()
   const [scope, setScope] = useState('all')
   const [query, setQuery] = useState('')
 
@@ -343,7 +351,7 @@ export function HooksPage(): React.JSX.Element {
   const visible = hooks.filter((h) => (scope === 'all' || h.agent === scope) && matches(query, h.command, h.event))
   const agents = scope === 'all' ? [...new Set(hooks.map((h) => h.agent))].sort() : [scope]
 
-  if (error) return <ErrorCard error={error} onRetry={reload} />
+  if (error) return <ErrorCard error={error} onRetry={refresh} />
   if (!data) return <LoadingCard />
   if (!data.supported) return <UnavailableCard reason={data.reason} />
 
@@ -356,7 +364,7 @@ export function HooksPage(): React.JSX.Element {
         query={query}
         onQuery={setQuery}
         placeholder="Search hooks…"
-        onRefresh={reload}
+        onRefresh={refresh}
         extra={
           agents.length > 0 ? (
             <Button
@@ -419,7 +427,7 @@ export function HooksPage(): React.JSX.Element {
 /* ── Commands ────────────────────────────────────────────────────────────── */
 
 export function CommandsPage(): React.JSX.Element {
-  const { data, error, reload } = useCapabilities()
+  const { data, error, refresh } = useCapabilities()
   const [scope, setScope] = useState('all')
   const [query, setQuery] = useState('')
 
@@ -432,7 +440,7 @@ export function CommandsPage(): React.JSX.Element {
   const visible = commands.filter((c) => (scope === 'all' || c.source === scope) && matches(query, c.name, c.description))
   const sources = scope === 'all' ? [...new Set(commands.map((c) => c.source))].sort() : [scope]
 
-  if (error) return <ErrorCard error={error} onRetry={reload} />
+  if (error) return <ErrorCard error={error} onRetry={refresh} />
   if (!data) return <LoadingCard />
   if (!data.supported) return <UnavailableCard reason={data.reason} />
 
@@ -448,7 +456,7 @@ export function CommandsPage(): React.JSX.Element {
         query={query}
         onQuery={setQuery}
         placeholder="Search commands…"
-        onRefresh={reload}
+        onRefresh={refresh}
       />
       {sources.map((source) => {
         const rows = visible.filter((c) => c.source === source)
@@ -459,7 +467,7 @@ export function CommandsPage(): React.JSX.Element {
             count={rows.length}
           >
             {rows.length === 0 ? (
-              <div className="py-1">
+              <div className="px-4 py-3">
                 <EmptyGroup title="No commands match" body="Clear the search to see every command the chat node understands." />
               </div>
             ) : (
@@ -485,7 +493,7 @@ export function CommandsPage(): React.JSX.Element {
 /* ── MCP servers ─────────────────────────────────────────────────────────── */
 
 export function McpServersPage(): React.JSX.Element {
-  const { data, error, reload } = useCapabilities()
+  const { data, error, refresh } = useCapabilities()
   const [scope, setScope] = useState('all')
   const [query, setQuery] = useState('')
 
@@ -498,7 +506,7 @@ export function McpServersPage(): React.JSX.Element {
   const visible = servers.filter((s) => (scope === 'all' || s.agent === scope) && matches(query, s.name, s.detail))
   const agents = scope === 'all' ? [...new Set(servers.map((s) => s.agent))].sort() : [scope]
 
-  if (error) return <ErrorCard error={error} onRetry={reload} />
+  if (error) return <ErrorCard error={error} onRetry={refresh} />
   if (!data) return <LoadingCard />
   if (!data.supported) return <UnavailableCard reason={data.reason} />
 
@@ -511,7 +519,7 @@ export function McpServersPage(): React.JSX.Element {
         query={query}
         onQuery={setQuery}
         placeholder="Search MCP servers…"
-        onRefresh={reload}
+        onRefresh={refresh}
       />
       {agents.length === 0 ? (
         <EmptyGroup
@@ -524,7 +532,7 @@ export function McpServersPage(): React.JSX.Element {
           return (
             <CapabilityGroup key={agent} title={agentLabel(agent)} count={rows.length}>
               {rows.length === 0 ? (
-                <div className="py-1">
+                <div className="px-4 py-3">
                   <EmptyGroup title="Nothing matches" body="Clear the search to see every server declared for this agent." />
                 </div>
               ) : (
@@ -557,7 +565,7 @@ export function McpServersPage(): React.JSX.Element {
  * toggle edits the CLI's `[plugins."name@marketplace"] enabled` key, which is
  * the same flag the CLI reads. Nothing else in that config is touched. */
 export function PluginsPage(): React.JSX.Element {
-  const { data, error, busy, reload, togglePlugin } = useCapabilities()
+  const { data, error, busy, refresh, togglePlugin } = useCapabilities()
   const [scope, setScope] = useState('all')
   const [query, setQuery] = useState('')
 
@@ -572,7 +580,7 @@ export function PluginsPage(): React.JSX.Element {
   )
   const marketplaces = [...new Set(visible.map((p) => p.marketplace))].sort()
 
-  if (error) return <ErrorCard error={error} onRetry={reload} />
+  if (error) return <ErrorCard error={error} onRetry={refresh} />
   if (!data) return <LoadingCard />
   if (!data.supported) return <UnavailableCard reason={data.reason} />
 
@@ -588,7 +596,7 @@ export function PluginsPage(): React.JSX.Element {
         query={query}
         onQuery={setQuery}
         placeholder="Search plugins…"
-        onRefresh={reload}
+        onRefresh={refresh}
       />
       {visible.length === 0 ? (
         <EmptyGroup
@@ -645,7 +653,7 @@ export function PluginsPage(): React.JSX.Element {
  * that owns the file, so the row reports them instead of offering a picker
  * that would not mean anything. */
 export function SubagentsPage(): React.JSX.Element {
-  const { data, error, reload } = useCapabilities()
+  const { data, error, refresh } = useCapabilities()
   const [scope, setScope] = useState('all')
   const [query, setQuery] = useState('')
 
@@ -658,7 +666,7 @@ export function SubagentsPage(): React.JSX.Element {
   const visible = agents.filter((a) => (scope === 'all' || a.agent === scope) && matches(query, a.name, a.description))
   const groups = [...new Set(visible.map((a) => a.agent))].sort()
 
-  if (error) return <ErrorCard error={error} onRetry={reload} />
+  if (error) return <ErrorCard error={error} onRetry={refresh} />
   if (!data) return <LoadingCard />
   if (!data.supported) return <UnavailableCard reason={data.reason} />
 
@@ -671,7 +679,7 @@ export function SubagentsPage(): React.JSX.Element {
         query={query}
         onQuery={setQuery}
         placeholder="Search subagents…"
-        onRefresh={reload}
+        onRefresh={refresh}
       />
       {groups.length === 0 ? (
         <EmptyGroup
@@ -782,6 +790,13 @@ export function UsagePage(): React.JSX.Element {
       .then(setData)
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
   }
+  const reload = (refresh = false): void => {
+    setError(null)
+    void window.termsprawl.settings
+      .usage({ refresh })
+      .then(setData)
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+  }
   useEffect(load, [])
 
   if (error) return <ErrorCard error={error} onRetry={load} />
@@ -794,7 +809,7 @@ export function UsagePage(): React.JSX.Element {
           data.reason ??
           'Chat nodes report token counts and cost per reply; this page totals them once a conversation has run.'
         }
-        action={<Button onClick={load}>Check again</Button>}
+        action={<Button onClick={() => reload(true)}>Check again</Button>}
       />
     )
   }
@@ -806,7 +821,7 @@ export function UsagePage(): React.JSX.Element {
     <>
       <MetricStrip stats={data} />
       <CapabilityGroup title="Token activity" count={data.daily.length}>
-        <div className="py-3">
+        <div className="px-4 py-3">
           <ActivityGrid daily={data.daily} />
         </div>
       </CapabilityGroup>

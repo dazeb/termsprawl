@@ -8,7 +8,7 @@ import { useCanvasRequests } from '../state/canvas-requests'
 import { useProjects } from '../state/projects'
 import { applyTheme } from '../state/theme'
 import { trustState, type TrustState } from './relay-trust'
-import { Button, Card, FieldRow, Hint, PrefRow, Row, Section, Select, Status, TextArea, TextInput, Toggle } from './ui/kit'
+import { Button, Card, CardNote, FieldRow, Hint, PrefRow, Row, Section, Select, Status, TextArea, TextInput, Toggle } from './ui/kit'
 import {
   CommandsPage,
   HooksPage,
@@ -883,7 +883,7 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
         id: 'theme',
         title: 'Theme',
         render: (c) => (
-          <div className="grid grid-cols-3 gap-2.5 py-3" role="group" aria-label="Theme">
+          <div className="grid grid-cols-3 gap-2.5 px-4 py-3" role="group" aria-label="Theme">
             {THEMES.map((t) => {
               const selected = (c.settings.theme ?? 'system') === t.value
               return (
@@ -1246,15 +1246,15 @@ function UserSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
   return (
     <>
       {device && (
-        <Hint>
+        <CardNote>
           open <strong>{device.verification_uri}</strong> and enter code <strong>{device.user_code}</strong> to link this device.
-        </Hint>
+        </CardNote>
       )}
       {cloudUser ? (
         <>
-          <Hint>
+          <CardNote>
             signed in as {cloudUser.github_login} · {cloudUser.plan} plan. Backups are encrypted server-side with your key.
-          </Hint>
+          </CardNote>
           <Row>
             <Button variant="primary" onClick={() => void cloudBackupNow()}>back up now</Button>
             {lastBackup && <Status>backup {lastBackup.id.slice(0, 8)} · {lastBackup.size_bytes} bytes</Status>}
@@ -1345,11 +1345,11 @@ function UserSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
           {ghNote && <Status className="text-danger">{ghNote}</Status>}
         </Row>
       )}
-      <Hint>
+      <CardNote>
         {isDesktop
           ? 'Termsprawl Cloud account (sign in to back up projects). Settings live in settings.json in the config directory.'
           : 'Sign in with the same GitHub account as your desktop to sync projects between them. Cloud settings for this canvas are managed here; everything else lives on your desktop.'}
-      </Hint>
+      </CardNote>
     </>
   )
 }
@@ -1360,11 +1360,11 @@ function UpdatesSection({ ctx, isPackaged }: { ctx: SectionCtx; isPackaged: bool
   // nothing. The Updates TAB itself is already desktop-only.
   if (!isPackaged) {
     return (
-      <Hint>
+      <CardNote>
         Updates come from GitHub Releases. This build is unpackaged (dev), so the
         updater is inactive. Launch the installed AppImage or .deb to manage
         updates.
-      </Hint>
+      </CardNote>
     )
   }
   return (
@@ -1392,7 +1392,7 @@ function UpdatesSection({ ctx, isPackaged }: { ctx: SectionCtx; isPackaged: bool
 function AgentsSection(): React.JSX.Element {
   return (
     <>
-      <Hint>Primary agents: codex and grok. Open them from the canvas context menu (Open agent ▸). Claude stays registered but is optional.</Hint>
+      <CardNote>Primary agents: codex and grok. Open them from the canvas context menu (Open agent ▸). Claude stays registered but is optional.</CardNote>
       {PRIMARY_AGENTS.map((id) => {
         const config = AGENT_REGISTRY[id]
         if (!config) return null
@@ -1424,8 +1424,8 @@ function AccountsSection(props: {
   const { settings, permissionSupported, addAccount, deleteAccount, setActive, setPermissionMode, loginInto, newLabel, setNewLabel, confirmDelete, setConfirmDelete } = props
   return (
     <>
-      <Hint>Each account is its own local agent config directory. Pick the active account for new agents; none means the default. Inherited API keys are stripped from its spawns.</Hint>
-      {settings.accounts.length === 0 && <Hint>no accounts yet — add one below.</Hint>}
+      <CardNote>Each account is its own local agent config directory. Pick the active account for new agents; none means the default. Inherited API keys are stripped from its spawns.</CardNote>
+      {settings.accounts.length === 0 && <CardNote>no accounts yet — add one below.</CardNote>}
       {settings.accounts.map((acc) => (
         <Row key={acc.id}>
           <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
@@ -1491,7 +1491,7 @@ function A2ASection(props: {
   } = props
   return (
     <>
-      <Hint>Agent-to-agent peers you can route tasks to (canvas right-click → “A2A send to peer”). Peers speak the Google A2A protocol (JSON-RPC over HTTP).</Hint>
+      <CardNote>Agent-to-agent peers you can route tasks to (canvas right-click → “A2A send to peer”). Peers speak the Google A2A protocol (JSON-RPC over HTTP).</CardNote>
       {peers.map((p) => (
         <Row key={p.id}>
           <span className="text-ink">{p.label}</span>
@@ -1517,7 +1517,7 @@ function ApiSection(props: { providers: ApiProviderConfig[]; providerName: strin
   const { providers, providerName, providerBaseUrl, setProviderName, setProviderBaseUrl, addProvider, removeProvider } = props
   return (
     <>
-      <Hint>OSS/provider API endpoints for the chat and agent drivers. API keys are NOT stored here — add a keychain-backed field later if needed.</Hint>
+      <CardNote>OSS/provider API endpoints for the chat and agent drivers. API keys are NOT stored here — add a keychain-backed field later if needed.</CardNote>
       {providers.map((p) => (
         <Row key={p.id}>
           <span className="text-ink">{p.name}</span>
@@ -1561,12 +1561,12 @@ function TelegramSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
 
   return (
     <>
-      <Hint>
+      <CardNote>
         Control termsprawl from your phone. Pair by messaging the bot with /start from
         the phone; the first chat becomes the owner unless you list chats below. The bot
         token is stored on this machine only — never committed to the repo (the
         TERMSPRAWL_TELEGRAM_TOKEN env var overrides it).
-      </Hint>
+      </CardNote>
 
       <PrefRow
         label="Enable Telegram bot"
@@ -1760,12 +1760,12 @@ function RelaySection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
 
   return (
     <>
-      <Hint>
+      <CardNote>
         Pair two termsprawl instances through the E2E-encrypted relay. A host mints a
         single-use invite once the peers are paired; the other instance joins with that
         code as a client. Traffic is end-to-end encrypted — the relay only routes
         ciphertext. Both sides confirm the peer&apos;s key fingerprint before trusting it.
-      </Hint>
+      </CardNote>
 
       <PrefRow
         label="Relay URL"
@@ -1816,7 +1816,7 @@ function RelaySection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
               {mint.busy ? 'Generating…' : 'Generate invite'}
             </Button>
           </PrefRow>
-          {mint.error && <Hint className="text-danger">{mint.error}</Hint>}
+          {mint.error && <CardNote className="text-danger">{mint.error}</CardNote>}
           {mint.code && (
             <>
               <div className="flex items-center justify-between gap-3 rounded-lg border border-edge bg-raised px-3 py-2 font-mono text-[15px] tracking-[0.08em] text-ink">
@@ -1825,7 +1825,7 @@ function RelaySection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
                   {copied ? 'Copied' : 'Copy'}
                 </Button>
               </div>
-              <Hint>Single-use, expires in 7 days. Share it out of band with the peer.</Hint>
+              <CardNote>Single-use, expires in 7 days. Share it out of band with the peer.</CardNote>
             </>
           )}
         </>
@@ -2026,11 +2026,11 @@ function ChatSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
 
   return (
     <>
-      <Hint>
+      <CardNote>
         Chat nodes talk to an OpenAI-compatible or Anthropic endpoint. Add a provider under
         API providers, then paste its key below. Keys are stored on this machine only —
         never committed (the {providers.length > 0 ? envName(providers[0].id) : 'TERMSPRAWL_PROVIDER_KEY_<ID>'} env var overrides a stored key).
-      </Hint>
+      </CardNote>
 
       <PrefRow
         label="Default provider"
@@ -2064,7 +2064,7 @@ function ChatSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
       </PrefRow>
 
       {providers.length === 0 ? (
-        <Hint>No providers configured yet — add one under “API providers” above.</Hint>
+        <CardNote>No providers configured yet — add one under “API providers” above.</CardNote>
       ) : (
         providers.map((p) => {
           const stored = keyFor(p.id)

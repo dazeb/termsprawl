@@ -58,6 +58,11 @@ export function pluginEnabledStates(configPath: string): Map<string, boolean> {
   return out
 }
 
+/** Directories that never hold a skill or an agent definition. Plugin caches
+ * ship assets, tests and fixture trees; walking them was most of the scan cost
+ * for zero information. */
+const SKIP_DIRS = new Set(['node_modules', 'assets', 'tests', 'dist', 'build', 'coverage', '.git'])
+
 /** Count files matching `want` under `dir`, stopping at `depth` levels. */
 function countUpTo(dir: string, want: (name: string) => boolean, depth: number): number {
   if (depth < 0) return 0
@@ -80,6 +85,7 @@ function countUpTo(dir: string, want: (name: string) => boolean, depth: number):
       if (want(name)) total += 1
       continue
     }
+    if (SKIP_DIRS.has(name)) continue
     total += countUpTo(path, want, depth - 1)
   }
   return total

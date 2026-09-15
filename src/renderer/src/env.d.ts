@@ -65,11 +65,11 @@ declare global {
         deleteAccount(id: string): Promise<AppSettings>
         permissionSupported(): Promise<boolean>
         loginCommand(): Promise<string>
-        capabilities(): Promise<SettingsCapabilities>
+        capabilities(options?: { refresh?: boolean }): Promise<SettingsCapabilities>
         setSkillEnabled(id: string, enabled: boolean): Promise<SettingsCapabilities>
         setPluginEnabled(id: string, enabled: boolean): Promise<SettingsCapabilities>
         reinstallHooks(agent: string): Promise<SettingsCapabilities>
-        usage(): Promise<UsageStats>
+        usage(options?: { refresh?: boolean }): Promise<UsageStats>
       }
       updates: {
         check(): Promise<UpdateStatus>

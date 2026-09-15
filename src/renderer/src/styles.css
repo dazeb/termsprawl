@@ -20,7 +20,7 @@
    * the whole app. Shadows stay dark in both themes (normal practice). */
   --surface: #101010; /* modals, menus, toasts, help pops, node bodies */
   --surface-raised: #1a1a1a; /* hover elevation on surfaces */
-  --scrim: rgba(0, 0, 0, 0.6); /* modal backdrops */
+  --scrim: rgba(0, 0, 0, 0.74); /* modal backdrops — no blur, so the scrim carries the separation */
   --bubble: rgba(255, 255, 255, 0.04); /* chat assistant bubbles */
   --bubble-border: rgba(255, 255, 255, 0.07);
 }
@@ -36,7 +36,7 @@ html[data-theme='light'] {
   --border: #dcdcd8;
   --surface: #ffffff;
   --surface-raised: #efefec;
-  --scrim: rgba(0, 0, 0, 0.32);
+  --scrim: rgba(0, 0, 0, 0.46);
   --bubble: rgba(0, 0, 0, 0.04);
   --bubble-border: rgba(0, 0, 0, 0.1);
 }
@@ -711,8 +711,12 @@ body {
   align-items: center;
   justify-content: center;
   background: var(--scrim);
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
+  /* No backdrop-filter on purpose. A full-screen blur re-composites everything
+     behind the scrim on every repaint, and behind this scrim sit live terminals
+     and browser guests that repaint constantly — so the settings sheet and the
+     confirm dialogs made the whole app crawl while open. The scrim alone
+     separates the layers (it is darker now to compensate) without asking the
+     compositor to re-blur the canvas every frame. */
 }
 
 .settings-modal-close {

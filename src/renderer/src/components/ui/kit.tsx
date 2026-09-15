@@ -45,7 +45,12 @@ export function Section({
           )}
         </div>
       )}
-      <div className="overflow-hidden rounded-[10px] border border-edge bg-panel px-4 [&>*:last-child]:border-b-0">
+      {/* The card carries NO horizontal padding: rows bring their own (`px-4`),
+          so every hairline divider runs the full width of the card and meets
+          its border exactly. With padding on the card the dividers stopped
+          16px short on each side, which read as an offset outline against the
+          card's own edge. */}
+      <div className="overflow-hidden rounded-[10px] border border-edge bg-panel [&>*:last-child]:border-b-0">
         {children}
       </div>
     </section>
@@ -67,7 +72,7 @@ export function PrefRow({
   className?: string
 }): React.JSX.Element {
   return (
-    <div className={`flex items-center justify-between gap-8 border-b border-edge py-3 ${className}`}>
+    <div className={`flex items-center justify-between gap-8 border-b border-edge px-4 py-3 ${className}`}>
       <div className="min-w-0 max-w-[52ch]">
         <div className="text-[13px] font-medium leading-tight text-ink">{label}</div>
         {sub && (
@@ -81,12 +86,31 @@ export function PrefRow({
 
 /** Generic list row (accounts, A2A peers, API providers, cloud rows). */
 export function Row({ children }: { children: ReactNode }): React.JSX.Element {
-  return <div className="flex items-center gap-2 border-b border-edge py-2 text-[13px]">{children}</div>
+  return <div className="flex items-center gap-2 border-b border-edge px-4 py-2 text-[13px]">{children}</div>
 }
 
 /** New-item form row (add account / peer / provider). */
 export function FieldRow({ children }: { children: ReactNode }): React.JSX.Element {
-  return <div className="mt-3 flex gap-2">{children}</div>
+  return <div className="flex gap-2 px-4 pb-4 pt-1">{children}</div>
+}
+
+/** Intro copy at the top of a card: a full-bleed band so it lines up with the
+ * row dividers, unlike a free-standing `Hint` (which is for nested cards and
+ * page-level footnotes). */
+export function CardNote({
+  children,
+  className = ''
+}: {
+  children: ReactNode
+  className?: string
+}): React.JSX.Element {
+  return (
+    <p
+      className={`border-b border-edge px-4 py-3 text-[11px] leading-snug text-mute [text-wrap:pretty] ${className}`}
+    >
+      {children}
+    </p>
+  )
 }
 
 export type ButtonVariant = 'neutral' | 'primary' | 'danger'

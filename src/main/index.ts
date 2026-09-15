@@ -5,7 +5,7 @@ import { homedir } from 'node:os'
 import { dirname, isAbsolute, join, posix } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { IPC } from '../shared/ipc'
-import type { ContextLinkListResult, ContextLinkWriteResult, DiffBase, DiffInfoResult, ProjectRemote, ProjectSettings, PtyCreateRequest, PtyExitInfo, SerializedNode, AppSettings, SettingsCapabilities, GitPanelSnapshot, GitResult, GitTarget, CommitMessageResult, Announcement, FileReadResult, FileWriteResult, DirListResult } from '../shared/types'
+import type { ContextLinkListResult, ContextLinkWriteResult, DiffBase, DiffInfoResult, ProjectRemote, ProjectSettings, PtyCreateRequest, PtyExitInfo, SerializedNode, AppSettings, SettingsCapabilities, UsageStats, GitPanelSnapshot, GitResult, GitTarget, CommitMessageResult, Announcement, FileReadResult, FileWriteResult, DirListResult } from '../shared/types'
 import type { CorePlatform } from '../core/platform'
 import { diffInfo, findRepoRoot, currentBranch, remoteUrl, syncState, gitStatus, listBranches, recentCommits, ghAuthed, stageChanges, unstageChanges, discardChanges, commitChanges, createBranch, checkoutBranch, push as gitPush, pull as gitPull, publish as gitPublish, listWorktrees, addWorktree, removeWorktree } from '../core/git-service'
 import {
@@ -1061,10 +1061,19 @@ function registerFileProtocol(): void {
   })
 }
 
-function registerUpdateIpc(): void {
+function registerUpdateIpc(): { warmCapabilityCache: () => void } {
   // Capability discovery is read-only: skills/hooks/commands/MCP all live in
   // the agent CLIs' own config trees, and the panel reports what is there.
-  const capabilitySnapshot = (): SettingsCapabilities => ({
+  //
+  // The scan is filesystem-bound and runs on the main process — the same
+  // process that pumps every terminal's output — so it is cached and only
+  // re-run when the panel asks for a refresh (its Refresh/Repair buttons) or a
+  // mutation invalidates it. Without this, every capability page mount re-walked
+  // the plugin cache and read every SKILL.md again, stalling all PTY I/O.
+  const CAPABILITY_TTL_MS = 30_000
+  let capabilityCache: { at: number; value: SettingsCapabilities } | null = null
+
+  const scanCapabilities = (): SettingsCapabilities => ({
     supported: true,
     skills: discoverSkills(skillRoots(homedir())),
     // The installers' own path helpers are the single source of truth for
@@ -1078,18 +1087,29 @@ function registerUpdateIpc(): void {
     plugins: discoverPlugins(pluginRoots(homedir()), codexConfigPath(homedir())),
     subagents: discoverSubagents(agentRoots(homedir())),
   })
-  ipcMain.handle(IPC.settingsCapabilitiesGet, capabilitySnapshot)
+  const capabilitySnapshot = (force = false): SettingsCapabilities => {
+    const now = Date.now()
+    if (!force && capabilityCache && now - capabilityCache.at < CAPABILITY_TTL_MS) {
+      return capabilityCache.value
+    }
+    const value = scanCapabilities()
+    capabilityCache = { at: now, value }
+    return value
+  }
+  ipcMain.handle(IPC.settingsCapabilitiesGet, (_event, options?: { refresh?: boolean }) =>
+    capabilitySnapshot(options?.refresh === true)
+  )
   // The one write in this surface, and it is a rename: see settings-skills.ts.
   ipcMain.handle(IPC.settingsSetSkillEnabled, (_event, id: string, enabled: boolean) => {
     setSkillEnabled(skillRoots(homedir()), String(id), Boolean(enabled))
-    return capabilitySnapshot()
+    return capabilitySnapshot(true)
   })
   // Plugin enable/disable writes one key in the CLI's own plugin table; the
   // id carries the `<name>@<marketplace>` key the CLI itself uses.
   ipcMain.handle(IPC.settingsSetPluginEnabled, (_event, id: string, enabled: boolean) => {
     const key = String(id).replace(/^[a-z]+:/, '')
     setPluginEnabled(codexConfigPath(homedir()), key, Boolean(enabled))
-    return capabilitySnapshot()
+    return capabilitySnapshot(true)
   })
   // Hook repair: re-run the installer we already run at boot. Idempotent by
   // construction (merge-only writers), so a second press is harmless.
@@ -1098,24 +1118,35 @@ function registerUpdateIpc(): void {
     if (agent === 'claude') installClaudeHooks(claudeSettingsPath(home), hookServer.url, hookServer.secret)
     else if (agent === 'codex') installCodexHooks(codexConfigPath(home), hookServer.url, hookServer.secret)
     else throw new Error(`unknown agent: ${agent}`)
-    return capabilitySnapshot()
+    return capabilitySnapshot(true)
   })
   // Usage needs no collection pass of its own: chat nodes already save token
   // counts and timestamps per assistant reply in the workspace file, so this
-  // totals what is on disk (all projects, saved revisions).
-  ipcMain.handle(IPC.settingsUsageGet, () => {
+  // totals what is on disk (all projects, saved revisions). Same caching rule
+  // as capabilities: `workspaceStore.snapshot()` reads every project file, and
+  // paying that on every page visit blocks the terminals for no new information.
+  const USAGE_TTL_MS = 30_000
+  let usageCache: { at: number; value: UsageStats } | null = null
+  ipcMain.handle(IPC.settingsUsageGet, (_event, options?: { refresh?: boolean }) => {
+    const now = Date.now()
+    if (options?.refresh !== true && usageCache && now - usageCache.at < USAGE_TTL_MS) {
+      return usageCache.value
+    }
     const { projects } = workspaceStore.snapshot()
     const overrides = appSettings.current.chat?.priceOverrides
     const samples = Object.values(projects).flatMap((nodes) =>
       chatUsageSamples(nodes, (model, usage) => costOf(usage, model, overrides).usd)
     )
     const stats = aggregateUsage(samples)
-    if (stats.hasData) return stats
-    return {
-      ...stats,
-      supported: true,
-      reason: 'No chat replies have reported tokens yet. Run a chat node and the totals appear here.'
-    }
+    const value: UsageStats = stats.hasData
+      ? stats
+      : {
+          ...stats,
+          supported: true,
+          reason: 'No chat replies have reported tokens yet. Run a chat node and the totals appear here.'
+        }
+    usageCache = { at: now, value }
+    return value
   })
   ipcMain.handle(IPC.appSettingsGet, () => appSettings.current)
   ipcMain.handle(IPC.appSettingsSet, (_event, patch: Partial<AppSettings>) => {
@@ -1153,6 +1184,19 @@ function registerUpdateIpc(): void {
     updateBridge.install()
   })
   ipcMain.handle(IPC.updateDismiss, () => updateBridge.dismiss())
+
+  // Exposed so boot can warm the cache on idle: the first open of a capability
+  // page then reads a memoized snapshot instead of walking the agent config
+  // trees on the main thread.
+  return {
+    warmCapabilityCache: () => {
+      try {
+        capabilitySnapshot(true)
+      } catch (error) {
+        console.error('[settings] capability warm-up failed:', error)
+      }
+    }
+  }
 }
 
 // Phase 12.2 — announcements: fetch the latest GitHub release notes (packaged
@@ -1640,7 +1684,12 @@ void app.whenReady().then(async () => {
   registerContextLinkIpc()
   registerGitIpc()
   registerFileProtocol()
-  registerUpdateIpc()
+  const updateIpc = registerUpdateIpc()
+  // Warm the settings capability cache once the window is up (idle time, not
+  // on the boot path): the scan is filesystem-bound and runs synchronously on
+  // the main process, so doing it here keeps the first open of Skills/Plugins/…
+  // from stalling every live terminal.
+  setTimeout(() => updateIpc.warmCapabilityCache(), 2500)
   registerAnnouncementIpc()
   registerCloudIpc()
   registerBrowserIpc()

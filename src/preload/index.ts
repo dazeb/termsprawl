@@ -78,14 +78,16 @@ const api = {
       ipcRenderer.invoke(IPC.accountDelete, id),
     permissionSupported: (): Promise<boolean> => ipcRenderer.invoke(IPC.permissionProbe),
     loginCommand: (): Promise<string> => ipcRenderer.invoke(IPC.loginCommand),
-    capabilities: (): Promise<SettingsCapabilities> => ipcRenderer.invoke(IPC.settingsCapabilitiesGet),
+    capabilities: (options?: { refresh?: boolean }): Promise<SettingsCapabilities> =>
+      ipcRenderer.invoke(IPC.settingsCapabilitiesGet, options),
     setSkillEnabled: (id: string, enabled: boolean): Promise<SettingsCapabilities> =>
       ipcRenderer.invoke(IPC.settingsSetSkillEnabled, id, enabled),
     setPluginEnabled: (id: string, enabled: boolean): Promise<SettingsCapabilities> =>
       ipcRenderer.invoke(IPC.settingsSetPluginEnabled, id, enabled),
     reinstallHooks: (agent: string): Promise<SettingsCapabilities> =>
       ipcRenderer.invoke(IPC.settingsReinstallHooks, agent),
-    usage: (): Promise<UsageStats> => ipcRenderer.invoke(IPC.settingsUsageGet)
+    usage: (options?: { refresh?: boolean }): Promise<UsageStats> =>
+      ipcRenderer.invoke(IPC.settingsUsageGet, options)
   },
 
   updates: {
