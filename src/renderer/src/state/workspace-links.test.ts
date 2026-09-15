@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { NodeLink } from '@shared/types'
 import {
   deserializeLinks,
+  patchLink,
+  reconcileLinkEdges,
   linksFromSerialized,
   removeLinksForNode,
   serializeLinks
@@ -106,5 +108,34 @@ describe('removeLinksForNode', () => {
     ]
     const out = removeLinksForNode(links, 'n1')
     expect(out.map((l) => l.id)).toEqual(['c'])
+  })
+})
+
+describe('live link edits', () => {
+  it('preserves labels on unrelated patches and clears only explicitly', () => {
+    const original = link({ label: 'release notes' })
+    expect(patchLink(original, { auto: true }).label).toBe('release notes')
+    expect(patchLink(original, { config: { ...original.config } }).label).toBe('release notes')
+    expect(patchLink(original, { label: undefined })).not.toHaveProperty('label')
+    expect(original.label).toBe('release notes')
+  })
+
+  it('keeps whitespace while composing a multiword label, normalizing only on save', () => {
+    const draft = patchLink(link(), { label: 'release ' })
+    expect(draft.label).toBe('release ')
+    expect(patchLink(draft, { label: `${draft.label}notes` }).label).toBe('release notes')
+    expect(serializeLinks([draft])[0].label).toBe('release')
+  })
+
+  it('refreshes selected edge data and removes deleted/cascaded edges', () => {
+    const original = link({ label: 'old' })
+    const other = link({ id: 'other', source: 'n3', target: 'n4' })
+    const previous = linksFromSerialized([original, other]).map((edge) => ({ ...edge, selected: true }))
+    const updated = patchLink(original, { auto: true, label: 'new' })
+    const refreshed = reconcileLinkEdges([updated, other], previous)
+    expect(refreshed[0]).toMatchObject({ selected: true, data: { auto: true, label: 'new' } })
+    expect(reconcileLinkEdges(removeLinksForNode([updated, other], 'n1'), refreshed))
+      .toEqual([expect.objectContaining({ id: 'other', selected: true })])
+    expect(reconcileLinkEdges([], refreshed)).toEqual([])
   })
 })

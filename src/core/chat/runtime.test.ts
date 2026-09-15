@@ -57,6 +57,18 @@ describe('createChatRuntime', () => {
     expect(rt.isBusy('n1')).toBe(false)
   })
 
+  it('broadcasts completion only after all tool iterations finish', async () => {
+    const driver = fakeDriver([
+      [{ kind: 'toolCall', call: { id: 'c1', name: 'lookup', argsJson: '{}', status: 'running' } }, { kind: 'done', reason: 'end_turn' }],
+      [{ kind: 'delta', text: 'final answer' }, { kind: 'done', reason: 'end_turn' }]
+    ])
+    const deps = withDriver(driver)
+    deps.toolsFor = () => [{ name: 'lookup', description: 'Lookup', schema: {}, needsApproval: false, run: async () => 'result' }]
+    const rt = createChatRuntime(deps)
+    await rt.send({ nodeId: 'tool-turn', messages: [userMsg] })
+    expect(deps.events.map(({ event }) => event.kind)).toEqual(['toolCall', 'toolResult', 'delta', 'done'])
+  })
+
   it('rejects a second concurrent send for the same node', async () => {
     let release!: () => void
     const gate = new Promise<void>((r) => (release = r))

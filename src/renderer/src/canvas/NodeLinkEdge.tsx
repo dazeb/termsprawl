@@ -35,7 +35,7 @@ export function NodeLinkEdge(props: EdgeProps): React.JSX.Element {
       <EdgeLabelRenderer>
         {name && (
           <div
-            className={`nodelink-label-dom${selected ? ' selected' : ''}`}
+            className={`nodelink-label-dom nodrag nopan${selected ? ' selected' : ''}`}
             style={{
               transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`
             }}

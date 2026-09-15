@@ -18,7 +18,7 @@ type ChatMsg = ChatNodeData['messages'][number]
 // into node data when a turn completes, so it persists with the project file.
 // All provider work happens in main via window.termsprawl.chat.
 export function ChatNode({ id, data, selected }: NodeProps<ChatNodeData>): React.JSX.Element {
-  const { updateNodeData, closeNode } = useCanvas()
+  const { updateNodeData, persistNodeData, closeNode } = useCanvas()
   const [messages, setMessages] = useState<ChatMsg[]>(data.messages ?? [])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
@@ -117,7 +117,9 @@ export function ChatNode({ id, data, selected }: NodeProps<ChatNodeData>): React
             next = [...next, { id: ev.messageId, role: ev.role, content: ev.content, ts: Date.now() }]
             commitMessages(next, false)
             // The conversation changed — schedule auto links sourcing this node.
-            void window.termsprawl.links.markDirty(id).catch(() => {})
+            void persistNodeData(id, { messages: next })
+              .then(() => window.termsprawl.links.markDirty(id))
+              .catch(() => {})
           }
         } else if (ev.kind === 'done') {
           const stopped = ev.reason === 'stopped'
@@ -129,6 +131,9 @@ export function ChatNode({ id, data, selected }: NodeProps<ChatNodeData>): React
           setBusy(false)
           // persist the completed transcript (one undo record per turn)
           commitMessages(next, true)
+          void persistNodeData(id, { messages: next })
+            .then(() => window.termsprawl.links.markDirty(id))
+            .catch(() => {})
         }
         return next
       })

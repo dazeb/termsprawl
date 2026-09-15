@@ -51,7 +51,7 @@ import { nextSelection } from '../state/canvas-knav'
 import { useProjects } from '../state/projects'
 import { useCanvasRequests } from '../state/canvas-requests'
 import { useBrowserHome } from '../state/browser-home'
-import { deserializeLinks, linksFromSerialized, removeLinksForNode, serializeLinks } from '../state/workspace-links'
+import { deserializeLinks, patchLink, reconcileLinkEdges, removeLinksForNode, serializeLinks } from '../state/workspace-links'
 import { NodeLinkEdge } from './NodeLinkEdge'
 import { LinkInspector } from '../components/LinkInspector'
 import type { SprawlNodeData, TerminalNodeData } from '../state/workspace'
@@ -92,6 +92,7 @@ const edgeTypes = { nodelink: NodeLinkEdge } as const
 // snapshots without polluting serialized node data with callbacks.
 interface CanvasApi {
   updateNodeData(id: string, patch: Partial<SprawlNodeData>, record?: boolean): void
+  persistNodeData(id: string, patch: Partial<SprawlNodeData>): Promise<void>
   commit(): void
   /** Remove a node; groups ungroup their children instead of deleting them. */
   closeNode(id: string): void
@@ -131,7 +132,17 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
   const [edges, setEdges] = useState<Edge[]>([])
   // Links are the persisted reality behind the edges (Phase 18): the project
   // file stores NodeLink records; the `edges` state mirrors them for React Flow.
+  const [links, setLinks] = useState<NodeLink[]>([])
   const linksRef = useRef<NodeLink[]>([])
+  const projectGeneration = useRef(0)
+  const busyLinksRef = useRef(new Set<string>())
+  const [linkRunBusy, setLinkRunBusy] = useState<Set<string>>(new Set())
+  const [inspectedLinkId, setInspectedLinkId] = useState<string | null>(null)
+  const replaceLinks = useCallback((next: NodeLink[]): void => {
+    linksRef.current = next
+    setLinks(next)
+    setEdges((previous) => reconcileLinkEdges(next, previous))
+  }, [])
   const [menu, setMenu] = useState<{ x: number; y: number; nodeId?: string } | null>(null)
   const [agentMenuOpen, setAgentMenuOpen] = useState(false)
   const [linkMenuOpen, setLinkMenuOpen] = useState(false)
@@ -188,28 +199,38 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
   // Load the active project's serialized nodes into React Flow.
   // keyed on activeProjectId — switching projects swaps the canvas.
   useEffect(() => {
+    const generation = ++projectGeneration.current
+    let cancelled = false
     loadingRef.current = true
+    setInspectedLinkId(null)
+    busyLinksRef.current = new Set()
+    setLinkRunBusy(new Set())
     const serialized = activeProjectId ? nodeCache[activeProjectId] ?? [] : []
     const initial = deserializeNodes(serialized)
     setNodes(activeProjectId ? (initial.length > 0 ? initial : [createTerminalNode(cwd)]) : [])
     setEdges([])
-    linksRef.current = []
+    replaceLinks([])
     // Links load over IPC (project file) and rebuild the edges once they land.
     if (activeProjectId) {
       void window.termsprawl.links
         .list(activeProjectId)
         .then((links) => {
-          linksRef.current = deserializeLinks(links)
-          setEdges(linksFromSerialized(linksRef.current))
+          if (cancelled || generation !== projectGeneration.current || activeProjectIdRef.current !== activeProjectId) return
+          replaceLinks(deserializeLinks(links))
         })
         .catch(() => {
           // No link support (old main) — canvas stays linkless, never breaks.
         })
     }
     // let React Flow settle before clearing the loading flag
-    setTimeout(() => {
-      loadingRef.current = false
+    const timer = setTimeout(() => {
+      if (!cancelled) loadingRef.current = false
     }, 0)
+    return () => {
+      cancelled = true
+      projectGeneration.current += 1
+      clearTimeout(timer)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProjectId])
 
@@ -229,9 +250,9 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
 
   /** Delete a link by id (edge delete key, edge context menu, inspector). */
   const deleteLink = useCallback((linkId: string): void => {
-    linksRef.current = linksRef.current.filter((l) => l.id !== linkId)
+    replaceLinks(linksRef.current.filter((l) => l.id !== linkId))
     if (activeProjectIdRef.current) persistLinks(activeProjectIdRef.current, linksRef.current)
-  }, [persistLinks])
+  }, [persistLinks, replaceLinks])
 
   /** Node delete cascade: drop every link touching the removed nodes. */
   const cascadeLinksForNodes = useCallback((removedIds: string[]): void => {
@@ -240,11 +261,10 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
     let after = before
     for (const id of removedIds) after = removeLinksForNode(after, id)
     if (after.length !== before.length) {
-      linksRef.current = after
-      setEdges(linksFromSerialized(after))
+      replaceLinks(after)
       if (activeProjectIdRef.current) persistLinks(activeProjectIdRef.current, after)
     }
-  }, [persistLinks])
+  }, [persistLinks, replaceLinks])
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -291,10 +311,12 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
       )
       if (terminalIds.length === 0) {
         setNodes((current) => applyChanges(current))
+        cascadeLinksForNodes([...permanentRemovalIds(nodes)])
         return
       }
 
       const originProjectId = activeProjectId
+      const generation = projectGeneration.current
       setCleanupError(null)
       if (!originProjectId) return
       void Promise.allSettled(
@@ -308,12 +330,15 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
           const cleanupPending = results.flatMap((result) =>
             result.status === 'fulfilled' ? result.value.cleanupPendingIds : []
           )
-          invalidate(committed)
           for (const id of committed) dropCachedNode(originProjectId, id)
+          if (generation !== projectGeneration.current || activeProjectIdRef.current !== originProjectId) return
+          invalidate(committed)
           if (useProjects.getState().activeProjectId === originProjectId) {
             setNodes((current) => applyChanges(current, committed))
           }
-          cascadeLinksForNodes([...committed])
+          cascadeLinksForNodes([...permanentRemovalIds(nodes)].filter((id) =>
+            nodes.find((node) => node.id === id)?.type !== 'terminal' || committed.has(id)
+          ))
           if (failed.length > 0) {
             setCleanupError(`Could not commit terminal close: ${failed.join(', ')}`)
           } else if (cleanupPending.length > 0) {
@@ -321,6 +346,7 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
           }
         })
         .catch((error: unknown) => {
+          if (generation !== projectGeneration.current || activeProjectIdRef.current !== originProjectId) return
           setCleanupError(`Could not close terminal: ${error instanceof Error ? error.message : String(error)}`)
         })
     },
@@ -338,10 +364,9 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
       // One link per ordered pair; re-connecting updates the existing link.
       const existing = linksRef.current.find((l) => l.source === connection.source && l.target === connection.target)
       if (existing) {
-        existing.kind = kinds[0]
-        existing.config = linkDefaultConfig(kinds[0])
-        existing.auto = false
-        setEdges(linksFromSerialized([...linksRef.current]))
+        replaceLinks(linksRef.current.map((link) => link.id === existing.id
+          ? patchLink(link, { kind: kinds[0], config: linkDefaultConfig(kinds[0]), auto: false })
+          : link))
         if (activeProjectIdRef.current) persistLinks(activeProjectIdRef.current, [...linksRef.current])
         return
       }
@@ -354,11 +379,10 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
         config: linkDefaultConfig(kinds[0]),
         createdAt: Date.now()
       }
-      linksRef.current = [...linksRef.current, link]
-      setEdges((eds) => [...eds, ...linksFromSerialized([link])])
+      replaceLinks([...linksRef.current, link])
       if (activeProjectIdRef.current) persistLinks(activeProjectIdRef.current, linksRef.current)
     },
-    [persistLinks]
+    [persistLinks, replaceLinks]
   )
 
   const onEdgesChange = useCallback(
@@ -400,6 +424,15 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
     },
     [push]
   )
+  const persistNodeData = useCallback(async (id: string, patch: Partial<SprawlNodeData>): Promise<void> => {
+    const projectId = activeProjectIdRef.current
+    if (!projectId || !latestNodesRef.current.some((node) => node.id === id)) return
+    const next = latestNodesRef.current.map((node) => node.id === id
+      ? { ...node, data: { ...node.data, ...patch } as SprawlNodeData } : node)
+    latestNodesRef.current = next
+    setNodes(next)
+    await saveProjectNodes(projectId, serializeNodes(next))
+  }, [saveProjectNodes])
   const commit = useCallback(() => push(), [push])
   const closeNode = useCallback(
     (id: string) => {
@@ -431,12 +464,14 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
       // Explicit node close is permanent. Component unmount alone is not: it
       // also happens while switching projects, where the tmux session must live.
       const originProjectId = activeProjectId
+      const generation = projectGeneration.current
       setCleanupError(null)
       if (!originProjectId) return
       void window.termsprawl.pty.closeNode(originProjectId, id)
         .then((result) => {
-          invalidate([id])
           dropCachedNode(originProjectId, id)
+          if (generation !== projectGeneration.current || activeProjectIdRef.current !== originProjectId) return
+          invalidate([id])
           if (useProjects.getState().activeProjectId === originProjectId) {
             setNodes((current) => removeNode(current, id))
           }
@@ -446,14 +481,15 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
           }
         })
         .catch((error: unknown) => {
+          if (generation !== projectGeneration.current || activeProjectIdRef.current !== originProjectId) return
           setCleanupError(`Could not close terminal: ${error instanceof Error ? error.message : String(error)}`)
         })
     },
     [activeProjectId, dropCachedNode, invalidate, push, cascadeLinksForNodes]
   )
   const canvasApi = useMemo(
-    () => ({ updateNodeData, commit, closeNode }),
-    [updateNodeData, commit, closeNode]
+    () => ({ updateNodeData, persistNodeData, commit, closeNode }),
+    [updateNodeData, persistNodeData, commit, closeNode]
   )
 
   // Append a node with a z-index above everything else so it renders on top.
@@ -610,7 +646,6 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
 
   // --- Link inspector (Phase 18) ---------------------------------------------
   // Selecting an edge opens the inspector; Escape / pane click closes it.
-  const [inspectedLinkId, setInspectedLinkId] = useState<string | null>(null)
   const onEdgeClick = useCallback((_event: React.MouseEvent, edge: Edge) => {
     setInspectedLinkId(edge.id)
   }, [])
@@ -625,44 +660,36 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
   }, [inspectedLinkId])
   const updateLink = useCallback(
     (linkId: string, patch: Partial<Pick<NodeLink, 'kind' | 'auto' | 'config' | 'label'>>): void => {
-      linksRef.current = linksRef.current.map((l) => {
-        if (l.id !== linkId) return l
-        const next: NodeLink = {
-          ...l,
-          ...(patch.kind !== undefined ? { kind: patch.kind } : {}),
-          ...(patch.auto !== undefined ? { auto: patch.auto } : {}),
-          ...(patch.config !== undefined ? { config: patch.config } : {})
-        }
-        // label: undefined is a MEANINGFUL clear (remove the name) — unlike
-        // kind/auto/config where undefined means "not in this patch". Drop
-        // the key entirely so memory matches what serializeLinks writes.
-        if (patch.label !== undefined) {
-          next.label = patch.label
-        } else if ('label' in next) {
-          delete next.label
-        }
-        return next
-      })
-      setEdges(linksFromSerialized(linksRef.current))
+      replaceLinks(linksRef.current.map((link) => link.id === linkId ? patchLink(link, patch) : link))
       if (activeProjectIdRef.current) persistLinks(activeProjectIdRef.current, linksRef.current)
     },
-    [persistLinks]
+    [persistLinks, replaceLinks]
   )
-  /** Re-read the latest link record after a run (lastRun status for the UI). */
-  const refreshLinkAfterRun = useCallback(
-    (linkId: string, result: { ok: boolean; summary: string }): void => {
-      linksRef.current = linksRef.current.map((l) =>
-        l.id === linkId ? { ...l, lastRun: { at: Date.now(), ok: result.ok, summary: result.summary } } : l
-      )
-      setEdges(linksFromSerialized(linksRef.current))
-    },
-    []
-  )
-  const [linkRunBusy, setLinkRunBusy] = useState<string | null>(null)
+  const runLink = useCallback((linkId: string): void => {
+    if (busyLinksRef.current.has(linkId)) return
+    const generation = projectGeneration.current
+    const projectId = activeProjectIdRef.current
+    busyLinksRef.current.add(linkId)
+    setLinkRunBusy(new Set(busyLinksRef.current))
+    const isCurrent = (): boolean => generation === projectGeneration.current && projectId === activeProjectIdRef.current
+    const finish = (result: { ok: boolean; summary: string }): void => {
+      if (!isCurrent()) return
+      replaceLinks(linksRef.current.map((link) => link.id === linkId
+        ? { ...link, lastRun: { at: Date.now(), ...result } } : link))
+    }
+    void window.termsprawl.links.run(linkId)
+      .then(finish)
+      .catch((error: unknown) => finish({ ok: false, summary: error instanceof Error ? error.message : String(error) }))
+      .finally(() => {
+        if (!isCurrent()) return
+        busyLinksRef.current.delete(linkId)
+        setLinkRunBusy(new Set(busyLinksRef.current))
+      })
+  }, [replaceLinks])
   /** The inspected link + its endpoint node kinds (null when the edge vanished). */
   const inspectedLink = useMemo(() => {
     if (!inspectedLinkId) return null
-    const link = linksRef.current.find((l) => l.id === inspectedLinkId)
+    const link = links.find((l) => l.id === inspectedLinkId)
     if (!link) return null
     const source = nodes.find((n) => n.id === link.source)
     const target = nodes.find((n) => n.id === link.target)
@@ -671,7 +698,7 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
       sourceKind: source?.data.kind ?? 'terminal',
       targetKind: link.kind === 'a2a-peer' ? 'a2a-peer' : target?.data.kind ?? 'file'
     }
-  }, [inspectedLinkId, nodes])
+  }, [inspectedLinkId, nodes, links])
 
   // Group the current selection (plus the right-clicked node) under a frame.
   const groupSelection = useCallback(() => {
@@ -850,10 +877,14 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
     (peerId: string, already: boolean) => {
       if (!menu?.nodeId || !cwd) return
       const selfId = menu.nodeId
+      const generation = projectGeneration.current
+      const projectId = activeProjectIdRef.current
+      const isCurrent = (): boolean => generation === projectGeneration.current && projectId === activeProjectIdRef.current
       const action = already
         ? window.termsprawl.contextLinks.remove
         : window.termsprawl.contextLinks.add
       void action(cwd, selfId, peerId).then((res) => {
+        if (!isCurrent()) return
         if (res.ok) {
           setNodes((nds) =>
             nds.map((n) => {
@@ -873,6 +904,8 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
         } else {
           setCleanupError(`Could not ${already ? 'unlink' : 'link'}: ${res.error}`)
         }
+      }).catch((error: unknown) => {
+        if (isCurrent()) setCleanupError(`Could not update link: ${error instanceof Error ? error.message : String(error)}`)
       })
       setLinkMenuOpen(false)
     },
@@ -916,11 +949,14 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
   const sendToA2aPeer = useCallback(
     (peerId: string, peerLabel: string) => {
       if (!menu?.nodeId) return
+      const generation = projectGeneration.current
+      const projectId = activeProjectIdRef.current
+      const isCurrent = (): boolean => generation === projectGeneration.current && projectId === activeProjectIdRef.current
       setA2aSendNote(`sending to ${peerLabel}…`)
       void window.termsprawl.links
         .sendToPeer(menu.nodeId, peerId)
-        .then((res) => setA2aSendNote(`${res.ok ? '✓' : '✗'} ${res.summary}`))
-        .catch((err: unknown) => setA2aSendNote(`✗ ${err instanceof Error ? err.message : String(err)}`))
+        .then((res) => { if (isCurrent()) setA2aSendNote(res.summary) })
+        .catch((err: unknown) => { if (isCurrent()) setA2aSendNote(err instanceof Error ? err.message : String(err)) })
     },
     [menu]
   )
@@ -1225,19 +1261,13 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
 
       {inspectedLink && (
         <LinkInspector
+          key={`${activeProjectId}:${inspectedLink.link.id}`}
           link={inspectedLink.link}
           sourceKind={inspectedLink.sourceKind}
           targetKind={inspectedLink.targetKind}
-          running={linkRunBusy === inspectedLink.link.id}
+          running={linkRunBusy.has(inspectedLink.link.id)}
           onChange={(patch) => updateLink(inspectedLink.link.id, patch)}
-          onRun={() => {
-            const linkId = inspectedLink.link.id
-            setLinkRunBusy(linkId)
-            void window.termsprawl.links
-              .run(linkId)
-              .then((result) => refreshLinkAfterRun(linkId, result))
-              .finally(() => setLinkRunBusy(null))
-          }}
+          onRun={() => runLink(inspectedLink.link.id)}
           onDelete={() => {
             deleteLink(inspectedLink.link.id)
             setInspectedLinkId(null)

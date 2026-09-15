@@ -93,6 +93,27 @@ describe('linkDefaultConfig', () => {
 })
 
 describe('extractContent', () => {
+  it('selects the latest nonblank assistant output only for last-output', async () => {
+    const chat = node({ nodeKind: 'chat', data: { messages: [
+      { role: 'assistant', content: 'older' },
+      { role: 'assistant', content: 'latest' },
+      { role: 'user', content: 'follow up' },
+      { role: 'assistant', content: '  ' }
+    ] } })
+    expect(await extractContent(chat, deps(), { kind: 'a2a-peer', message: 'last-output', deliverReply: false }))
+      .toEqual({ kind: 'text', text: 'latest', title: 'chat' })
+    const full = await extractContent(chat, deps(), { kind: 'a2a-peer', message: 'full-capture', deliverReply: false })
+    expect(full).toMatchObject({ kind: 'conversation', text: 'assistant: older\n\nassistant: latest\n\nuser: follow up' })
+    expect(await extractContent(node({ nodeKind: 'chat', data: { messages: [{ role: 'user', content: 'question' }] } }), deps(), { kind: 'a2a-peer', message: 'last-output', deliverReply: false }))
+      .toEqual({ kind: 'empty' })
+  })
+
+  it('rejects remote editors before invoking the local reader', async () => {
+    let reads = 0
+    await expect(extractContent(node({ nodeKind: 'editor', data: { path: '/etc/passwd', remote: { host: 'remote' } } }), deps({ readFile: async () => { reads++; return 'local secret' } })))
+      .rejects.toThrow('remote editor sources are not supported')
+    expect(reads).toBe(0)
+  })
   it('extracts sticky text', async () => {
     const out = await extractContent(node({ data: { text: 'hello world' } }), deps())
     expect(out).toEqual({ kind: 'text', text: 'hello world', title: 'sticky' })

@@ -93,10 +93,18 @@ export function redactSettings(settings: AppSettings): {
   } & Omit<AppSettings, 'chat' | 'telegram'>
 }
 
-export function buildHandlers(platform: CorePlatform): Record<string, RpcHandler> {
+export function buildHandlers(platform: CorePlatform, lifecycle?: { onDispose(dispose: () => void): void }): Record<string, RpcHandler> {
   const version = readVersion()
   const workspaceStore = new WorkspaceStore(platform)
-  const ptyManager = new PtyManager(platform)
+  let linkService: LinkService | undefined
+  const ptyManager = new PtyManager({
+    userDataPath: platform.userDataPath,
+    broadcast(channel, payload) {
+      platform.broadcast(channel, payload)
+      const prefix = `${IPC.ptyData}:`
+      if (channel.startsWith(prefix)) linkService?.notePtyActivity(channel.slice(prefix.length))
+    }
+  })
   const userDataPath = platform.userDataPath
   mkdirSync(userDataPath, { recursive: true })
 
@@ -146,7 +154,7 @@ export function buildHandlers(platform: CorePlatform): Record<string, RpcHandler
 
   // Node links (Phase 18): same LinkService as desktop, wired to the server's
   // stores. PTY writes and pane capture ride the server's own PtyManager.
-  const linkService = new LinkService({
+  linkService = new LinkService({
     allLinks: () => workspaceStore.allLinks(),
     findLink: (id) => workspaceStore.findLink(id),
     projectOfNode: (nodeId) => {
@@ -171,20 +179,27 @@ export function buildHandlers(platform: CorePlatform): Record<string, RpcHandler
       if (!res.ok) throw new Error(res.error)
       const replyText = 'text' in res ? res.text : undefined
       if (opts.deliverReply && replyText && opts.sourceNodeId) {
-        // Server Edition: replies come back as a chat context event (the
-        // server has no live terminal paste target guarantee).
-        platform.broadcast(`chat:event:${opts.sourceNodeId}`, {
+        const source = Object.values(workspaceStore.snapshot().projects)
+          .flat().find((node) => node.id === opts.sourceNodeId)
+        const kind = source?.type ?? source?.data?.kind
+        if (kind === 'terminal') {
+          if (!ptyManager.has(opts.sourceNodeId)) throw new Error('reply target terminal is not running')
+          ptyManager.write(opts.sourceNodeId, `\x1b[200~[termsprawl] peer ${peerId} replied: ${replyText}\x1b[201~`)
+        } else if (kind === 'chat') platform.broadcast(`chat:event:${opts.sourceNodeId}`, {
           kind: 'context-added',
           messageId: `a2a-${Date.now().toString(36)}`,
           role: 'user',
           content: `[reply from peer ${peerId}]\n${replyText}`,
           sourceTitle: `peer ${peerId}`
         })
+        else throw new Error('reply target node is unavailable')
       }
       return { reply: replyText }
     },
     userDataPath
   })
+
+  lifecycle?.onDispose(() => linkService?.dispose())
 
   return {
     [IPC.appVersion]: () => version,
@@ -503,17 +518,17 @@ export function buildHandlers(platform: CorePlatform): Record<string, RpcHandler
     [IPC.linksRun]: (args) => {
       const [linkId] = args as [string]
       if (typeof linkId !== 'string') return Promise.resolve({ ok: false, summary: 'bad request' })
-      return linkService.runById(linkId)
+      return linkService!.runById(linkId)
     },
     [IPC.linksMarkDirty]: (args) => {
       const [sourceId] = args
-      if (typeof sourceId === 'string') linkService.markDirty(sourceId)
+      if (typeof sourceId === 'string') linkService!.markDirty(sourceId)
     },
     [IPC.linksUpdate]: (args) => {
       const [projectId, links] = args as [string, NodeLink[]]
       if (typeof projectId !== 'string' || !Array.isArray(links)) return 0
       const rev = workspaceStore.saveLinks(projectId, links)
-      linkService.linksChanged()
+      linkService!.linksChanged()
       return rev
     },
     [IPC.linksSendToPeer]: (args) => {
@@ -521,7 +536,7 @@ export function buildHandlers(platform: CorePlatform): Record<string, RpcHandler
       if (typeof nodeId !== 'string' || typeof peerId !== 'string') {
         return Promise.resolve({ ok: false, summary: 'bad request' })
       }
-      return linkService.sendNodeToPeer(nodeId, peerId)
+      return linkService!.sendNodeToPeer(nodeId, peerId)
     }
   }
 }

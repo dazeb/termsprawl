@@ -1,7 +1,7 @@
 // Link inspector (Phase 18): a popover shown when a node-link edge is
 // selected. Edit the link kind / options, run it now, or delete it. Styling
 // follows the HelpBadge popover family; in-app confirms only.
-import { useState } from 'react'
+import React, { useState } from 'react'
 import type { LinkConfig, LinkKind, NodeLink } from '@shared/types'
 import { linkDefaultConfig, LINK_SOURCES } from '../../../core/links/registry'
 
@@ -33,7 +33,7 @@ export function LinkInspector(props: LinkInspectorProps): React.JSX.Element {
   const lastRun = link.lastRun
 
   return (
-    <div className="link-inspector" onClick={(e) => e.stopPropagation()}>
+    <div className="link-inspector nodrag nopan" onClick={(e) => e.stopPropagation()}>
       <div className="link-inspector-head">
         <span className="link-inspector-title">link</span>
         <button className="link-inspector-close" onClick={onClose} title="Close (Esc)">
@@ -49,7 +49,7 @@ export function LinkInspector(props: LinkInspectorProps): React.JSX.Element {
           placeholder="name this link"
           maxLength={60}
           onChange={(e) => {
-            const label = e.target.value.trim().slice(0, 60)
+            const label = e.target.value.slice(0, 60)
             onChange({ label: label.length > 0 ? label : undefined })
           }}
         />
@@ -117,7 +117,7 @@ export function LinkInspector(props: LinkInspectorProps): React.JSX.Element {
 
       {link.kind === 'context-inject' && (
         <>
-          <label className="link-inspector-check">
+          {props.targetKind === 'chat' && <label className="link-inspector-check">
             <input
               type="checkbox"
               checked={link.config.kind === 'context-inject' ? link.config.wrapper : true}
@@ -127,8 +127,8 @@ export function LinkInspector(props: LinkInspectorProps): React.JSX.Element {
               }
             />
             <span>wrap with source title</span>
-          </label>
-          <label className="link-inspector-check">
+          </label>}
+          {props.targetKind === 'terminal' && <label className="link-inspector-check">
             <input
               type="checkbox"
               checked={link.config.kind === 'context-inject' ? link.config.pastePointer : true}
@@ -138,13 +138,13 @@ export function LinkInspector(props: LinkInspectorProps): React.JSX.Element {
               }
             />
             <span>paste pointer line into terminal</span>
-          </label>
+          </label>}
         </>
       )}
 
       {link.kind === 'a2a-peer' && (
         <>
-          <label className="link-inspector-field">
+          {sourceKind === 'chat' ? <label className="link-inspector-field">
             <span>payload</span>
             <select
               value={link.config.kind === 'a2a-peer' ? link.config.message : 'last-output'}
@@ -158,10 +158,10 @@ export function LinkInspector(props: LinkInspectorProps): React.JSX.Element {
                 })
               }
             >
-              <option value="last-output">last output</option>
-              <option value="full-capture">full capture</option>
+              <option value="last-output">latest assistant reply</option>
+              <option value="full-capture">full conversation</option>
             </select>
-          </label>
+          </label> : <p>Terminal sources send a bounded capture of the current pane, not a structured conversation.</p>}
           <label className="link-inspector-check">
             <input
               type="checkbox"

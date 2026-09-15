@@ -13,8 +13,11 @@ export class LinkScheduler {
   private links = new Map<string, NodeLink>()
   private timers = new Map<string, ReturnType<typeof setTimeout>>()
   private inFlight = new Set<string>()
+  private dirtyWhileInFlight = new Set<string>()
   /** Dirty sources seen before their links were known (boot race); replayed on setLinks. */
   private pendingDirty = new Set<string>()
+  /** Invalidates callbacks queued for an older version of a link. */
+  private generations = new Map<string, number>()
   private disposed = false
 
   constructor(
@@ -29,14 +32,19 @@ export class LinkScheduler {
   /** Replace the known link list (on project load / link edit). */
   setLinks(links: NodeLink[]): void {
     if (this.disposed) return
-    this.links = new Map(links.map((l) => [l.id, l]))
-    // Drop timers for links that vanished.
-    for (const id of [...this.timers.keys()]) {
-      if (!this.links.has(id)) this.clearTimer(id)
+    const next = new Map(links.map((l) => [l.id, l]))
+    for (const [id, previous] of this.links) {
+      const current = next.get(id)
+      if (!current?.auto || current.source !== previous.source) {
+        this.clearTimer(id)
+        this.dirtyWhileInFlight.delete(id)
+        this.generations.set(id, (this.generations.get(id) ?? 0) + 1)
+      }
     }
-    // Replay dirty sources that arrived before the link list did (boot race).
-    for (const sourceId of this.pendingDirty) this.markDirty(sourceId)
+    this.links = next
+    const pending = [...this.pendingDirty]
     this.pendingDirty.clear()
+    for (const sourceId of pending) this.markDirty(sourceId)
   }
 
   /** A source's content changed — schedule its auto links. */
@@ -63,10 +71,12 @@ export class LinkScheduler {
   }
 
   private schedule(linkId: string): void {
-    if (this.disposed) return
+    if (this.disposed || !this.links.get(linkId)?.auto) return
     this.clearTimer(linkId)
+    const generation = this.generations.get(linkId) ?? 0
     const timer = setTimeout(() => {
       this.timers.delete(linkId)
+      if (generation !== (this.generations.get(linkId) ?? 0)) return
       void this.run(linkId)
     }, this.gapMs)
     this.timers.set(linkId, timer)
@@ -81,11 +91,12 @@ export class LinkScheduler {
   }
 
   private async run(linkId: string): Promise<void> {
-    // One run per link at a time: a dirty during a run re-arms afterwards.
+    if (this.disposed || !this.links.get(linkId)?.auto) return
     if (this.inFlight.has(linkId)) {
-      this.schedule(linkId)
+      this.dirtyWhileInFlight.add(linkId)
       return
     }
+    const generation = this.generations.get(linkId) ?? 0
     this.inFlight.add(linkId)
     try {
       await this.onRun(linkId)
@@ -93,6 +104,9 @@ export class LinkScheduler {
       // Fail-open: a broken link must never break the scheduler.
     } finally {
       this.inFlight.delete(linkId)
+      if (this.dirtyWhileInFlight.delete(linkId) && generation === (this.generations.get(linkId) ?? 0)) {
+        this.schedule(linkId)
+      }
     }
   }
 

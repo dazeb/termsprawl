@@ -6,7 +6,7 @@
 // the desktop main process AND the Server Edition handlers both construct it.
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path'
 import { mkdir, readFile, writeFile, appendFile } from 'node:fs/promises'
-import type { NodeLink } from '@shared/types'
+import type { LinkConfig, NodeLink } from '@shared/types'
 import { runLink, stagedContextPath, type LinkEngineDeps } from './engine'
 import { extractContent } from './registry'
 import { LinkScheduler } from '../links-scheduler'
@@ -81,7 +81,7 @@ export class LinkService {
   }
 
   /** Extract content from a source node by id. */
-  private async extractByNode(nodeId: string, projectId: string) {
+  private async extractByNode(nodeId: string, projectId: string, config?: LinkConfig) {
     const nodes = this.deps.nodesOfProject(projectId)
     const node = nodes.find((n) => n.id === nodeId) as
       | { id: string; type?: string; data?: Record<string, unknown> }
@@ -98,7 +98,8 @@ export class LinkService {
             return null
           }
         }
-      }
+      },
+      config
     )
   }
 
@@ -108,7 +109,14 @@ export class LinkService {
     // Folder projects root link outputs at the project folder; cwd-less
     // (inline/remote) projects get a per-project dir under userData.
     const projectRoot = project?.cwd ?? join(this.deps.userDataPath, 'link-outputs', projectId)
-    const source = await this.extractByNode(link.source, projectId)
+    let source
+    try {
+      source = await this.extractByNode(link.source, projectId, link.config)
+    } catch (error) {
+      const summary = `link failed: ${error instanceof Error ? error.message : String(error)}`
+      this.deps.recordLinkRun(projectId, link.id, Date.now(), false, summary)
+      return { ok: false, summary }
+    }
     const nodes = this.deps.nodesOfProject(projectId)
     const targetNode = nodes.find((n) => n.id === link.target) as
       | { id: string; type?: string; data?: Record<string, unknown> }
@@ -169,9 +177,9 @@ export class LinkService {
   async sendNodeToPeer(nodeId: string, peerId: string): Promise<{ ok: boolean; summary: string }> {
     const project = this.deps.projectOfNode(nodeId)
     if (!project) return { ok: false, summary: 'node not found' }
-    const source = await this.extractByNode(nodeId, project.id)
-    if (source.kind === 'empty') return { ok: false, summary: 'source is empty' }
     try {
+      const source = await this.extractByNode(nodeId, project.id)
+      if (source.kind === 'empty') return { ok: false, summary: 'source is empty' }
       const res = await this.deps.sendToPeer(peerId, source.text, { deliverReply: false, sourceNodeId: nodeId })
       const reply = res.reply ? ` — reply: ${res.reply.slice(0, 120)}` : ''
       return { ok: true, summary: `sent to peer ${peerId}${reply}` }

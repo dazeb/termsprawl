@@ -120,7 +120,9 @@ export function createChatRuntime(deps: ChatRuntimeDeps): ChatRuntime {
         const driver = deps.driverFor ? deps.driverFor(cfg) : driverFor(cfg)
         const tools = deps.toolsFor ? deps.toolsFor(req) : []
         const result = await runChatLoop(driver, req.model ?? cfg.model ?? '', [...req.messages], tools, {
-          onEvent: (e) => deps.broadcast(req.nodeId, e),
+          onEvent: (e) => {
+            if (e.kind !== 'done') deps.broadcast(req.nodeId, e)
+          },
           requestApproval: (call) =>
             new Promise<'approve' | 'deny'>((resolve) => {
               // surface the card, then wait for chatApprove (the loop also
@@ -130,12 +132,17 @@ export function createChatRuntime(deps: ChatRuntimeDeps): ChatRuntime {
             }),
           signal: controller.signal
         })
+        deps.broadcast(req.nodeId, {
+          kind: 'done',
+          reason: controller.signal.aborted ? 'stopped' : result.stopReason === 'max_iterations' ? 'max_iterations' : 'end_turn'
+        })
         return { ok: true, stopReason: result.stopReason }
       } catch (e) {
         // A user-initiated stop is a normal outcome, not an error — any driver
         // that surfaces the abort (adapter yields done/stopped OR throws
         // AbortError) resolves the send as ok with stopReason 'stopped'.
         if ((e as Error)?.name === 'AbortError') {
+          deps.broadcast(req.nodeId, { kind: 'done', reason: 'stopped' })
           return { ok: true, stopReason: 'stopped' }
         }
         const err = e as ChatError

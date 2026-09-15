@@ -40,6 +40,29 @@ export function linksFromSerialized(links: NodeLink[]): Edge[] {
   }))
 }
 
+/** Rebuild link data without discarding React Flow's current selection. */
+export function reconcileLinkEdges(links: NodeLink[], previous: Edge[]): Edge[] {
+  const selected = new Map(previous.map((edge) => [edge.id, edge.selected]))
+  return linksFromSerialized(links).map((edge) => ({ ...edge, selected: selected.get(edge.id) }))
+}
+
+export type LinkPatch = Partial<Pick<NodeLink, 'kind' | 'auto' | 'config' | 'label'>>
+
+/** Missing label means unchanged; an explicit undefined removes it. */
+export function patchLink(link: NodeLink, patch: LinkPatch): NodeLink {
+  const next = {
+    ...link,
+    ...(patch.kind !== undefined ? { kind: patch.kind } : {}),
+    ...(patch.auto !== undefined ? { auto: patch.auto } : {}),
+    ...(patch.config !== undefined ? { config: patch.config } : {})
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'label')) {
+    if (patch.label === undefined) delete next.label
+    else next.label = patch.label
+  }
+  return next
+}
+
 /** Drop every link that touches the deleted node (both directions). */
 export function removeLinksForNode(links: NodeLink[], nodeId: string): NodeLink[] {
   return links.filter((l) => l.source !== nodeId && l.target !== nodeId)

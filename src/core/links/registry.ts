@@ -112,13 +112,18 @@ function nonEmpty(s: string | null): string | null {
 }
 
 /**
- * Extract link content from a source node. Never throws: every branch is
- * wrapped and a failing dep degrades to `{ kind: 'empty' }`.
+ * Extract link content. Remote editors throw before any local read; ordinary
+ * missing content and failing dependencies degrade to `{ kind: 'empty' }`.
  */
 export async function extractContent(
   node: NodeExtractInput,
-  deps: ExtractDeps
+  deps: ExtractDeps,
+  config?: LinkConfig
 ): Promise<SourceContent> {
+  // A remote path must never be interpreted on this machine.
+  if (node.nodeKind === 'editor' && node.data.remote) {
+    throw new Error('remote editor sources are not supported by node links')
+  }
   try {
     switch (node.nodeKind) {
       case 'sticky': {
@@ -137,6 +142,15 @@ export async function extractContent(
       }
       case 'chat': {
         const messages = Array.isArray(node.data.messages) ? node.data.messages : []
+        if (config?.kind === 'a2a-peer' && config.message === 'last-output') {
+          for (let i = messages.length - 1; i >= 0; i--) {
+            const m = messages[i]
+            if (!m || typeof m !== 'object' || m.role !== 'assistant') continue
+            const text = nonEmpty(asString(m.content))
+            if (text) return { kind: 'text', text, title: asString(node.data.title) ?? 'chat' }
+          }
+          return { kind: 'empty' }
+        }
         const lines: string[] = []
         for (const raw of messages) {
           if (!raw || typeof raw !== 'object') continue

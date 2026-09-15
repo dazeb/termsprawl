@@ -105,7 +105,10 @@ export async function createApp(opts?: { auth?: AuthPolicy; onRequest?: (method:
       if (client.readyState === WebSocket.OPEN) client.send(frame)
     }
   })
-  const dispatch = createDispatcher(buildHandlers(platform))
+  let disposeHandlers = (): void => {}
+  const dispatch = createDispatcher(buildHandlers(platform, {
+    onDispose: (dispose) => { disposeHandlers = dispose }
+  }))
   const agents = await startAgentBridge(platform)
 
   const shimSource = existsSync(SHIM_PATH) ? readFileSync(SHIM_PATH, 'utf8') : ''
@@ -246,6 +249,7 @@ export async function createApp(opts?: { auth?: AuthPolicy; onRequest?: (method:
     authToken: policy.disabled ? null : policy.token,
     dispatch,
     close: async () => {
+      disposeHandlers()
       agents.stop()
       for (const client of [...clients]) client.close()
       await new Promise<void>((resolveClose) => wss.close(() => resolveClose()))
