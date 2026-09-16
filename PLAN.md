@@ -21,6 +21,36 @@ terminals; Monaco renders editors/diffs.
 
 ---
 
+## Current stage — updated 2026-09-16
+
+The roadmap has reached Phase 19 (A2A communication). Work is now focused on
+settings usability, node-link reliability, and release verification. The phase
+sections below retain their historical implementation and verification records;
+they are not evidence of fresh test runs or the current deployment state.
+
+Recent completed implementation:
+- Settings capability discovery and usage views, including truthful unsupported
+  states for Server Edition and general terminal settings (0.25.3-era work).
+- Capability pages backed by CLI data (`d77630a`), followed by Plugins and
+  Subagents pages backed by CLI caches/configuration (`82e247f`).
+- Settings-panel performance and card-outline polish (`3f526c9`).
+- Link inspector synchronization and automatic link execution repairs across
+  desktop and Server Edition (`e00e7a8`).
+
+Release state checked on 2026-09-16: Gitea `main` and tag `v0.25.7` both resolve
+to `4eb77fdcfda6dae65a713240dbe4bd350bfa5eb2`, matching the local version-bump
+commit. The required Gitea refs are present. Runner success, published assets,
+and live site/docs alignment have not been reverified in this plan update;
+a version bump or pushed tag alone does not establish release completion.
+
+Next release work:
+- Check the Gitea verify and release jobs for the tagged commit, then read back
+  the AppImage, `.deb`, and `latest-linux.yml` from both release destinations.
+- Check that the docs cover the recent settings and link behavior and that the
+  marketing site's `APP_VERSION` matches the verified release.
+- Choose the next feature or maintenance scope explicitly; no Phase 20 is
+  currently defined in this plan.
+
 ## Legal ground rules (Phase 0 enforced, applies forever)
 
 1. **Do not copy** any code, comments, file structure, assets, or docs text
@@ -656,7 +686,8 @@ concepts, not a porting source.*
 
 ### Task 12.1: electron-builder config
 - AppImage + .deb for Linux; asar-unpack node-pty; icon.
-- Verify: `npm run dist:linux` produces working artifacts (launch the .deb).
+- Verify: `pnpm run dist` produces working Linux artifacts; smoke-test the
+  AppImage and installed `.deb`.
 
 ### Task 12.2: Auto-update + announcements
 - GitHub Releases feed; update card; announce banner.
@@ -667,19 +698,48 @@ concepts, not a porting source.*
   Releases must include `latest-linux.yml` (produced by `pnpm run dist`) or the
   client cannot see a new version.
 
-### Task 12.3: CI
-- GitHub Actions: typecheck + test + build on PR; release on tag.
-- **Status: DONE with a caveat (2026-08-28).** Gitea Actions pipeline was
-  already live (`.gitea/workflows/ci.yml`, commits 45c1732/84ba174): verify job
-  (install/typecheck/test/build) + release job on `v*` tags publishing to BOTH
-  the Gitea release and GitHub Releases (GH_TOKEN secret; runner = CT 109
-  actrunner). This task added the GitHub Actions mirror
-  (`.github/workflows/ci.yml`, PR #6): same verify job + tag release publishing
-  the three assets (AppImage/.deb/latest-linux.yml). **Caveat:** GitHub Actions
-  is disabled at the account/org level for dazeb (verified: 0 runs ever,
-  including on main) — this workflow never ran. Per the 2026-08-29 decision,
-  GitHub Actions is permanently dead: the workflow file was removed and PR #6
-  closed. Release publishing is guaranteed by the Gitea pipeline alone.
+### Task 12.3: CI and release delivery — Gitea only
+
+- **Implemented:** `.gitea/workflows/ci.yml` is the sole CI/release workflow.
+  [Gitea repository](http://192.168.8.175:3000/dazeb/termsprawl) and
+  [Actions runs](http://192.168.8.175:3000/dazeb/termsprawl/actions).
+  GitHub Actions is permanently disabled; do not add a mirror workflow.
+- **Required trigger:** push `main` to `gitea` to run verification; push the
+  release `v*` tag to `gitea` to run verification and packaging/publishing on
+  the self-hosted runner (CT 109, `actrunner`). Pushing only to GitHub or
+  hermes-box does not activate this runner. An ordinary feature-branch push
+  does not match the workflow's branch filter; pull requests also run CI.
+- Verification installs app and relay dependencies, then runs typecheck, app
+  build, Server Edition build, and tests. Build precedes tests because the
+  server boot gate needs the built renderer.
+- The tag release job builds Linux artifacts and publishes to Gitea and,
+  when `GH_TOKEN` is configured, GitHub Releases. GitHub remains the desktop
+  auto-update source and must contain `latest-linux.yml`.
+- **Current workflow limitation:** the release job has no `needs: verify`
+  dependency. Verify and release can run independently on a tag; publication
+  alone does not prove verification passed. Check both jobs before declaring
+  a release complete. A missing `GH_TOKEN` skips GitHub publication without
+  failing the job, so check both destinations' assets explicitly.
+
+### Task 12.4: Required release checklist
+
+1. Check the working tree and actual remote URLs (`git remote -v`), integrate
+   the intended work into `main`, and run typecheck, tests, and the local
+   originality gate. Run the spaces and GitHub-import E2E gates documented
+   in `AGENTS.md` before pushing the release tag.
+2. Run `scripts/release.sh X.Y.Z` from clean `main` (or use its explicit
+   `--from <branch>` option). It bumps the version, runs local gates, pushes
+   `main` to origin, Gitea, and GitHub, then pushes the version tag to all three.
+   The E2E gates are manual prerequisites, not executed by this script.
+3. **Do not skip `git push gitea main` or `git push gitea vX.Y.Z`.** These are
+   the runner triggers already included in the release script. Read back the
+   branch/tag refs and inspect the corresponding Gitea Actions jobs.
+4. Verify successful verify and release jobs and read back all three assets
+   (AppImage, `.deb`, `latest-linux.yml`) on both Gitea and GitHub. Do not
+   label a local version bump or tag push as a completed release.
+5. Run `scripts/release-site.sh X.Y.Z` to update and deploy the marketing
+   site, and update/deploy sibling docs for changed user-facing behavior.
+   Verify the live site version and relevant docs before closing the release.
 
 ---
 
