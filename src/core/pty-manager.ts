@@ -61,12 +61,15 @@ export class PtyManager {
     const cwd = req.remote ? process.cwd() : req.cwd ?? process.cwd()
     const sessionName = sessionNameFor(req.id)
 
-    // Commands are written as `exec <command>` after PTY listeners attach.
-    // Resolve the first token because GUI-launched apps inherit a minimal PATH
-    // that may omit user-local agent/editor installs. Without a command this
-    // remains a normal interactive shell.
-    const command = req.command ? resolveCommandLine(req.command) : undefined
-    const sessionCommand = [shell]
+    // Launch presets as the pane's process, not as keystrokes sent before
+    // tmux/ssh has attached (those can be dropped, leaving a bare shell).
+    // Remote commands must resolve on the remote host, never this machine.
+    const command = req.command
+      ? req.remote ? req.command : resolveCommandLine(req.command)
+      : undefined
+    const notice = req.command && !req.remote ? unresolvedNotice(req.command) : null
+    const launch = command ? notice ? missingCommandExec(notice) : `exec ${command}` : undefined
+    const sessionCommand = launch ? [shell, '-lc', launch] : [shell]
 
     let fresh = true
     let spawnFile = shell
@@ -87,7 +90,7 @@ export class PtyManager {
       // cwd is intentionally omitted: `tmux -c <dir>` under `ssh -tt` fails on
       // first tmux-server start (chdir race), so the remote shell starts in the
       // remote user's home. Project-path cwd is a later refinement.
-      spawnArgs = remoteTmuxSpawnArgv(remoteHost, sessionName, remoteShell)
+      spawnArgs = remoteTmuxSpawnArgv(remoteHost, sessionName, remoteShell, undefined, launch)
     } else if (this.tmux) {
       fresh = !hasSession(this.tmux, req.id)
       spawnFile = this.tmux.tmuxPath
@@ -102,7 +105,7 @@ export class PtyManager {
         ...sessionCommand
       ]
     } else {
-      spawnArgs = command ? ['-lc', command] : []
+      spawnArgs = launch ? ['-lc', launch] : []
     }
 
     // Strip tmux nesting vars so a reattach inside tmux can't refuse, and drop
@@ -166,18 +169,6 @@ export class PtyManager {
       this.remoteBySession.delete(req.id)
       if (!req.remote) this.scrollback.stop(req.id, this.tmux ?? undefined)
     })
-
-    // Start one-shot presets only after listeners are attached, otherwise a
-    // fast command can print and exit before node-pty delivers its first data
-    // event. Warm tmux reattachments must not launch the command a second time.
-    if (command && fresh && (req.remote || this.tmux)) {
-      // Surface WHY a preset died: an unresolvable command (missing CLI) is
-      // replaced by a one-shot shell that prints the fix, instead of a bare
-      // "command not found" + "[exited]".
-      const notice = unresolvedNotice(req.command ?? '')
-      if (notice) session.write(`${missingCommandExec(notice)}\r`)
-      else session.write(`exec ${command}\r`)
-    }
 
     return { id: req.id, pid: session.pid, fresh }
   }

@@ -2,7 +2,7 @@
 // streams output through the CorePlatform seam. With tmux available, sessions
 // survive manager destruction and reattach warm.
 
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -93,6 +93,25 @@ describe('PtyManager', () => {
 
     await waitFor(() => platform.captured.some((c) => c.data.includes('COMMAND_MARK')), 25000)
     expect(platform.captured.some((c) => c.data.includes('COMMAND_MARK'))).toBe(true)
+  })
+
+  it('tmux: executes an agent preset once and preserves it on reattach', { timeout: 30000 }, async () => {
+    const { manager, platform } = makeManager()
+    const marker = join(platform.userDataPath, 'agent-starts')
+    const request = {
+      id: 'agent-start', cols: 80, rows: 24, shell: '/bin/bash',
+      command: `/bin/sh -c 'printf "started\\n" >> "${marker}"; exec /bin/cat'`
+    }
+    manager.create(request)
+    // Terminal echo of the launch command is not proof that the agent ran.
+    await waitFor(() => existsSync(marker))
+    expect(readFileSync(marker, 'utf8')).toBe('started\n')
+    manager.killAll()
+    const replacement = makeManager(platform.userDataPath).manager
+    expect(replacement.create(request).fresh).toBe(false)
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    expect(readFileSync(marker, 'utf8')).toBe('started\n')
+    replacement.destroy(request.id)
   })
 
   it('does not write a preset command into its no-tmux fallback process', async () => {

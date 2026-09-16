@@ -14,13 +14,15 @@ export function remoteTmuxSpawnArgv(
   remote: RemoteHost,
   sessionName: string,
   shell: string,
-  remoteCwd?: string
+  remoteCwd?: string,
+  launch?: string
 ): string[] {
   const base = connectionArgs(remote) // ends with the target
   const target = base[base.length - 1] ?? remote.host
   const opts = base.slice(0, -1)
   const cwdArg = remoteCwd ? ` -c ${shq(remoteCwd)}` : ''
-  const tmuxCmd = `tmux new-session -A -D -s ${sessionName}${cwdArg} -- ${shell}`
+  const paneCommand = launch ? `${shq(shell)} -lc ${shq(launch)}` : shq(shell)
+  const tmuxCmd = `tmux new-session -A -D -s ${sessionName}${cwdArg} -- ${paneCommand}`
   return ['-tt', ...opts, target, tmuxCmd]
 }
 

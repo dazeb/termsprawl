@@ -29,6 +29,11 @@ sections below retain their historical implementation and verification records;
 they are not evidence of fresh test runs or the current deployment state.
 
 Recent completed implementation:
+- Agent-launch repair (2026-09-16): new agent terminals start their CLI as
+  the tmux pane process instead of sending startup keystrokes before attach.
+  Warm reattachment preserves the running agent; SSH presets resolve on the
+  remote host. Regression reproduced before the fix; typecheck and all 1,033
+  tests pass after it. Pending merge/release.
 - Settings capability discovery and usage views, including truthful unsupported
   states for Server Edition and general terminal settings (0.25.3-era work).
 - Capability pages backed by CLI data (`d77630a`), followed by Plugins and
