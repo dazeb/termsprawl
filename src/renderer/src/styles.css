@@ -1952,8 +1952,12 @@ html[data-theme='light'] option {
 .context-menu {
   position: fixed;
   z-index: var(--z-toast);
-  min-width: 160px;
-  padding: 4px;
+  width: 232px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -1961,7 +1965,10 @@ html[data-theme='light'] option {
 }
 
 .context-menu button {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
   width: 100%;
   padding: 6px 10px;
   background: none;
@@ -1973,10 +1980,18 @@ html[data-theme='light'] option {
   cursor: pointer;
 }
 
-.context-menu button:hover {
+.context-menu button:hover:not(:disabled),
+.context-menu button:focus-visible {
   background: rgba(198, 241, 53, 0.12);
   color: var(--accent);
 }
+
+.context-menu button:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.context-menu button:disabled { opacity: 0.45; cursor: default; }
+.context-section + .context-section, .context-selection-label { border-top: 1px solid var(--border); margin-top: 5px; }
+.context-section-label { padding: 8px 10px 5px; color: var(--muted); font-size: 11px; font-weight: 600; }
+.agent-menu-logo { width: 18px; height: 18px; flex: 0 0 18px; background: currentColor; mask: center / contain no-repeat; -webkit-mask: center / contain no-repeat; }
+.agent-menu-monogram { width: 18px; flex: 0 0 18px; font-family: monospace; font-size: 10px; font-weight: 600; text-align: center; }
 
 .context-submenu-toggle {
   display: flex;

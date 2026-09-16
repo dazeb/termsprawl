@@ -26,3 +26,34 @@ linked; full texts live in the respective package's `LICENSE` file under
 - monaco-editor ships its own web workers (editor.worker, language workers).
   termsprawl loads them locally via vite `?worker` imports — no CDN.
 - tmux is an external runtime requirement, not bundled (see README).
+
+## Agent logo SVGs
+
+Claude, OpenAI (Codex), Grok, and Antigravity marks in
+`src/renderer/src/assets/agents/` are from [Lobe Icons](https://github.com/lobehub/lobe-icons),
+commit `a94750e3f5f8fc33757b839d85030e742284e43a`,
+`packages/static-svg/icons/`. Used in monochrome to identify the corresponding
+agent; trademarks belong to their respective owners. OpenClaude uses an original
+text monogram, not an upstream logo.
+
+MIT License
+
+Copyright (c) 2023 LobeHub
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

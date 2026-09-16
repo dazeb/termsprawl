@@ -29,6 +29,11 @@ sections below retain their historical implementation and verification records;
 they are not evidence of fresh test runs or the current deployment state.
 
 Recent completed implementation:
+- Canvas menu refresh (2026-09-16): enabled agents are direct actions with
+  monochrome logos (OpenClaude uses an original monogram), grouped above
+  creation tools and selection actions. Keyboard navigation, dismissal,
+  viewport clamping, and small-window scrolling verified in a browser preview.
+  Matching agent/canvas docs updated; pending merge/release.
 - Agent-launch repair (2026-09-16): new agent terminals start their CLI as
   the tmux pane process instead of sending startup keystrokes before attach.
   Warm reattachment preserves the running agent; SSH presets resolve on the

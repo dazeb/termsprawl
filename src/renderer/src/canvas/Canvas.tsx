@@ -42,7 +42,7 @@ import {
   ungroup
 } from '../state/workspace'
 import type { OrganizeSnapshot } from '../state/workspace'
-import { agentIds, agentName, agentTitle } from '@shared/agents/config'
+import { AgentMenuItems, CanvasMenu } from './CanvasMenu'
 import type { AgentId } from '@shared/agents/config'
 import type { NodeLink, ProjectRemote } from '@shared/types'
 import { connectableLinkKinds, linkDefaultConfig } from '../../../core/links/registry'
@@ -144,7 +144,6 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
     setEdges((previous) => reconcileLinkEdges(next, previous))
   }, [])
   const [menu, setMenu] = useState<{ x: number; y: number; nodeId?: string } | null>(null)
-  const [agentMenuOpen, setAgentMenuOpen] = useState(false)
   const [linkMenuOpen, setLinkMenuOpen] = useState(false)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [cleanupError, setCleanupError] = useState<string | null>(null)
@@ -619,14 +618,12 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
       appendOnTop(node)
       push()
       setMenu(null)
-      setAgentMenuOpen(false)
     },
     [cwd, menu, push, screenToFlowPosition, appendOnTop]
   )
 
   const onPaneContextMenu = useCallback((event: React.MouseEvent) => {
     event.preventDefault()
-    setAgentMenuOpen(false)
     setLinkMenuOpen(false)
     setMenu({ x: event.clientX, y: event.clientY })
   }, [])
@@ -634,7 +631,6 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
   const onNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
     event.preventDefault()
     event.stopPropagation()
-    setAgentMenuOpen(false)
     setLinkMenuOpen(false)
     setMenu({ x: event.clientX, y: event.clientY, nodeId: node.id })
   }, [])
@@ -1150,20 +1146,28 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
       </ReactFlow>
 
       {menu && (
-        <div
-          className="context-menu"
-          style={{ left: menu.x, top: menu.y }}
-          onClick={(e) => e.stopPropagation()}
-        >
+        <CanvasMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
+          <AgentMenuItems onSelect={addAgent} />
+          <div className="context-section" role="group" aria-label="Create">
+            <div className="context-section-label">Create</div>
+            <button role="menuitem" onClick={addTerminal}>Terminal</button>
+            <button role="menuitem" onClick={addSticky}>Sticky note</button>
+            <button role="menuitem" onClick={addEditor}>Editor</button>
+            <button role="menuitem" onClick={addBrowser}>Browser</button>
+            <button role="menuitem" onClick={addChat}>Chat</button>
+            <button role="menuitem" onClick={addDiff}>Diff</button>
+            <button role="menuitem" onClick={addDruk}>Druk editor</button>
+          </div>
+          {(menu.nodeId || canGroup) && <div className="context-section-label context-selection-label">Selection</div>}
           {menuIsGroup ? (
-            <button onClick={ungroupGroup}>Ungroup</button>
+            <button role="menuitem" onClick={ungroupGroup}>Ungroup</button>
           ) : (
-            canGroup && <button onClick={groupSelection}>Group selection</button>
+            canGroup && <button role="menuitem" onClick={groupSelection}>Group selection</button>
           )}
-          {menu?.nodeId && <button onClick={closeMenuNode}>Close</button>}
+          {menu?.nodeId && <button role="menuitem" onClick={closeMenuNode}>Close</button>}
           {menuIsAgentNode && (
             <>
-              <button
+              <button role="menuitem"
                 className="context-submenu-toggle"
                 onClick={() => setA2aMenuOpen((v) => !v)}
               >
@@ -1172,12 +1176,12 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
               {a2aMenuOpen && (
                 <div className="context-submenu">
                   {a2aPeers.length === 0 && (
-                    <button disabled title="Add peers in Settings → Connections → A2A peers">
+                    <button role="menuitem" disabled title="Add peers in Settings → Connections → A2A peers">
                       no peers configured
                     </button>
                   )}
                   {a2aPeers.map((peer) => (
-                    <button key={peer.id} onClick={() => sendToA2aPeer(peer.id, peer.label)}>
+                    <button role="menuitem" key={peer.id} onClick={() => sendToA2aPeer(peer.id, peer.label)}>
                       send to {peer.label}
                     </button>
                   ))}
@@ -1188,15 +1192,15 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
           )}
           {menuIsClaudeAgent && (
             <>
-              <button onClick={branchAgentSession} title="Send /branch to the agent">
+              <button role="menuitem" onClick={branchAgentSession} title="Send /branch to the agent">
                 Branch session
               </button>
-              <button onClick={resumeAgentSession} title="New node resuming this session">
+              <button role="menuitem" onClick={resumeAgentSession} title="New node resuming this session">
                 Resume session in new node
               </button>
               {cwd && agentPeers.length > 0 && (
                 <>
-                  <button
+                  <button role="menuitem"
                     className="context-submenu-toggle"
                     onClick={() => setLinkMenuOpen((v) => !v)}
                   >
@@ -1208,7 +1212,7 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
                         const already = linkedIds.includes(peer.id)
                         const title = (peer.data as { title?: string }).title ?? peer.id
                         return (
-                          <button key={peer.id} onClick={() => toggleLink(peer.id, already)}>
+                          <button role="menuitem" key={peer.id} onClick={() => toggleLink(peer.id, already)}>
                             {already ? `unlink ${title}` : `link ${title}`}
                           </button>
                         )
@@ -1219,29 +1223,7 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
               )}
             </>
           )}
-          <button onClick={addTerminal}>New terminal</button>
-          <button onClick={addSticky}>New sticky note</button>
-          <button onClick={addDiff}>New diff</button>
-          <button onClick={addEditor}>New editor</button>
-          <button onClick={addBrowser}>New browser</button>
-          <button onClick={addChat}>New chat</button>
-          <button onClick={addDruk}>Open druk</button>
-          <button
-            className="context-submenu-toggle"
-            onClick={() => setAgentMenuOpen((v) => !v)}
-          >
-            Open agent ▸
-          </button>
-          {agentMenuOpen && (
-            <div className="context-submenu">
-              {agentIds().map((id) => (
-                <button key={id} onClick={() => addAgent(id)} title={agentName(id)}>
-                  {agentTitle(id)}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        </CanvasMenu>
       )}
 
       <div className="history-bar">
