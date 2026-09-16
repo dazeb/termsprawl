@@ -33,17 +33,17 @@ Recent completed implementation:
   canvas browser profile; authenticated agent cookie read/write/clear commands
   operate on that same profile. New browsers open at 1000×720 with no resize
   maximum. Real Electron sign-in, restart persistence, and Playwright
-  cookies/addCookies/storageState checks pass. Pending merge/release.
+  cookies/addCookies/storageState checks pass. Shipped in 0.26.0.
 - Canvas menu refresh (2026-09-16): enabled agents are direct actions with
   monochrome logos (OpenClaude uses an original monogram), grouped above
   creation tools and selection actions. Keyboard navigation, dismissal,
   viewport clamping, and small-window scrolling verified in a browser preview.
-  Matching agent/canvas docs updated; pending merge/release.
+  Matching agent/canvas docs updated. Shipped in 0.26.0.
 - Agent-launch repair (2026-09-16): new agent terminals start their CLI as
   the tmux pane process instead of sending startup keystrokes before attach.
   Warm reattachment preserves the running agent; SSH presets resolve on the
   remote host. Regression reproduced before the fix; typecheck and all 1,033
-  tests pass after it. Pending merge/release.
+  tests pass after it. Shipped in 0.26.0.
 - Settings capability discovery and usage views, including truthful unsupported
   states for Server Edition and general terminal settings (0.25.3-era work).
 - Capability pages backed by CLI data (`d77630a`), followed by Plugins and
@@ -52,17 +52,30 @@ Recent completed implementation:
 - Link inspector synchronization and automatic link execution repairs across
   desktop and Server Edition (`e00e7a8`).
 
-Release state checked on 2026-09-16: Gitea `main` and tag `v0.25.7` both resolve
-to `4eb77fdcfda6dae65a713240dbe4bd350bfa5eb2`, matching the local version-bump
-commit. The required Gitea refs are present. Runner success, published assets,
-and live site/docs alignment have not been reverified in this plan update;
-a version bump or pushed tag alone does not establish release completion.
+Release state verified on 2026-09-16: **0.26.0 is shipped.** Gitea `main` and
+tag `v0.26.0` both resolve to `18dd668dc421255cb683c43238ff3322e1801212` on all
+three remotes (origin / github / gitea), matching the local version-bump
+commit. The Gitea `verify` and `release` jobs for that tag succeeded, and the
+AppImage, `.deb`, and `latest-linux.yml` were read back from **both** the Gitea
+release and GitHub Releases with matching sizes; the GitHub download URLs
+return 200 and `latest-linux.yml` reports `version: 0.26.0`. The marketing site
+is live at `APP_VERSION` 0.26.0 (every route 200, live bundle contains the
+version) and the docs deploy run for the matching content commit succeeded,
+with the new agent names present on the live pages.
+
+Release blocker found and fixed while verifying: the first `release` job for
+`v0.26.0` failed its `publish gitea release` step (`curl: (22)` → HTTP 500)
+because Gitea CT 100's root filesystem was **100% full** (7.4G/7.8G, 45M free).
+Gitea's own SQLite writes failed with `database or disk is full (13)`, so it
+never recorded the failure and the run stayed "running" in the UI. The CT
+rootfs was grown 8G → 16G (`pct resize 100 rootfs +8G`, non-destructive, no
+snapshots present) and the tag was re-pushed to Gitea to re-trigger the
+idempotent publish; that run published to both destinations cleanly. The stale
+run #175 record on Gitea was left as-is (harmless) — it cannot be corrected
+retroactively. **Watch CT 100 disk headroom before every release**; the 6.3G of
+Gitea release attachments is what fills it.
 
 Next release work:
-- Check the Gitea verify and release jobs for the tagged commit, then read back
-  the AppImage, `.deb`, and `latest-linux.yml` from both release destinations.
-- Check that the docs cover the recent settings and link behavior and that the
-  marketing site's `APP_VERSION` matches the verified release.
 - Choose the next feature or maintenance scope explicitly; no Phase 20 is
   currently defined in this plan.
 
@@ -758,6 +771,23 @@ concepts, not a porting source.*
 5. Run `scripts/release-site.sh X.Y.Z` to update and deploy the marketing
    site, and update/deploy sibling docs for changed user-facing behavior.
    Verify the live site version and relevant docs before closing the release.
+
+**Pre-flight: Gitea runner and CT 100 disk headroom.** Each release adds ~280M
+of attachments to Gitea, whose data lives on CT 100 (an 8G rootfs until it was
+grown to 16G on 2026-09-16). When that filesystem fills, the publish step fails
+with `curl: (22)` → HTTP 500 *and* Gitea cannot record the failure, so the run
+stays "running" forever while publishing nothing. Before pushing a release tag,
+check headroom:
+
+```bash
+ssh root@192.168.8.195 'pct exec 100 -- df -h /'   # want well under 90% used
+```
+
+If it is tight, prune old releases or grow it with `pct resize 100 rootfs +8G`
+(non-destructive; the `pve` VG had ~14G free). If a release job fails this way,
+grow the disk and re-push the tag to Gitea (`git push gitea :refs/tags/vX.Y.Z`
+then `git push gitea refs/tags/vX.Y.Z`) — the publish steps are idempotent and
+reuse the existing release.
 
 ---
 
