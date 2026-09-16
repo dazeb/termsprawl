@@ -15,6 +15,9 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 IMAGE="${1:-ts-space:latest}"
+# Rootless Docker may require the workstation LAN address for the mock cloud.
+CLOUD_HOST="${TS_E2E_CLOUD_HOST:-host.docker.internal}"
+export TS_E2E_REPO_ROOT="$PWD"
 WORK=$(mktemp -d /tmp/ts-gh-e2e-XXXXXX)
 CLOUD_PORT=18990
 SRV_PORT=18991
@@ -119,14 +122,16 @@ docker run -d --name ts-gh-e2e -v ts-gh-e2e-v:/data \
   --add-host=host.docker.internal:host-gateway \
   -e TERMSPRAWL_SERVER_HOST=0.0.0.0 -e TERMSPRAWL_SERVER_TOKEN= -e PORT=3110 \
   -e TERMSPRAWL_SPACE_HEADER="$SPACE_ROUTER_HEADER" \
-  -e TS_CLOUD_API="http://host.docker.internal:$CLOUD_PORT" \
+  -e TS_CLOUD_API="http://$CLOUD_HOST:$CLOUD_PORT" \
   -e TS_SPACE_BOOT_TOKEN="e2e-space-sync-token" \
   "$IMAGE" >/dev/null
 sleep 6
 
 # ---- drive the server: read boot events (github:suggest), then import ----
 cat > "$WORK/drive.mjs" <<'EOF'
-import { WebSocket } from '/mnt/nvme1/workspace/projects/termsprawl/node_modules/ws/wrapper.mjs'
+import { createRequire } from 'node:module'
+const require = createRequire(process.env.TS_E2E_REPO_ROOT + '/package.json')
+const { WebSocket } = require('ws')
 const PORT = process.env.E2E_SRV_PORT
 const sock = new WebSocket(`ws://127.0.0.1:${PORT}/ws`)
 const events = []
@@ -194,7 +199,9 @@ if docker exec ts-gh-e2e sh -c "grep -r '$FAKE_TOKEN' /data 2>/dev/null | head -
 
 # ---- re-import refusal ----
 cat > "$WORK/reimport.mjs" <<EOF
-import { WebSocket } from '/mnt/nvme1/workspace/projects/termsprawl/node_modules/ws/wrapper.mjs'
+import { createRequire } from 'node:module'
+const require = createRequire(process.env.TS_E2E_REPO_ROOT + '/package.json')
+const { WebSocket } = require('ws')
 const sock = new WebSocket('ws://127.0.0.1:$SRV_PORT/ws')
 sock.on('open', () => sock.send(JSON.stringify({ t:'req', id:1, method:'github:import', args:['octocat/Hello-World'] })))
 sock.on('message', (raw) => { const m = JSON.parse(raw.toString()); if (m.t === 'res') { console.log(JSON.stringify(m.result ?? m)); process.exit(0) } })
