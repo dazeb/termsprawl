@@ -37,5 +37,13 @@ uses to drive it.
 - The URL policy lives in `src/core/browser-policy.ts` (pure, electron-free,
   TDD). Do not inline navigation checks here — import that.
 - The CDP endpoint binds to 127.0.0.1 only. Do not loosen to 0.0.0.0.
+- **Guest rendering has one hard CSS trap**: a `<webview>`'s
+  `display` must never be `block`. Electron lays the guest out with its own flex
+  layout, so `block` pins the guest viewport to Chromium's 150px default while
+  the host element still honours `height:100%` — the node paints its top 150px
+  and the rest is black. The renderer end of it is
+  `src/renderer/src/nodes/BrowserNode.tsx` (`WEBVIEW_VISIBLE_DISPLAY`) +
+  `styles.css`, guarded by `nodes/browser-webview-sizing.test.ts`. Symptom is
+  visual, so do not hunt for it in this directory.
 
 See ../../AGENTS.md for the process model.

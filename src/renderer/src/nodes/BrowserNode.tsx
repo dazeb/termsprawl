@@ -42,6 +42,20 @@ const HIDE_SCROLLBARS_CSS = `
 * { scrollbar-width: none !important; }
 `
 
+// A <webview> guest is sized by Electron's own flex layout, NOT by our CSS box:
+// the element's `display` must stay flex/inline-flex or its internal guest view
+// never stretches. Forcing `display: block` (as this node used to) makes the
+// HOST element honour `height: 100%` while the GUEST stays at Chromium's
+// default 150px viewport — the element is 550px tall, the page inside paints
+// only the top 150px, and the remainder shows .browser-node-host's black
+// background (~75% of the node black). Verified with a minimal repro on
+// Electron 43.4 (guest `window.innerHeight` reports 150 for every host height
+// under `block`, and the true height under `flex`); the bug only became visible
+// when browser nodes were enlarged past 150px in 0.26.0 — at the old 320x240
+// size the ~140px host was under the default, so it never showed. Do not
+// "simplify" this back to block, and keep styles.css's webview rule in sync.
+const WEBVIEW_VISIBLE_DISPLAY = 'flex'
+
 // A browser node: one sandboxed <webview> guest PER TAB, rendered inline on
 // the canvas (13.4). The guests are hardened in main (no preload / no
 // nodeIntegration / sandbox on / nav policy), so each tab is a real browser
@@ -152,7 +166,7 @@ export function BrowserNode({ id, data, selected }: NodeProps<BrowserNodeData>):
     webview.setAttribute('src', tab.url)
     webview.style.width = '100%'
     webview.style.height = '100%'
-    webview.style.display = hidden ? 'none' : 'block'
+    webview.style.display = hidden ? 'none' : WEBVIEW_VISIBLE_DISPLAY
     webview.dataset.nodeId = id
     webview.dataset.tabId = tab.id
     webviewsRef.current.set(tab.id, webview)
@@ -306,7 +320,7 @@ export function BrowserNode({ id, data, selected }: NodeProps<BrowserNodeData>):
     setCrashed(false)
     setGuestId(null)
     // Show the newly-active neighbour (it was display:none while in the background).
-    webviewsRef.current.get(res.activeTabId)?.style.setProperty('display', 'block')
+    webviewsRef.current.get(res.activeTabId)?.style.setProperty('display', WEBVIEW_VISIBLE_DISPLAY)
     syncToolbar(res.activeTabId)
     persist(res.tabs, res.activeTabId)
   }
@@ -317,7 +331,7 @@ export function BrowserNode({ id, data, selected }: NodeProps<BrowserNodeData>):
     // Hide the old guest, show the new one.
     webviewsRef.current.get(activeTabIdRef.current)?.style.setProperty('display', 'none')
     const next = webviewsRef.current.get(tabId)
-    if (next) next.style.setProperty('display', 'block')
+    if (next) next.style.setProperty('display', WEBVIEW_VISIBLE_DISPLAY)
     setTabs(res.tabs)
     setActiveTabId(res.activeTabId)
     setCrashed(false)

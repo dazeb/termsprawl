@@ -1719,8 +1719,13 @@ html[data-theme='light'] option {
   background: #000;
 }
 
+/* A <webview> guest is laid out by Electron's own flex layout, so this must be
+ * flex — NOT block. With `display: block` the host element honours height:100%
+ * but the guest view inside stays at Chromium's 150px default viewport, leaving
+ * everything below it black (~75% of an enlarged browser node). See
+ * BrowserNode's WEBVIEW_VISIBLE_DISPLAY for the full diagnosis. */
 .browser-node-host webview {
-  display: block;
+  display: flex;
   width: 100%;
   height: 100%;
 }

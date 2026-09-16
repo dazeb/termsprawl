@@ -127,6 +127,15 @@ touch build config, re-verify with a packaged boot test.
 - **Never use `window.confirm`/`alert`/`prompt`** — Electron does not implement
   them; they silently return falsy instead of showing a dialog. Any confirmation
   must be an in-app dialog (see TabBar's `.confirm-overlay` delete confirm).
+- **A browser node's `<webview>` must never be `display: block`.** Electron
+  sizes the guest with its own flex layout, so `block` caps the GUEST at
+  Chromium's 150px default viewport while the HOST element still honours
+  `height: 100%` — an enlarged browser node paints only its top 150px and the
+  remainder shows the host's black background ("most of it is black", 0.26.0).
+  Keep `WEBVIEW_VISIBLE_DISPLAY = 'flex'` in `nodes/BrowserNode.tsx` and the
+  `.browser-node-host webview` rule in `styles.css` in sync; guarded by
+  `nodes/browser-webview-sizing.test.ts`. The bug is invisible at the old
+  320×240 node size (host was under 150px), so only larger nodes reveal it.
 - **Undo/redo** (`state/history.ts`): debounced snapshots of the nodes array,
   skipped while typing in inputs/terminals.
 - **Workspace persistence** (`core/workspace-files.ts` + `workspace-store.ts`):
