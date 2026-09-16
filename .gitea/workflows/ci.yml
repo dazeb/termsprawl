@@ -43,10 +43,14 @@ jobs:
       - name: build server
         run: pnpm run build:server
 
+      - name: release safety checks
+        run: python3 scripts/release-safety.test.py
+
       - name: test
         run: pnpm test
 
   release:
+    needs: verify
     # On version tags: build the AppImage/.deb once, publish to BOTH the Gitea
     # release (this instance) and GitHub Releases (the app's auto-updater reads
     # GitHub latest-linux.yml). CI runs on Gitea; GitHub only receives the
@@ -65,11 +69,24 @@ jobs:
       - name: raise node heap limit
         run: echo "NODE_OPTIONS=--max-old-space-size=4096" >> "$GITHUB_ENV"
 
+      - name: require GitHub publishing credentials
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: test -n "$GH_TOKEN" || { echo "GH_TOKEN is required for desktop auto-updates" >&2; exit 1; }
+
       - name: dist
         # --publish never: electron-builder would otherwise auto-publish to
         # the configured github provider on tag builds (fails without
         # GH_TOKEN). The publish steps below upload to Gitea + GitHub.
         run: pnpm run build && pnpm exec electron-builder --linux --publish never
+
+      - name: verify release artifacts
+        run: |
+          set -euo pipefail
+          version="$(node -p 'require("./package.json").version')"
+          for f in "dist/termsprawl-${version}.AppImage" "dist/termsprawl_${version}_amd64.deb" dist/latest-linux.yml; do
+            test -s "$f" || { echo "Missing or empty release artifact: $f" >&2; exit 1; }
+          done
 
       - name: publish gitea release
         env:
@@ -91,7 +108,7 @@ jobs:
           echo "gitea release id: ${rel_id}"
 
           for f in dist/termsprawl-*.AppImage dist/termsprawl_*_amd64.deb dist/latest-linux.yml; do
-            [[ -f "$f" ]] || continue
+            [[ -s "$f" ]] || { echo "Missing or empty artifact: $f" >&2; exit 1; }
             name="$(basename "$f")"
             echo "gitea uploading ${name}"
             curl -fsS -X POST \
@@ -105,8 +122,8 @@ jobs:
         # GitHub Releases still feed the desktop app's auto-updater
         # (latest-linux.yml). GitHub *Actions* are permanently disabled on the
         # account — that's about the CI runner, not this publish step, which
-        # runs on Gitea's runner with a PAT secret and is how releases land on
-        # GitHub at all. Skipped when the GH_TOKEN secret is absent.
+        # runs on Gitea's runner with a required PAT secret and is how releases
+        # land on GitHub.
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           TAG: ${{ github.ref_name }}
@@ -114,8 +131,8 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -z "${GH_TOKEN:-}" ]]; then
-            echo "GH_TOKEN not set — skipping GitHub release (Gitea release already published)."
-            exit 0
+            echo "GH_TOKEN not set — GitHub release is required." >&2
+            exit 1
           fi
           echo "creating/updating GitHub release ${TAG}"
           gh release create "${TAG}" \

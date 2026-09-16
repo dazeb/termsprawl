@@ -713,13 +713,16 @@ concepts, not a porting source.*
   build, Server Edition build, and tests. Build precedes tests because the
   server boot gate needs the built renderer.
 - The tag release job builds Linux artifacts and publishes to Gitea and,
-  when `GH_TOKEN` is configured, GitHub Releases. GitHub remains the desktop
+  using the required `GH_TOKEN`, GitHub Releases. GitHub remains the desktop
   auto-update source and must contain `latest-linux.yml`.
-- **Current workflow limitation:** the release job has no `needs: verify`
-  dependency. Verify and release can run independently on a tag; publication
-  alone does not prove verification passed. Check both jobs before declaring
-  a release complete. A missing `GH_TOKEN` skips GitHub publication without
-  failing the job, so check both destinations' assets explicitly.
+- **Release hardening (2026-09-16):** the release job now requires a successful
+  verify job, a configured `GH_TOKEN`, and all three nonempty release assets
+  before publishing. The app release script reuses an existing tag only when
+  it points to HEAD; a conflicting tag fails. Site deployment resumes when
+  the version is already committed and fails on unsuccessful HTTP requests,
+  a missing application bundle, or a missing expected version.
+- These hardening changes require merging and pushing to Gitea before they
+  affect runner behavior. Offline checks: `python3 scripts/release-safety.test.py`.
 
 ### Task 12.4: Required release checklist
 

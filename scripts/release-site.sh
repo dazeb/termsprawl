@@ -54,7 +54,11 @@ fs.writeFileSync(p, s.replace(/export const APP_VERSION = '[0-9]+\.[0-9]+\.[0-9]
 grep "APP_VERSION" "$SITE"
 
 git add "$SITE"
-git commit -m "chore: bump APP_VERSION to $NEW_VER"
+if git diff --cached --quiet; then
+  echo "==> APP_VERSION already at $NEW_VER — resuming deployment"
+else
+  git commit -m "chore: bump APP_VERSION to $NEW_VER"
+fi
 git push origin main
 git push gitea main
 
@@ -62,13 +66,18 @@ echo "==> deploying to hermes-box"
 bash scripts/deploy-hermes-box.sh
 
 echo "==> verifying live site"
-set +e
-STATUS="$(curl -s -o /dev/null -w '%{http_code}' https://termsprawl.com/)"
-JS="$(curl -s https://termsprawl.com/ | grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' | head -1)"
-VERSIONS="$(curl -s "https://termsprawl.com/$JS" | grep -oE "$(echo "$NEW_VER" | sed -E 's/\./\\./g')" | sort | uniq -c)"
-set -e
-echo "   HTTP $STATUS"
-echo "   bundle carries $NEW_VER: ${VERSIONS:-0}"
+PAGE="$(curl -fsS https://termsprawl.com/)"
+JS="$(printf '%s' "$PAGE" | grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' | head -1 || true)"
+if [[ -z "$JS" ]]; then
+  echo "!! live site has no application bundle" >&2
+  exit 1
+fi
+BUNDLE="$(curl -fsS "https://termsprawl.com/$JS")"
+if ! printf '%s' "$BUNDLE" | grep -E "(^|[^0-9.])${NEW_VER//./\\.}([^0-9.]|$)" >/dev/null; then
+  echo "!! live bundle does not contain version $NEW_VER" >&2
+  exit 1
+fi
+echo "   live bundle verified at $NEW_VER"
 
 echo
 echo "==> DONE: site live at $NEW_VER"

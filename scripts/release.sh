@@ -120,7 +120,15 @@ git push github main
 
 # ---- 5. tag + push to all remotes (triggers the builder) ----
 echo "==> tag $TAG"
-git tag "$TAG"
+if git rev-parse --verify "refs/tags/$TAG" >/dev/null 2>&1; then
+  if [[ "$(git rev-parse "$TAG^{commit}")" != "$(git rev-parse HEAD)" ]]; then
+    echo "!! $TAG already points to a different commit — aborting" >&2
+    exit 1
+  fi
+  echo "==> reusing existing $TAG at HEAD"
+else
+  git tag "$TAG"
+fi
 git push origin "$TAG"
 git push gitea "$TAG"
 git push github "$TAG"

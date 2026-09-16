@@ -236,8 +236,8 @@ export function FileTree({ cwd, remote, onOpenFile, openEditors = [] }: FileTree
 
             {section === 'plugins' && (
               <div className="file-tree-empty">
-                plugins are coming soon — extensions for the sidebar, just like
-                VS Code.
+                Sidebar extensions are not available yet. Manage agent CLI plugins
+                in Settings → Plugins.
               </div>
             )}
           </div>
