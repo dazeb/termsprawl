@@ -4,14 +4,14 @@
 // webContents rendered inline in the canvas. This module is the main-process
 // enforcement point: it (a) sanitises the guest's webPreferences the moment it
 // is attached, (b) bars navigation to anything that isn't an ordinary web
-// origin, (c) denies all popups, and (d) keeps a node-id → guest-id map so
+// origin, (c) sandboxes sign-in popups, and (d) keeps a node-id → guest-id map so
 // anything (the renderer toolbar, or an agent via IPC) can drive a specific
 // node by its stable canvas id.
 //
 // The guest never carries a preload and never gets nodeIntegration, so a page
 // inside the browser can reach neither termsprawl's preload API nor Node.
 
-import { app, webContents, type WebContents } from 'electron'
+import { app, BrowserWindow, webContents, type WebContents } from 'electron'
 import { isAllowedNavUrl } from '../../core/browser-policy'
 
 type NodeId = string
@@ -73,10 +73,44 @@ function sanitizeAttachedWebview(webPreferences: Electron.WebPreferences): void 
   webPreferences.experimentalFeatures = false
 }
 
+/** Login popups share only the embedded browser profile, never the app bridge. */
+export function secureBrowserContents(contents: WebContents, allowPopups = true): void {
+  const browserSession = contents.session
+  const guard = (event: Electron.Event, url: string): void => {
+    if (!isAllowedNavUrl(url)) event.preventDefault()
+  }
+  contents.on('will-navigate', guard)
+  contents.on('will-redirect', guard)
+  contents.setWindowOpenHandler(({ url }) => {
+    if (!allowPopups || !isAllowedNavUrl(url)) return { action: 'deny' }
+    return {
+      action: 'allow',
+      overrideBrowserWindowOptions: {
+        width: 600, height: 760, autoHideMenuBar: true,
+        parent: BrowserWindow.fromWebContents(contents.hostWebContents ?? contents) ?? undefined,
+        webPreferences: {
+          session: browserSession, nodeIntegration: false,
+          contextIsolation: true, sandbox: true, webSecurity: true,
+          allowRunningInsecureContent: false, webviewTag: false
+        }
+      }
+    }
+  })
+  contents.on('did-create-window', (popup) => {
+    secureBrowserContents(popup.webContents, false)
+    const closePopup = (): void => { if (!popup.isDestroyed()) popup.close() }
+    contents.once('destroyed', closePopup)
+    popup.once('closed', () => {
+      contents.removeListener('destroyed', closePopup)
+      void browserSession.cookies.flushStore().catch(() => {})
+    })
+  })
+}
+
 /**
  * Install the per-process browser security hooks. Call once, before any
  * webview is created (module top-level in index.ts).
- * - Every webview guest: block non-web navigation + deny popups.
+ * - Every webview guest: block non-web navigation + sandbox sign-in popups.
  * - Every parent webContents: sanitise the guest prefs before attach.
  */
 export function installBrowserSecurity(): void {
@@ -91,15 +125,8 @@ export function installBrowserSecurity(): void {
 
     if (contents.getType() !== 'webview') return
 
-    // A guest carries no preload and full sandbox; enforce the URL policy and
-    // close the popup escape hatch.
-    contents.on('will-navigate', (event, url) => {
-      if (!isAllowedNavUrl(url)) event.preventDefault()
-    })
-    contents.on('will-redirect', (event, url) => {
-      if (!isAllowedNavUrl(url)) event.preventDefault()
-    })
-    contents.setWindowOpenHandler(() => ({ action: 'deny' }))
+    secureBrowserContents(contents)
+
   })
 }
 

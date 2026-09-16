@@ -29,6 +29,11 @@ sections below retain their historical implementation and verification records;
 they are not evidence of fresh test runs or the current deployment state.
 
 Recent completed implementation:
+- Shared browser sessions (2026-09-16): sandboxed sign-in popups use the
+  canvas browser profile; authenticated agent cookie read/write/clear commands
+  operate on that same profile. New browsers open at 1000×720 with no resize
+  maximum. Real Electron sign-in, restart persistence, and Playwright
+  cookies/addCookies/storageState checks pass. Pending merge/release.
 - Canvas menu refresh (2026-09-16): enabled agents are direct actions with
   monochrome logos (OpenClaude uses an original monogram), grouped above
   creation tools and selection actions. Keyboard navigation, dismissal,

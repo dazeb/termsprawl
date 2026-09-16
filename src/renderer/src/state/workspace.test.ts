@@ -518,6 +518,7 @@ describe('createAgentLoginNode', () => {
 describe('browser tabs + history (13.4)', () => {
   it('createBrowserNode defaults to DuckDuckGo (a real, useful start page)', () => {
     const node = createBrowserNode()
+    expect(node.style).toMatchObject({ width: 1000, height: 720 })
     expect(node.data.tabs![0].url).toBe(DEFAULT_BROWSER_URL)
     expect(node.data.url).toBe(DEFAULT_BROWSER_URL)
   })

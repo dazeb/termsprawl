@@ -16,6 +16,7 @@ interface FakeGuest {
   isDestroyed(): boolean
   getTitle(): string
   getURL(): string
+  session: { cookies: { flushStore: ReturnType<typeof vi.fn> } }
   debugger: {
     attached: boolean
     attach: ReturnType<typeof vi.fn>
@@ -48,6 +49,7 @@ function fakeGuest(id: number, title = 'Example Domain', url = 'https://example.
     isDestroyed: () => false,
     getTitle: () => guest.title,
     getURL: () => guest.url,
+    session: { cookies: { flushStore: vi.fn(async () => {}) } },
     debugger: {
       attached: false,
       attach: vi.fn(() => {
@@ -263,6 +265,26 @@ describe('cdp-facade CDP protocol', () => {
       error?: { code: number }
     }
     expect(unknown.error?.code).toBe(-32000)
+  })
+
+  it('shares browser-context cookies with the visible guest and rejects foreign contexts', async () => {
+    mockRegisteredIds.push(7)
+    const guest = fakeGuest(7)
+    guest.debugger.sendCommand.mockImplementation(async (method: string) =>
+      method === 'Network.getAllCookies' ? { cookies: [{ name: 'login', value: 'test-session' }] } : {})
+    const targets = await client.send('Target.getTargets') as { result: { targetInfos: { browserContextId: string }[] } }
+    const browserContextId = targets.result.targetInfos[0].browserContextId
+    const cookies = [{ name: 'login', value: 'test-session', url: 'https://example.com' }]
+    expect(await client.send('Storage.getCookies', { browserContextId })).toMatchObject({ result: { cookies: [{ name: 'login' }] } })
+    await client.send('Storage.setCookies', { cookies, browserContextId })
+    expect(guest.debugger.sendCommand).toHaveBeenCalledWith('Network.setCookies', { cookies })
+    await client.send('Storage.clearCookies', { browserContextId })
+    expect(guest.debugger.sendCommand).toHaveBeenCalledWith('Network.clearBrowserCookies', {})
+    expect(await client.send('Storage.getCookies', { browserContextId: 'other-profile' })).toMatchObject({ error: { code: -32602 } })
+  })
+
+  it('requires an open canvas tab for browser-context cookies', async () => {
+    expect(await client.send('Storage.getCookies')).toMatchObject({ error: { code: -32000 } })
   })
 
   it('attaches a session and proxies page commands to the guest debugger', async () => {

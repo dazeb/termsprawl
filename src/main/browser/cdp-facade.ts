@@ -26,7 +26,7 @@
 // local process, and a raw Chromium debug port additionally exposed the main
 // window — both are closed now.
 
-// Set TERMSPRAWL_FACADE_DEBUG=1 to log every CDP message/event (verification).
+// Set TERMSPRAWL_FACADE_DEBUG=1 for protocol metadata (never cookie payloads).
 const FACADE_DEBUG = process.env.TERMSPRAWL_FACADE_DEBUG === '1'
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
@@ -320,7 +320,7 @@ export async function startCdpFacade(
       } catch {
         return
       }
-      if (FACADE_DEBUG) console.error('[cdp-facade] <<', JSON.stringify(msg).slice(0, 400))
+      if (FACADE_DEBUG) console.error('[cdp-facade] <<', JSON.stringify({ id: msg.id, method: msg.method, sessionId: msg.sessionId }))
       void route(ws, msg)
     })
     ws.on('close', () => {
@@ -392,7 +392,7 @@ interface FacadeMessage {
 async function route(ws: Ws, msg: FacadeMessage): Promise<void> {
   const id = msg.id
   const send = (payload: Record<string, unknown>): void => {
-    if (FACADE_DEBUG) console.error('[cdp-facade] >>', JSON.stringify(payload).slice(0, 400))
+    if (FACADE_DEBUG) console.error('[cdp-facade] >>', JSON.stringify({ id, method: msg.method, error: Boolean(payload.error) }))
     if (ws.readyState === 1) ws.send(JSON.stringify({ id, ...payload }))
   }
   const sendErr = (code: number, message: string): void =>
@@ -439,6 +439,32 @@ async function route(ws: Ws, msg: FacadeMessage): Promise<void> {
   const params = (msg.params ?? {}) as Record<string, unknown>
 
   switch (method) {
+    case 'Storage.getCookies':
+    case 'Storage.setCookies':
+    case 'Storage.clearCookies': {
+      if (params.browserContextId && params.browserContextId !== FAKE_BROWSER_CONTEXT) {
+        return sendErr(-32602, 'unknown browser context')
+      }
+      const guestId = browserGuestIds().find((id) => liveGuest(id))
+      if (guestId === undefined) return sendErr(-32000, 'open a canvas browser tab first')
+      const guest = liveGuest(guestId)!
+      const command = method === 'Storage.getCookies' ? 'Network.getAllCookies'
+        : method === 'Storage.setCookies' ? 'Network.setCookies' : 'Network.clearBrowserCookies'
+      if (method === 'Storage.setCookies' && !Array.isArray(params.cookies)) {
+        return sendErr(-32602, 'cookies must be an array')
+      }
+      try {
+        await attachGuest(guestId)
+        // All canvas guests use the same persistent browser profile. Chromium
+        // handles HttpOnly/Secure/SameSite and partitioned cookies itself.
+        const result = await guest.debugger.sendCommand(command,
+          method === 'Storage.setCookies' ? { cookies: params.cookies } : {})
+        if (method !== 'Storage.getCookies') await guest.session.cookies.flushStore()
+        return send({ result })
+      } catch (error) {
+        return sendErr(-32000, String(error))
+      }
+    }
     case 'Target.getTargets':
       return send({ result: { targetInfos: buildTargetInfos() } })
     case 'Target.getTargetInfo': {

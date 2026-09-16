@@ -12,7 +12,8 @@ uses to drive it.
   it exposed the main window's full preload bridge to any local process).
 - `manager.ts` — `installBrowserSecurity()` hardens every `<webview>` guest at
   attach (strip preload, force contextIsolation + sandbox, `webSecurity` on),
-  blocks non-web `will-navigate`/`will-redirect`, denies all popups, and keeps a
+  blocks non-web `will-navigate`/`will-redirect`, permits sandboxed web sign-in
+  popups sharing the guest session (nested popups denied), and keeps a
   node-id → guest-id map so `navigateBrowserNode()` can drive a node by its
   stable canvas id while enforcing the URL policy in one place.
 - `agent-server.ts` — loopback, token-gated agent-control server: `GET /info`,
@@ -26,7 +27,8 @@ uses to drive it.
   critically — reports each guest's REAL target id (== its main frame id,
   learned from the guest's own `Page.getFrameTree` at attach), because
   Playwright resolves frame sessions by that id and silently degrades the page
-  to a dummy frame on mismatch.
+  to a dummy frame on mismatch. Browser-level Storage cookie commands map to
+  the live guest profile; cookie writes flush to disk. Debug logs omit payloads.
 
 ## Rules
 

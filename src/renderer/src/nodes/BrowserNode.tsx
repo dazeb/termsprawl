@@ -7,7 +7,6 @@ import {
   activateBrowserTab,
   addBrowserTab,
   browserTitle,
-  BROWSER_NODE_MAX,
   closeBrowserTab,
   DEFAULT_BROWSER_URL,
   nextBrowserTabId,
@@ -148,6 +147,7 @@ export function BrowserNode({ id, data, selected }: NodeProps<BrowserNodeData>):
     // guest never sees a preload or Node because installBrowserSecurity()
     // forces those off at attach time.
     webview.setAttribute('partition', 'persist:termsprawl-browser')
+    webview.setAttribute('allowpopups', '')
     webview.setAttribute('webpreferences', 'contextIsolation=yes, sandbox=yes, nodeIntegration=no')
     webview.setAttribute('src', tab.url)
     webview.style.width = '100%'
@@ -331,8 +331,6 @@ export function BrowserNode({ id, data, selected }: NodeProps<BrowserNodeData>):
         isVisible={selected}
         minWidth={220}
         minHeight={140}
-        maxWidth={BROWSER_NODE_MAX.width}
-        maxHeight={BROWSER_NODE_MAX.height}
       />
       <LinkHandles />
       <div className="browser-tabs">
