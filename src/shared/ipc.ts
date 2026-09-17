@@ -2,6 +2,10 @@
 // Never hardcode a channel string elsewhere.
 
 export const IPC = {
+  agentToolRequest: 'agent-tools:request',
+  agentToolReply: 'agent-tools:reply',
+  agentToolStatus: 'agent-tools:status',
+  agentToolStatusGet: 'agent-tools:status-get',
   // App metadata
   appVersion: 'app:version',
   openExternal: 'shell:open-external',

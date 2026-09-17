@@ -85,6 +85,8 @@ export interface SettingsCapabilities {
 export interface UsageStats { hasData: boolean; supported: boolean; reason?: string; totalInputTokens: number; totalOutputTokens: number; totalCost: number; sessions: number; longestSessionSeconds: number; daily: Array<{ date: string; inputTokens: number; outputTokens: number; cost: number }>; models: Array<{ provider: string; model: string; inputTokens: number; outputTokens: number; cost: number }> }
 
 export interface PtyCreateRequest {
+  /** Managed preset identity; absent on legacy nodes and ordinary shells. */
+  agentId?: import('./agents/config').AgentId
   /** Stable per-node id; also the tmux session key (Phase 4). */
   id: string
   /** Owning project, used to clean up live sessions before persistence settles. */

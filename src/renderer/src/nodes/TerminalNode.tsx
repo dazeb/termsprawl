@@ -1,3 +1,4 @@
+import type { IntegrationStatus } from "@shared/agent-tools"
 import { useEffect, useRef, useState } from 'react'
 import { NodeResizer } from '@reactflow/node-resizer'
 import type { Node, NodeProps } from 'reactflow'
@@ -37,6 +38,15 @@ function getOwningRemote(projectId: string | null): ProjectRemote | undefined {
 // happens via the header (the drag handle). The × button asks Canvas to
 // destroy the tmux session; ordinary React unmount only detaches the view.
 export function TerminalNode({ id, data, selected }: NodeProps<TerminalNodeData>): React.JSX.Element {
+  const [integration, setIntegration] = useState<IntegrationStatus | null>(null)
+  useEffect(() => {
+    const tools = window.termsprawl.agentTools
+    if (!tools) return
+    let active = true
+    void tools.status(id).then((status) => { if (active) setIntegration(status) }).catch(() => {})
+    const off = tools.onStatus((nodeId, status) => { if (nodeId === id) setIntegration(status) })
+    return () => { active = false; off() }
+  }, [id])
   const hostRef = useRef<HTMLDivElement>(null)
   // The xterm instance + fit addon live inside the mount effect; the resize
   // hook below reads them through refs so layout stays rAF-deferred (no RO
@@ -201,6 +211,7 @@ export function TerminalNode({ id, data, selected }: NodeProps<TerminalNodeData>
         rows: term.rows,
         cwd: data.cwd,
         command: data.command,
+        agentId: data.agentId,
         terminalProfile: terminalSettings.profile,
         httpProxy: terminalSettings.proxy,
         ...(ownerRemote ? { remote: ownerRemote } : {})
@@ -245,7 +256,7 @@ export function TerminalNode({ id, data, selected }: NodeProps<TerminalNodeData>
         requestAnimationFrame(() => requestAnimationFrame(() => term.dispose()))
       })
     }
-  }, [id, data.cwd, data.command, isRemote, data.relayTerm, terminalSettings])
+  }, [id, data.cwd, data.command, data.agentId, isRemote, data.relayTerm, terminalSettings])
 
   // Remote relay node (B3): follow the local relay connection so we can show a
   // clear "waiting for relay peer" state and (re)attach once actually paired.
@@ -332,6 +343,9 @@ export function TerminalNode({ id, data, selected }: NodeProps<TerminalNodeData>
             {data.title}
           </span>
         )}
+        {integration && <span className="agent-badge" title={`${integration.adapter} ${integration.version}: ${integration.reason}`}>
+          {integration.state === 'connected' ? 'Connected' : integration.state === 'cli-fallback' ? 'CLI fallback' : 'Needs setup'}
+        </span>}
         {isRemote && <span className="terminal-remote-badge">remote</span>}
         <HelpBadge
           label="about this terminal"

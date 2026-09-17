@@ -16,6 +16,8 @@ export interface TerminalNodeData {
   cwd?: string
   /** Optional command the PTY runs instead of a bare shell (e.g. `druk`). */
   command?: string
+  /** Explicit identity for managed presets, including the disabled custom template. */
+  agentId?: AgentId
   /** Agent nodes linked for context sharing — CACHE ONLY. Source of truth is
    * the `.termsprawl/links/*.json` files; rebuilt on project load, so a
    * git-pulled link shows up even if this field was never saved. */
@@ -186,6 +188,7 @@ export function createAgentNode(agentId: AgentId, cwd?: string): Node<TerminalNo
     data: {
       kind: 'terminal',
       title: agentTitle(agentId),
+      agentId,
       cwd,
       command
     }
@@ -211,6 +214,7 @@ export function createResumeAgentNode(
     data: {
       kind: 'terminal',
       title: agentTitle(agentId),
+      agentId,
       cwd,
       command
     }
@@ -243,6 +247,10 @@ export function createAgentLoginNode(command: string, cwd?: string): Node<Termin
 /** True when a command launches a known, enabled agent CLI (e.g.
  * `claude --session-id n1` or a bare `codex`). Non-agent terminals (a plain
  * shell or `druk …`) return false. Used to scope context-link peer lists. */
+export function isAgentNodeData(data: { agentId?: AgentId; command?: string }): boolean {
+  return (data.agentId !== undefined && agentIds().includes(data.agentId)) || isAgentCommand(data.command)
+}
+
 export function isAgentCommand(command: string | undefined): boolean {
   if (!command) return false
   const first = command.trim().split(/\s+/)[0]

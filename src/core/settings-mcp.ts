@@ -1,9 +1,8 @@
 // MCP server discovery for the settings panel's MCP Servers page.
 //
-// termsprawl does not host MCP servers and does not rewrite the agent CLIs'
-// config: each CLI declares its own servers and launches them. What we can do
-// honestly is read those declarations, so the panel answers "which MCP servers
-// will my agents start?" without inventing state we do not own.
+// Inventory of user-declared MCP servers. Main additionally includes the
+// termsprawl bridges configured for managed agent launches; this reader never
+// rewrites the agent CLIs' persistent configuration.
 //
 // Two shapes exist in the wild:
 //   Claude Code  ~/.claude.json        { "mcpServers": { "<name>": {…} } }

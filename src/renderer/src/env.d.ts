@@ -1,3 +1,4 @@
+import type { CanvasToolRequest, CanvasToolReply, IntegrationStatus } from "@shared/agent-tools"
 import type {
   DiffBase,
   DiffInfoResult,
@@ -50,6 +51,12 @@ import type { ChatEvent } from '../../core/chat/types'
 declare global {
   interface Window {
     termsprawl: {
+      agentTools?: {
+        onRequest(callback: (request: CanvasToolRequest) => void): () => void
+        reply(reply: CanvasToolReply): void
+        status(nodeId: string): Promise<IntegrationStatus | null>
+        onStatus(callback: (nodeId: string, status: IntegrationStatus) => void): () => void
+      }
       appVersion(): Promise<string>
       openExternal(url: string): Promise<void>
       /** Which edition serves this renderer — the settings panel shows only

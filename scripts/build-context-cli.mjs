@@ -40,3 +40,18 @@ rmSync(TARGET, { force: true })
 renameSync(OUT, TARGET)
 console.log('built scripts/termsprawl-context.mjs')
 
+
+// A dependency-free MCP/CLI client executed with the app's bundled Electron runtime.
+await build({
+  configFile: false,
+  logLevel: 'warn',
+  build: {
+    ssr: true,
+    lib: { entry: 'src/core/agent-tool-entry.ts', formats: ['es'] },
+    outDir: 'out/tools',
+    emptyOutDir: false,
+    minify: false,
+    target: 'node22',
+    rollupOptions: { output: { entryFileNames: 'agent-tool-entry.mjs' } }
+  }
+})

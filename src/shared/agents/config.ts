@@ -37,6 +37,11 @@ export interface AgentConfig {
   command: string
   /** Visible in the canvas context menu. Custom is a template, not enabled. */
   enabled: boolean
+  integration: {
+    strategy: 'probe'
+    cliFallback: boolean
+    transcriptReader: 'claude-jsonl' | null
+  }
   capabilities: AgentCapabilities
 }
 
@@ -47,6 +52,7 @@ export const AGENT_REGISTRY: Record<AgentId, AgentConfig> = {
     title: 'claude',
     command: 'claude',
     enabled: true,
+    integration: { strategy: 'probe', cliFallback: true, transcriptReader: 'claude-jsonl' },
     capabilities: {
       hooks: true,
       resume: true,
@@ -65,13 +71,14 @@ export const AGENT_REGISTRY: Record<AgentId, AgentConfig> = {
     title: 'codex',
     command: 'codex',
     enabled: true,
+    integration: { strategy: 'probe', cliFallback: true, transcriptReader: null },
     capabilities: {
       hooks: true,
       resume: true,
       subagents: true,
       recurring: false,
       branch: false,
-      contextLink: false,
+      contextLink: true,
       usage: false,
       chat: false,
       permissionMode: true
@@ -87,6 +94,7 @@ export const AGENT_REGISTRY: Record<AgentId, AgentConfig> = {
     title: 'antigravity',
     command: 'gemini',
     enabled: true,
+    integration: { strategy: 'probe', cliFallback: true, transcriptReader: null },
     capabilities: {
       // Honesty flag: no hook normalizer exists for this CLI (hook-server
       // NORMALIZERS maps claude only), so the UI must not offer status
@@ -96,7 +104,7 @@ export const AGENT_REGISTRY: Record<AgentId, AgentConfig> = {
       subagents: true,
       recurring: false,
       branch: false,
-      contextLink: false,
+      contextLink: true,
       usage: true,
       chat: false,
       permissionMode: true
@@ -108,6 +116,7 @@ export const AGENT_REGISTRY: Record<AgentId, AgentConfig> = {
     title: 'grok',
     command: 'grok',
     enabled: true,
+    integration: { strategy: 'probe', cliFallback: true, transcriptReader: null },
     capabilities: {
       // Honesty flag: no hook normalizer exists for this CLI (hook-server
       // NORMALIZERS maps claude only) — see the gemini note above.
@@ -116,7 +125,7 @@ export const AGENT_REGISTRY: Record<AgentId, AgentConfig> = {
       subagents: true,
       recurring: true,
       branch: true,
-      contextLink: false,
+      contextLink: true,
       usage: true,
       chat: true,
       permissionMode: true
@@ -131,6 +140,7 @@ export const AGENT_REGISTRY: Record<AgentId, AgentConfig> = {
     title: 'openclaude',
     command: 'openclaude',
     enabled: true,
+    integration: { strategy: 'probe', cliFallback: true, transcriptReader: null },
     capabilities: {
       // Honesty: no hook normalizer exists (NORMALIZERS maps claude + codex).
       // No capability is claimed until verified against the real CLI.
@@ -139,7 +149,7 @@ export const AGENT_REGISTRY: Record<AgentId, AgentConfig> = {
       subagents: false,
       recurring: false,
       branch: false,
-      contextLink: false,
+      contextLink: true,
       usage: false,
       chat: false,
       permissionMode: false
@@ -151,13 +161,14 @@ export const AGENT_REGISTRY: Record<AgentId, AgentConfig> = {
     title: 'agent',
     command: 'agent',
     enabled: false,
+    integration: { strategy: 'probe', cliFallback: true, transcriptReader: null },
     capabilities: {
       hooks: false,
       resume: false,
       subagents: false,
       recurring: false,
       branch: false,
-      contextLink: false,
+      contextLink: true,
       usage: false,
       chat: false,
       permissionMode: false

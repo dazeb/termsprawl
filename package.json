@@ -9,7 +9,7 @@
   "homepage": "https://github.com/dazeb/termsprawl",
   "desktopName": "termsprawl",
   "scripts": {
-    "dev": "electron-vite dev",
+    "dev": "pnpm run build:cli && electron-vite dev",
     "build": "pnpm run build:cli && electron-vite build",
     "build:server": "vite build --config vite.config.server.ts",
     "start:server": "TERMSPRAWL_SERVER_ENTRY=1 node out/server/index.js",

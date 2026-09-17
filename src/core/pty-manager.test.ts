@@ -95,6 +95,20 @@ describe('PtyManager', () => {
     expect(platform.captured.some((c) => c.data.includes('COMMAND_MARK'))).toBe(true)
   })
 
+  it('delivers managed tool input after attachment and isolates environment in an existing tmux server', { timeout: 30000 }, async () => {
+    const { manager } = makeManager()
+    manager.create({ id: 'env-one', cols: 80, rows: 24, shell: '/bin/bash', env: { TERMSPRAWL_SESSION_FILE: '/tmp/first session.json' } })
+    await waitFor(() => manager.hasReadySession('env-one'))
+    manager.create({ id: 'env-two', cols: 80, rows: 24, shell: '/bin/bash', command: 'missing-preset', env: { TERMSPRAWL_SESSION_FILE: '/tmp/second session.json' } }, '/bin/bash --noprofile --norc')
+    expect(() => manager.writeManaged('env-two', 'echo early', true)).toThrow('attaching')
+    await waitFor(() => manager.hasReadySession('env-two'))
+    manager.writeManaged('env-two', 'printf "result:%s\\n" "$TERMSPRAWL_SESSION_FILE"', true)
+    await waitFor(() => (manager.capturePane('env-two') ?? '').includes('result:/tmp/second session.json'))
+    expect(manager.capturePane('env-two')).not.toContain('result:/tmp/first session.json')
+    manager.destroy('env-one')
+    manager.destroy('env-two')
+  })
+
   it('tmux: executes an agent preset once and preserves it on reattach', { timeout: 30000 }, async () => {
     const { manager, platform } = makeManager()
     const marker = join(platform.userDataPath, 'agent-starts')

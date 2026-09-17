@@ -44,6 +44,7 @@ export class PtyManager {
   private readonly projectBySession = new Map<string, string>()
   private readonly remoteBySession = new Map<string, RemoteHost>()
   private readonly destroying = new Set<string>()
+  private readonly ready = new Set<string>()
   private readonly scrollback: ScrollbackStore
   private tmux: TmuxConfig | null
 
@@ -52,7 +53,23 @@ export class PtyManager {
     this.scrollback = new ScrollbackStore(platform.userDataPath)
   }
 
-  create(req: PtyCreateRequest): PtyCreateResult {
+  isWarm(id: string): boolean { return Boolean(this.tmux && hasSession(this.tmux, id)) }
+  localTmux(): TmuxConfig | null { return this.tmux }
+  hasLiveSession(id: string): boolean { return this.sessions.has(id) }
+  hasReadySession(id: string): boolean { return this.sessions.has(id) && this.ready.has(id) }
+
+  /** Tool input goes straight to the pane, avoiding the attaching client's input race. */
+  writeManaged(id: string, data: string, submit = false): void {
+    assertTerminalId(id)
+    if (!this.hasReadySession(id)) throw new Error('Terminal is still attaching; read its output before sending input')
+    if (this.tmux && !this.remoteBySession.has(id)) {
+      const target = `=${sessionNameFor(id)}:`
+      execFileSync(this.tmux.tmuxPath, [...this.tmux.baseArgs, 'send-keys', '-t', target, '-l', '--', data], { stdio: 'ignore', timeout: 3000 })
+      if (submit) execFileSync(this.tmux.tmuxPath, [...this.tmux.baseArgs, 'send-keys', '-t', target, 'Enter'], { stdio: 'ignore', timeout: 3000 })
+    } else this.write(id, data + (submit ? '\r' : ''))
+  }
+
+  create(req: PtyCreateRequest, preparedCommand?: string): PtyCreateResult {
     assertTerminalId(req.id)
     const shell = req.shell ?? process.env.SHELL ?? '/bin/bash'
     // For a remote request, `req.cwd` is the REMOTE path (may not exist here);
@@ -64,10 +81,10 @@ export class PtyManager {
     // Launch presets as the pane's process, not as keystrokes sent before
     // tmux/ssh has attached (those can be dropped, leaving a bare shell).
     // Remote commands must resolve on the remote host, never this machine.
-    const command = req.command
+    const command = preparedCommand ?? (req.command
       ? req.remote ? req.command : resolveCommandLine(req.command)
-      : undefined
-    const notice = req.command && !req.remote ? unresolvedNotice(req.command) : null
+      : undefined)
+    const notice = !preparedCommand && req.command && !req.remote ? unresolvedNotice(req.command) : null
     const launch = command ? notice ? missingCommandExec(notice) : `exec ${command}` : undefined
     const sessionCommand = launch ? [shell, '-lc', launch] : [shell]
 
@@ -99,6 +116,7 @@ export class PtyManager {
         'new-session',
         '-A',
         '-D',
+        ...Object.entries(req.env ?? {}).flatMap(([key, value]) => ['-e', `${key}=${value}`]),
         '-s',
         sessionName,
         '--',
@@ -126,6 +144,7 @@ export class PtyManager {
     // replacing it; with tmux this only detaches, while fallback shells exit.
     const existing = this.sessions.get(req.id)
     if (existing) existing.kill()
+    this.ready.delete(req.id)
 
     const session = pty.spawn(spawnFile, spawnArgs, {
       name: 'xterm-256color',
@@ -153,6 +172,7 @@ export class PtyManager {
 
     session.onData((data) => {
       if (this.sessions.get(req.id) === session) {
+        this.ready.add(req.id)
         this.platform.broadcast(ptyDataChannel(req.id), data)
       }
     })
@@ -165,6 +185,7 @@ export class PtyManager {
       this.platform.broadcast(ptyExitChannel(req.id), info)
       if (this.destroying.has(req.id)) return
       this.sessions.delete(req.id)
+      this.ready.delete(req.id)
       this.projectBySession.delete(req.id)
       this.remoteBySession.delete(req.id)
       if (!req.remote) this.scrollback.stop(req.id, this.tmux ?? undefined)
@@ -214,6 +235,7 @@ export class PtyManager {
       session.kill()
     }
     this.sessions.delete(id)
+    this.ready.delete(id)
     this.projectBySession.delete(id)
     this.remoteBySession.delete(id)
     if (!remote) this.scrollback.destroy(id)
@@ -291,6 +313,7 @@ export class PtyManager {
       session.kill()
     }
     this.sessions.clear()
+    this.ready.clear()
     this.projectBySession.clear()
     this.remoteBySession.clear()
     this.destroying.clear()

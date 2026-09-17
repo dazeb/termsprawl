@@ -1,3 +1,4 @@
+import type { CanvasToolRequest, CanvasToolReply, IntegrationStatus } from "../core/agent-tools"
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC, agentSessionNameChannel, ptyDataChannel, ptyExitChannel } from '../shared/ipc'
 import type { AgentStatusEvent } from '../shared/agent-status'
@@ -55,6 +56,20 @@ import type { UpdateStatus } from '../shared/update-status'
 // The narrow API surface exposed to the renderer as window.termsprawl.
 // Grows per phase; the renderer must never touch ipcRenderer directly.
 const api = {
+  agentTools: {
+    onRequest: (callback: (request: CanvasToolRequest) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, request: CanvasToolRequest): void => callback(request)
+      ipcRenderer.on(IPC.agentToolRequest, listener)
+      return () => { ipcRenderer.removeListener(IPC.agentToolRequest, listener) }
+    },
+    reply: (reply: CanvasToolReply): void => ipcRenderer.send(IPC.agentToolReply, reply),
+    status: (nodeId: string): Promise<IntegrationStatus | null> => ipcRenderer.invoke(IPC.agentToolStatusGet, nodeId),
+    onStatus: (callback: (nodeId: string, status: IntegrationStatus) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, event: { nodeId: string; status: IntegrationStatus }): void => callback(event.nodeId, event.status)
+      ipcRenderer.on(IPC.agentToolStatus, listener)
+      return () => { ipcRenderer.removeListener(IPC.agentToolStatus, listener) }
+    }
+  },
   appVersion: (): Promise<string> => ipcRenderer.invoke(IPC.appVersion),
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke(IPC.openExternal, url),
 

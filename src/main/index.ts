@@ -1,3 +1,4 @@
+import { AgentToolRuntime } from "./agent-tool-runtime"
 import { app, BrowserWindow, dialog, ipcMain, Notification, protocol, net, shell, screen } from 'electron'
 import { execFileSync, spawn } from 'node:child_process'
 import { appendFileSync, readFileSync, writeFileSync } from 'node:fs'
@@ -147,6 +148,8 @@ protocol.registerSchemesAsPrivileged([
 // terminal byte reaches the renderer through platform.broadcast on a
 // `pty:data:<id>` channel; the relay runtime subscribes here so a paired peer
 // can be served the same stream without duplicating data paths.
+let agentToolsRuntime: AgentToolRuntime | undefined
+
 const ptyRelayTaps = new Map<string, Set<(data: string) => void>>()
 
 // The Electron implementation of the core's platform seam.
@@ -164,6 +167,11 @@ const platform: CorePlatform = {
         const data = String(payload)
         for (const cb of taps) cb(data)
       }
+    }
+    if (channel.startsWith('pty:exit:')) {
+      const nodeId = channel.slice('pty:exit:'.length)
+      // A detached tmux client is not the end of the agent running in its pane.
+      if (!ptyManager.isWarm(nodeId)) agentToolsRuntime?.revoke(nodeId)
     }
     for (const win of BrowserWindow.getAllWindows()) {
       win.webContents.send(channel, payload)
@@ -695,7 +703,7 @@ function registerWorkspaceIpc(): void {
   ipcMain.handle(IPC.projectDelete, (_event, id: string) => {
     const result = deleteProjectAndDestroyTerminals(
       workspaceStore,
-      (terminalId) => ptyManager.destroy(terminalId),
+      (terminalId) => { agentToolsRuntime?.revoke(terminalId); ptyManager.destroy(terminalId) },
       id,
       ptyManager.sessionIdsForProject(id)
     )
@@ -1083,7 +1091,7 @@ function registerUpdateIpc(): { warmCapabilityCache: () => void } {
       { path: codexConfigPath(homedir()), agent: 'codex' },
     ]),
     commands: discoverCommands(),
-    mcp: inventoryMcp(mcpFiles(homedir())),
+    mcp: [...inventoryMcp(mcpFiles(homedir())), ...(agentToolsRuntime?.mcpInventory() ?? [])],
     plugins: discoverPlugins(pluginRoots(homedir()), codexConfigPath(homedir())),
     subagents: discoverSubagents(agentRoots(homedir())),
   })
@@ -1654,17 +1662,18 @@ function registerPtyIpc(): void {
     if (isClaudeAgentCommand(augmented.command ?? '') && augmented.cwd) {
       ensureContextDiscovery(augmented.cwd)
     }
-    return ptyManager.create(augmented)
+    const prepared = agentToolsRuntime?.prepare(augmented)
+    return ptyManager.create(prepared?.request ?? augmented, prepared?.command)
   })
   ipcMain.on(IPC.ptyWrite, (_event, id: string, data: string) => ptyManager.write(id, data))
   ipcMain.on(IPC.ptyResize, (_event, id: string, cols: number, rows: number) =>
     ptyManager.resize(id, cols, rows)
   )
-  ipcMain.handle(IPC.ptyDestroy, (_event, id: string) => ptyManager.destroy(id))
+  ipcMain.handle(IPC.ptyDestroy, (_event, id: string) => { agentToolsRuntime?.revoke(id); return ptyManager.destroy(id) })
   ipcMain.handle(IPC.terminalClose, (_event, projectId: string, id: string) => {
     return closeTerminalNode(
       workspaceStore,
-      (terminalId) => ptyManager.destroy(terminalId),
+      (terminalId) => { agentToolsRuntime?.revoke(terminalId); ptyManager.destroy(terminalId) },
       projectId,
       id
     )
@@ -1718,7 +1727,7 @@ void app.whenReady().then(async () => {
   for (const projectId of pendingProjectIds) {
     const result = deleteProjectAndDestroyTerminals(
       workspaceStore,
-      (terminalId) => ptyManager.destroy(terminalId),
+      (terminalId) => { agentToolsRuntime?.revoke(terminalId); ptyManager.destroy(terminalId) },
       projectId
     )
     for (const terminalId of result.cleanupPendingIds) {
@@ -1755,6 +1764,15 @@ void app.whenReady().then(async () => {
 
   syncTelegramBot()
 
+  agentToolsRuntime = new AgentToolRuntime(platform, workspaceStore, ptyManager, () => appSettings.current.agentBrowserControl === true, app.getVersion())
+  try {
+    await agentToolsRuntime.start(process.execPath, join(app.getAppPath(), 'out', 'tools', 'agent-tool-entry.mjs'))
+  } catch (error) {
+    console.error('[agent-tools] startup failed:', error)
+    await agentToolsRuntime.close()
+    agentToolsRuntime = undefined
+  }
+
   createWindow()
 
   setTimeout(() => {
@@ -1771,6 +1789,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  void agentToolsRuntime?.close()
   ptyManager.killAll()
   linkService.dispose()
   stopA2aEndpoint()

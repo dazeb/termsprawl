@@ -25,8 +25,10 @@ function guestKey(nodeId: string, tabId: string): string {
   return `${nodeId}::${tabId}`
 }
 
-export function guestIdForNode(nodeId: string, tabId: string): GuestId | undefined {
-  return guests.get(guestKey(nodeId, tabId))
+export function guestIdForNode(nodeId: string, tabId?: string): GuestId | undefined {
+  if (tabId) return guests.get(guestKey(nodeId, tabId))
+  // Legacy browser nodes have no persisted tab ID until their first navigation.
+  return [...guests].find(([key]) => key.startsWith(`${nodeId}::`))?.[1]
 }
 
 export function registerBrowserGuest(nodeId: string, tabId: string, guestId: number): void {

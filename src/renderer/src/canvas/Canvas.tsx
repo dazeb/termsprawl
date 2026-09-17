@@ -1,3 +1,5 @@
+import { flushSync } from "react-dom"
+import { applyCanvasTool } from "../state/agent-tool-canvas"
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import ReactFlow, {
   Background,
@@ -30,7 +32,7 @@ import {
   createRemoteTerminalNode,
   createBrowserNode,
   createChatNode,
-  isAgentCommand,
+  isAgentNodeData,
   layoutCascade,
   layoutFlat,
   layoutRestore,
@@ -486,6 +488,53 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
     },
     [activeProjectId, dropCachedNode, invalidate, push, cascadeLinksForNodes]
   )
+  useEffect(() => {
+    const tools = window.termsprawl.agentTools
+    if (!tools) return
+    return tools.onRequest((request) => {
+      void (async () => {
+        if (request.expiresAt < Date.now()) throw new Error('Canvas request expired; no change applied')
+        if (loadingRef.current || !activeProjectIdRef.current || request.projectId !== activeProjectIdRef.current) throw new Error('Select the agent’s project tab before using canvas tools')
+        const generation = projectGeneration.current
+        const projectId = request.projectId
+        if (remote) throw new Error('Agent tools currently support local desktop projects only')
+        let value: unknown
+        if (request.operation === 'terminal_close') {
+          const id = String(request.args.nodeId)
+          const target = latestNodesRef.current.find((node) => node.id === id)
+          if (target?.data.kind !== 'terminal' || target.data.relayTerm) throw new Error('Local terminal not found')
+          const closed = await window.termsprawl.pty.closeNode(projectId, id)
+          dropCachedNode(projectId, id)
+          if (generation !== projectGeneration.current) throw new Error('Terminal closed, but the project changed during the operation')
+          invalidate([id])
+          const next = removeNode(latestNodesRef.current, id)
+          flushSync(() => setNodes(next))
+          latestNodesRef.current = next
+          cascadeLinksForNodes([id])
+          value = { nodeId: id, cleanupPendingIds: closed.cleanupPendingIds }
+        } else {
+          const planned = applyCanvasTool(latestNodesRef.current, request, cwd)
+          if (planned.nodes !== latestNodesRef.current) {
+            flushSync(() => setNodes(planned.nodes))
+            latestNodesRef.current = planned.nodes
+            await saveProjectNodes(projectId, serializeNodes(planned.nodes))
+            push()
+          }
+          value = planned.value
+        }
+        if (generation !== projectGeneration.current) throw new Error('Project changed while applying the operation; inspect the project before retrying')
+        if (['browser_open', 'terminal_open', 'agent_launch', 'artifact_open', 'sticky_open', 'canvas_select', 'canvas_group'].includes(request.operation)) {
+          const result = value as { nodeId?: string; nodeIds?: string[] }
+          const ids = result.nodeId ? [result.nodeId] : result.nodeIds ?? []
+          requestAnimationFrame(() => {
+            if (generation === projectGeneration.current) void fitView({ nodes: ids.map((id) => ({ id })), padding: 0.2, maxZoom: 1, duration: 200 })
+          })
+        }
+        tools.reply({ requestId: request.requestId, result: { ok: true, value } })
+      })().catch((error: unknown) => tools.reply({ requestId: request.requestId, result: { ok: false, error: error instanceof Error ? error.message : String(error) } }))
+    })
+  }, [cwd, remote, saveProjectNodes, push, invalidate, dropCachedNode, cascadeLinksForNodes, fitView])
+
   const canvasApi = useMemo(
     () => ({ updateNodeData, persistNodeData, commit, closeNode }),
     [updateNodeData, persistNodeData, commit, closeNode]
@@ -927,7 +976,7 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
   const [a2aPeers, setA2aPeers] = useState<Array<{ id: string; label: string; endpoint: string }>>([])
   const [a2aSendNote, setA2aSendNote] = useState<string | null>(null)
   const menuIsAgentNode =
-    menuNode?.type === 'terminal' && isAgentCommand((menuNode.data as { command?: string }).command)
+    menuNode?.type === 'terminal' && isAgentNodeData(menuNode.data as TerminalNodeData)
   // Load the peer list when the submenu opens (settings are the source).
   useEffect(() => {
     if (!a2aMenuOpen) return
@@ -966,7 +1015,7 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
         (n) =>
           n.id !== menu?.nodeId &&
           n.type === 'terminal' &&
-          isAgentCommand((n.data as { command?: string }).command)
+          isAgentNodeData(n.data as TerminalNodeData)
       )
     : []
 
@@ -1198,6 +1247,10 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
               <button role="menuitem" onClick={resumeAgentSession} title="New node resuming this session">
                 Resume session in new node
               </button>
+            </>
+          )}
+          {menuIsAgentNode && (
+            <>
               {cwd && agentPeers.length > 0 && (
                 <>
                   <button role="menuitem"
