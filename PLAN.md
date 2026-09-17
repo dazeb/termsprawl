@@ -29,6 +29,20 @@ sections below retain their historical implementation and verification records;
 they are not evidence of fresh test runs or the current deployment state.
 
 Recent completed implementation:
+- Browser node fill repair shipped (2026-09-17): the webview-display fix from
+  `2b6565d` had never been released — it was authored *after* the `v0.26.0` tag,
+  so every installable build still painted only the guest's top 150px with the
+  rest black (~70% of an enlarged node). Confirmed by extracting the running
+  0.26.0 AppImage's app.asar (`display: block`) versus a build of `main`
+  (`display: flex`), and reproduced in a minimal Electron harness (660px host:
+  150px painted under `block`, 319px under `flex`, devicePixelRatio 2). Shipped
+  in 0.27.0; the released AppImage was re-extracted and verified to contain
+  `display: flex` and no `display: block`. Lesson: when this symptom is reported,
+  check which build is running before debugging the renderer.
+- Rotating 4D tesseract boot screen (2026-09-17): 16 vertices rotated in the XW
+  and YW planes and projected 4D→3D→2D, with per-edge depth shading. The math
+  and palette are pure modules with their own tests; the overlay cross-fades over
+  the canvas so the fade costs no startup time. Shipped in 0.27.0.
 - Agent workspace tools (2026-09-17): agents launched by termsprawl now receive
   a shared, Electron-free operation service with two clients — a stdio MCP
   bridge and the bundled `termsprawlctl` helper — so one implementation serves
@@ -38,21 +52,10 @@ Recent completed implementation:
   owner with request/response acknowledgements rather than a second node store.
   Launch preparation picks an adapter from the executable's own advertised
   capabilities, never its display name, and unverified mechanisms report
-  **Needs setup** instead of claiming success. Managed runtime files are
-  installed under app user data at 0600/0700. Verified: typecheck clean; 1,094
-  tests pass across 114 files; originality gate OK (265 files vs 546 prior, one
-  known-benign CSS block); production build plus AppImage and `.deb`; the new
-  Electron smoke test passes end to end with two agents (launch identity,
-  bundled-runtime `doctor`, MCP initialize/tools-list/tool-call, browser
-  navigate/type/click/screenshot with cross-agent ownership refusal and explicit
-  transfer, terminal submit/read, external window leaving the canvas attached,
-  session close, canvas persistence) and its restart phase confirms a relaunch
-  keeps the pane PID and credential digest while issuing a new instance ID. A
-  packaged boot reads the helper out of the asar into user data byte-identically.
-  Gitea `verify` run #179 passed on the merge commit. Not yet released; remote
-  SSH and Server Edition transport are deferred, and transcript reading is
-  advertised only for Claude transcripts. Docs are prepared on a branch, not
-  deployed.
+  **Needs setup** instead of claiming success. Managed runtime files install
+  under app user data at 0600/0700. Shipped in 0.27.0; remote SSH and Server
+  Edition transport are deferred, and transcript reading is advertised only for
+  Claude transcripts.
 - Shared browser sessions (2026-09-16): sandboxed sign-in popups use the
   canvas browser profile; authenticated agent cookie read/write/clear commands
   operate on that same profile. New browsers open at 1000×720 with no resize
@@ -76,7 +79,34 @@ Recent completed implementation:
 - Link inspector synchronization and automatic link execution repairs across
   desktop and Server Edition (`e00e7a8`).
 
-Release state verified on 2026-09-16: **0.26.0 is shipped.** Gitea `main` and
+Release state verified on 2026-09-17: **0.27.0 is shipped.** `main` and tag
+`v0.27.0` both resolve to `dbbcf8bc46db90c2bfcb90a1dd34691380627b5b` on all
+three remotes. The Gitea `verify` (#182, on the bump) and `release` (#183, on
+the tag) jobs succeeded — no repeat of the CT 100 disk failure, which was
+checked first (51% used, 7.4G free before the build). The AppImage, `.deb` and
+`latest-linux.yml` were read back from **both** the Gitea release and GitHub
+Releases with matching sizes, the downloaded AppImage's sha512 matches the
+`latest-linux.yml` value byte for byte, both download URLs return 200, and the
+released AppImage was extracted and confirmed to contain the `display: flex`
+browser fix (and no `display: block`), the tesseract boot styles and
+`out/tools/agent-tool-entry.mjs`. It also boots and provisions the agent-tools
+runtime into an isolated user data dir. The site is live at `APP_VERSION`
+0.27.0 (live bundle contains the version) and the docs deploy run #21 for
+`docs: document agent tools…` (`9cf092d`) succeeded, with `/docs/agent-tools`
+serving a real page.
+
+Pre-release gates run on the workstation, not in CI: `space-e2e.sh` passed all
+seven steps (seed → boot-restore → ws-drive → pty → restart → push) in
+`TS_E2E_SKIP_DOCKER=1` mode against a fresh `build` + `build:server`.
+`github-import-e2e.sh` could not run — it needs Docker, and this workstation's
+Docker registry auth is broken (`401 Unauthorized` pulling `node:24-slim`), so
+the stale `ts-space:latest` image could not be rebuilt either. The docker-mode
+`space-e2e` failure seen first was therefore the stale image, not a regression:
+no file under `src/server`, `src/core/cloud.ts`, `src/core/space-*.ts` or
+`Dockerfile.space` changed in this release.
+
+Release state verified on 2026-09-16: **0.26.0 is shipped** (superseded by
+0.27.0 below; kept as the historical record). Gitea `main` and
 tag `v0.26.0` both resolve to `18dd668dc421255cb683c43238ff3322e1801212` on all
 three remotes (origin / github / gitea), matching the local version-bump
 commit. The Gitea `verify` and `release` jobs for that tag succeeded, and the
@@ -100,13 +130,13 @@ retroactively. **Watch CT 100 disk headroom before every release**; the 6.3G of
 Gitea release attachments is what fills it.
 
 Next release work:
-- Agent workspace tools is the current unreleased scope on `main`. Before it
-  ships: deploy the matching docs (they are committed on `codex/astra` in
-  `termsprawl-docs`, not on `main`, because that repo auto-deploys on a push to
-  `main` and this feature is not in a released build yet), and decide whether
-  the feature warrants a marketing blurb on termsprawl.com.
-- Deferred within that scope: remote SSH and Server Edition transport, and
-  transcript reading beyond Claude. The design note for the feature lives
+- Agent workspace tools and the browser fill repair shipped in **0.27.0**
+  (2026-09-17), along with the tesseract boot screen. The matching docs are
+  live (`termsprawl-docs` `main` = `9cf092d`, deploy run #21 succeeded) and the
+  site reports 0.27.0. A marketing blurb was judged unnecessary: the feature
+  speaks to agents rather than to a browsing visitor.
+- Deferred within the agent-tools scope: remote SSH and Server Edition
+  transport, and transcript reading beyond Claude. The design note lives
   outside the repo (`~/.codex/plans/`, "Automatic agent integration for
   termsprawl"); its remaining acceptance items are the per-agent real-launch
   smoke tests and the two-agent concurrency exercise, which the Electron smoke
