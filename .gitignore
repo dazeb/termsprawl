@@ -35,3 +35,8 @@ npm-debug.log*
 .worktrees/
 
 .worktrees/
+
+# ZCode session artifacts (plan files, session config). Not product files —
+# they vary per agent/session and would otherwise make the tree look dirty to
+# release.sh's clean-tree check.
+.zcode/
