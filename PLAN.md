@@ -29,6 +29,30 @@ sections below retain their historical implementation and verification records;
 they are not evidence of fresh test runs or the current deployment state.
 
 Recent completed implementation:
+- Agent workspace tools (2026-09-17): agents launched by termsprawl now receive
+  a shared, Electron-free operation service with two clients — a stdio MCP
+  bridge and the bundled `termsprawlctl` helper — so one implementation serves
+  every preset. Connections bind to an app instance, project and agent node,
+  and the service validates access itself (a caller-supplied node ID is not
+  authorization). Canvas mutations route through React Flow's existing state
+  owner with request/response acknowledgements rather than a second node store.
+  Launch preparation picks an adapter from the executable's own advertised
+  capabilities, never its display name, and unverified mechanisms report
+  **Needs setup** instead of claiming success. Managed runtime files are
+  installed under app user data at 0600/0700. Verified: typecheck clean; 1,094
+  tests pass across 114 files; originality gate OK (265 files vs 546 prior, one
+  known-benign CSS block); production build plus AppImage and `.deb`; the new
+  Electron smoke test passes end to end with two agents (launch identity,
+  bundled-runtime `doctor`, MCP initialize/tools-list/tool-call, browser
+  navigate/type/click/screenshot with cross-agent ownership refusal and explicit
+  transfer, terminal submit/read, external window leaving the canvas attached,
+  session close, canvas persistence) and its restart phase confirms a relaunch
+  keeps the pane PID and credential digest while issuing a new instance ID. A
+  packaged boot reads the helper out of the asar into user data byte-identically.
+  Gitea `verify` run #179 passed on the merge commit. Not yet released; remote
+  SSH and Server Edition transport are deferred, and transcript reading is
+  advertised only for Claude transcripts. Docs are prepared on a branch, not
+  deployed.
 - Shared browser sessions (2026-09-16): sandboxed sign-in popups use the
   canvas browser profile; authenticated agent cookie read/write/clear commands
   operate on that same profile. New browsers open at 1000×720 with no resize
@@ -76,8 +100,18 @@ retroactively. **Watch CT 100 disk headroom before every release**; the 6.3G of
 Gitea release attachments is what fills it.
 
 Next release work:
-- Choose the next feature or maintenance scope explicitly; no Phase 20 is
-  currently defined in this plan.
+- Agent workspace tools is the current unreleased scope on `main`. Before it
+  ships: deploy the matching docs (they are committed on `codex/astra` in
+  `termsprawl-docs`, not on `main`, because that repo auto-deploys on a push to
+  `main` and this feature is not in a released build yet), and decide whether
+  the feature warrants a marketing blurb on termsprawl.com.
+- Deferred within that scope: remote SSH and Server Edition transport, and
+  transcript reading beyond Claude. The design note for the feature lives
+  outside the repo (`~/.codex/plans/`, "Automatic agent integration for
+  termsprawl"); its remaining acceptance items are the per-agent real-launch
+  smoke tests and the two-agent concurrency exercise, which the Electron smoke
+  test covers in fixture form rather than against each installed CLI.
+- No further phase is defined beyond this; choose the next scope explicitly.
 
 ## Legal ground rules (Phase 0 enforced, applies forever)
 
