@@ -3270,8 +3270,23 @@ html[data-theme='light'] option {
   border-color: rgba(198, 241, 53, 0.4);
 }
 
-/* Tesseract loading spinner — the logo rotating while the workspace boots.
- * Pure CSS so prefers-reduced-motion can freeze it (audit F3 pattern). */
+/* Positioning context shared by the canvas and the boot overlay: the overlay
+   covers the canvas area only, so the toolbar stays visible beneath it. */
+.canvas-stage {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Boot overlay — the rotating tesseract while the workspace loads.
+ *
+ * The canvas is painted by TesseractSpinner (4D geometry projected twice, see
+ * components/tesseract-geometry.ts); this stylesheet only places it and fades
+ * the overlay out. Motion is JS-driven there, not CSS, which is why the
+ * reduced-motion guard for the rotation lives in the component and only the
+ * fade transition is disabled here. */
 .boot-overlay {
   position: absolute;
   inset: 0;
@@ -3279,26 +3294,40 @@ html[data-theme='light'] option {
   place-items: center;
   background: var(--bg);
   z-index: var(--z-overlay);
+  opacity: 1;
+  transition: opacity 180ms ease-out;
+}
+/* Set when loading finishes. The canvas mounts underneath at the same moment,
+   so the overlay cross-fades away instead of hard-cutting — the boot screen is
+   usually up for well under a second, and a cut reads as a glitch. */
+.boot-overlay--leaving {
+  opacity: 0;
 }
 .tesseract-spinner {
-  width: 72px;
-  height: 72px;
-  animation: tesseract-spin 3s linear infinite;
-  opacity: 0.9;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
 }
-.tesseract-spinner img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
+.tesseract-canvas {
+  width: 132px;
+  height: 132px;
+  display: block;
+}
+.boot-wordmark {
+  font-family: 'Geist Mono', 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.34em;
+  /* letter-spacing adds its space after EVERY glyph including the last, so the
+     element is one letter-space wider than the visible word and the ink would
+     sit half a space left of the canvas centre. Cancelling the trailing space
+     with a negative end margin makes the margin box match the ink exactly. */
+  margin-inline-end: -0.34em;
+  color: var(--muted);
   user-select: none;
-  -webkit-user-drag: none;
-}
-@keyframes tesseract-spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .tesseract-spinner {
-    animation: none;
+  .boot-overlay {
+    transition: none;
   }
 }

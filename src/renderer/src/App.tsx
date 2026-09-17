@@ -11,10 +11,11 @@ import { HelpBadge } from './components/HelpBadge'
 import { isResizeObserverNoise } from './ro-noise'
 import { useProjects } from './state/projects'
 import { resolveAccent } from './state/accent'
-import { applyTheme } from './state/theme'
+import { applyTheme, resolveTheme } from './state/theme'
 import { useBrowserHome } from './state/browser-home'
 import { Onboarding, ShouldShowOnboarding } from './components/Onboarding'
 import { TesseractSpinner } from './components/TesseractSpinner'
+import { useBootOverlay } from './hooks/useBootOverlay'
 import type { AppSettings } from '@shared/types'
 
 export function App(): React.JSX.Element {
@@ -29,6 +30,12 @@ export function App(): React.JSX.Element {
   const activeCwd = projects.find((p) => p.id === activeProjectId)?.cwd ?? undefined
   const activeRemote = projects.find((p) => p.id === activeProjectId)?.remote
   const activeAccent = projects.find((p) => p.id === activeProjectId)?.settings?.accent
+
+  // Resolved once: the shell's CSS var override and the boot tesseract must
+  // agree on the accent, and resolveAccent is also the never-purple guard.
+  const accent = resolveAccent(activeAccent)
+  const theme = resolveTheme(settings?.theme ?? 'system')
+  const boot = useBootOverlay(loaded)
 
   useEffect(() => {
     void window.termsprawl?.appVersion().then(setVersion)
@@ -76,11 +83,7 @@ export function App(): React.JSX.Element {
       className="shell"
       // resolveAccent is the never-purple guard: a legacy/imported purple (or
       // any non-hex junk) resolves to undefined and the default lime applies.
-      style={
-        resolveAccent(activeAccent)
-          ? ({ ['--accent']: resolveAccent(activeAccent) } as React.CSSProperties)
-          : undefined
-      }
+      style={accent ? ({ ['--accent']: accent } as React.CSSProperties) : undefined}
     >
       <div className="toolbar">
         <span className="brand">
@@ -115,19 +118,29 @@ export function App(): React.JSX.Element {
           ⚠ {error}
         </div>
       )}
-      {loaded ? (
-        <ReactFlowProvider>
-          <Canvas cwd={activeCwd} remote={activeRemote} invertWheelZoom={settings?.invertWheelZoom ?? false} />
-        </ReactFlowProvider>
-      ) : (
-        <div className="canvas">
-          {/* Branded boot state: the tesseract logo rotates over the dot grid
-              while the workspace store loads over IPC. */}
-          <div className="boot-overlay">
-            <TesseractSpinner />
+      {/* The stage is the positioning context shared by the canvas and the boot
+          overlay. The overlay must span the canvas area only — the toolbar
+          above stays visible (as it did when the overlay lived inside the
+          canvas div). */}
+      <div className="canvas-stage">
+        {loaded ? (
+          <ReactFlowProvider>
+            <Canvas cwd={activeCwd} remote={activeRemote} invertWheelZoom={settings?.invertWheelZoom ?? false} />
+          </ReactFlowProvider>
+        ) : (
+          <div className="canvas" />
+        )}
+        {/* Boot overlay: the tesseract spins over the dot grid while the
+            workspace store loads over IPC. It is a SIBLING of the canvas rather
+            than an alternative to it, so the canvas mounts at the moment
+            loading finishes and the overlay cross-fades away on top — the fade
+            adds no startup time. */}
+        {boot.visible && (
+          <div className={`boot-overlay${boot.leaving ? ' boot-overlay--leaving' : ''}`}>
+            <TesseractSpinner accent={accent} theme={theme} />
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
