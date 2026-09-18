@@ -7,6 +7,7 @@ import { TOOL_GUIDES, type IntegrationStatus } from './agent-tools'
 export function shellQuote(value: string): string { return `'${value.replace(/'/g, `'"'"'`)}'` }
 
 export interface AgentProbe { executable: string; help: string; version: string }
+export function clearAgentProbeCache(): void { probeCache.clear() }
 const probeCache = new Map<string, AgentProbe>()
 export function probeAgent(command: string): AgentProbe | null {
   const executable = findExecutable(command)
@@ -28,6 +29,7 @@ export function selectLaunchAdapter(probe: AgentProbe): LaunchAdapter {
   const name = basename(probe.executable)
   if (name === 'claude' && probe.help.includes('--mcp-config') && probe.help.includes('--append-system-prompt')) return { kind: 'claude-mcp', nativeMcp: true, instructionFlag: '--append-system-prompt' }
   if (name === 'codex' && probe.help.includes('--config') && /mcp/.test(probe.help)) return { kind: 'codex-mcp', nativeMcp: true }
+  if (name === 'opencode' && /--prompt\b/.test(probe.help)) return { kind: 'opencode-cli', nativeMcp: false, instructionFlag: '--prompt' }
   if (['agy', 'antigravity', 'gemini'].includes(name) && probe.help.includes('--prompt-interactive')) return { kind: `${name}-cli`, nativeMcp: false, instructionFlag: '--prompt-interactive' }
   // Only advertise an instruction route explicitly described by this binary.
   if (['gemini', 'agy', 'antigravity', 'grok', 'openclaude'].includes(name) && /\[PROMPT\]|\[prompt\]/.test(probe.help)) return { kind: `${name}-cli`, nativeMcp: false, initialPrompt: true }

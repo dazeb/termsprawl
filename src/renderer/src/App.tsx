@@ -1,3 +1,4 @@
+import { SetupHost } from './components/DependencySetup'
 import { useEffect, useState } from 'react'
 import { ReactFlowProvider } from 'reactflow'
 import { Canvas } from './canvas/Canvas'
@@ -111,6 +112,7 @@ export function App(): React.JSX.Element {
           }}
         />
       )}
+      <SetupHost />
       <UpdateToast />
       <AnnouncementBanner />
       {error && (

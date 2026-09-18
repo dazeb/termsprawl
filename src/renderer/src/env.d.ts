@@ -1,3 +1,4 @@
+import type { DependencyApi } from '@shared/dependencies'
 import type { CanvasToolRequest, CanvasToolReply, IntegrationStatus } from "@shared/agent-tools"
 import type {
   DiffBase,
@@ -51,6 +52,7 @@ import type { ChatEvent } from '../../core/chat/types'
 declare global {
   interface Window {
     termsprawl: {
+      dependencies?: DependencyApi
       agentTools?: {
         onRequest(callback: (request: CanvasToolRequest) => void): () => void
         reply(reply: CanvasToolReply): void

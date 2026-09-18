@@ -1,3 +1,4 @@
+import { useSetup } from '../state/setup'
 // First-run onboarding (Task 3.2): a single dismissible overlay shown when
 // the workspace has no projects yet and the user has never finished the
 // guide (settings.onboardedAt absent). Three steps to a running terminal.
@@ -74,6 +75,7 @@ export function Onboarding({ onDismiss }: OnboardingProps): React.JSX.Element {
           ))}
         </ol>
         <div className="onboarding-actions">
+          {typeof window !== 'undefined' && window.termsprawl?.dependencies && <Button onClick={() => { onDismiss(); useSetup.getState().show() }}>Check your setup</Button>}
           <Button variant="primary" onClick={createProject}>
             Get started — create a project
           </Button>

@@ -1,3 +1,7 @@
+import { AGENT_REGISTRY } from '../shared/agents/config'
+import type { InstallableAgent } from '../shared/dependencies'
+import { stopSetupProcesses } from '../core/dependency-installers'
+import { DependencyService } from '../core/dependencies'
 import { AgentToolRuntime } from "./agent-tool-runtime"
 import { app, BrowserWindow, dialog, ipcMain, Notification, protocol, net, shell, screen } from 'electron'
 import { execFileSync, spawn } from 'node:child_process'
@@ -181,6 +185,11 @@ const platform: CorePlatform = {
 
 const ptyManager = new PtyManager(platform)
 const workspaceStore = new WorkspaceStore(platform)
+const launchedSetupAgents = new Map<string, InstallableAgent>()
+const dependencies = new DependencyService(platform.userDataPath, {
+  active: (id) => [...launchedSetupAgents].some(([nodeId, agent]) => agent === id && (ptyManager.hasLiveSession(nodeId) || ptyManager.isWarm(nodeId))) || Object.values(workspaceStore.snapshot().projects).flat().some(node =>
+    (node.data.agentId === id || (typeof node.data.command === 'string' ? node.data.command.split(/\s+/)[0] : undefined) === AGENT_REGISTRY[id].command) && (ptyManager.hasLiveSession(node.id) || ptyManager.isWarm(node.id)))
+})
 
 // Node links (Phase 18): persisted typed edges + the auto-run scheduler.
 const linkService = new LinkService({
@@ -1655,6 +1664,11 @@ function withAgentEnvironment(req: PtyCreateRequest): PtyCreateRequest {
 
 function registerPtyIpc(): void {
   ipcMain.handle(IPC.ptyCreate, (_event, req: PtyCreateRequest) => {
+    const agent = req.agentId ?? Object.values(AGENT_REGISTRY).find(a => a.command === req.command?.split(/\s+/)[0])?.id
+    if (!req.remote && agent && agent !== 'custom') {
+      if (dependencies.busy && dependencies.job?.agent === agent && !ptyManager.isWarm(req.id)) throw new Error('This agent is being installed. Wait for setup to finish before opening it.')
+      launchedSetupAgents.set(req.id, agent)
+    }
     let augmented = withAgentNodeIdEnv(req)
     augmented = withAgentEnvironment(augmented)
     // When a Claude agent node is spawned into a folder project, make sure the
@@ -1687,6 +1701,10 @@ void app.whenReady().then(async () => {
   // electron-updater surface is real; unpackaged/dev = it no-ops and hides.
   ipcMain.handle('app:runtime-info', () => ({ packaged: app.isPackaged }))
   registerPtyIpc()
+  ipcMain.handle(IPC.dependenciesCheck, (_event, refresh) => dependencies.check(refresh === true))
+  ipcMain.handle(IPC.dependenciesInstall, (_event, id) => dependencies.install(id))
+  ipcMain.handle(IPC.dependenciesUpdates, () => dependencies.checkUpdates())
+  ipcMain.handle(IPC.dependenciesStatus, () => dependencies.job)
   registerWorkspaceIpc()
   registerDiffIpc()
   registerFileIpc()
@@ -1788,7 +1806,13 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
-app.on('before-quit', () => {
+app.on('before-quit', (event) => {
+  if (dependencies.busy) {
+    const choice = dialog.showMessageBoxSync({ type: 'warning', buttons: ['Keep installing', 'Quit'], defaultId: 0, cancelId: 0,
+      title: 'Installation in progress', message: 'An agent installation is running.', detail: 'Quitting may interrupt setup. You can retry from Settings → Agents.' })
+    if (choice === 0) { event.preventDefault(); return }
+    stopSetupProcesses()
+  }
   void agentToolsRuntime?.close()
   ptyManager.killAll()
   linkService.dispose()

@@ -1,3 +1,4 @@
+import { useSetup } from '../state/setup'
 import { flushSync } from "react-dom"
 import { applyCanvasTool } from "../state/agent-tool-canvas"
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
@@ -659,7 +660,16 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
 
   // An agent terminal: launches the agent CLI once in the project cwd.
   const addAgent = useCallback(
-    (agentId: AgentId) => {
+    async (agentId: AgentId) => {
+      if (!remote && agentId !== 'custom' && window.termsprawl.dependencies) {
+        try {
+          const snapshot = await window.termsprawl.dependencies.check()
+          useSetup.setState({ snapshot })
+          if (snapshot.dependencies.find(d => d.id === agentId)?.state !== 'installed') {
+            useSetup.getState().show(agentId); setMenu(null); return
+          }
+        } catch (error) { useSetup.setState({ error: String(error) }); useSetup.getState().show(agentId); return }
+      }
       const node = createAgentNode(agentId, cwd)
       if (menu && wrapperRef.current) {
         node.position = screenToFlowPosition({ x: menu.x, y: menu.y })
@@ -668,7 +678,7 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
       push()
       setMenu(null)
     },
-    [cwd, menu, push, screenToFlowPosition, appendOnTop]
+    [cwd, remote, menu, push, screenToFlowPosition, appendOnTop]
   )
 
   const onPaneContextMenu = useCallback((event: React.MouseEvent) => {
@@ -880,8 +890,11 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
   const spawnRequest = useCanvasRequests((s) => s.request)
   useEffect(() => {
     if (!spawnRequest) return
-    if (spawnRequest.kind === 'agentLogin') {
+    if (spawnRequest.kind === 'agent') {
+      appendOnTop(createAgentNode(spawnRequest.agent, cwd)); push()
+    } else if (spawnRequest.kind === 'agentLogin') {
       const node = createAgentLoginNode(spawnRequest.command, cwd)
+      if (spawnRequest.title) node.data.title = spawnRequest.title
       appendOnTop(node)
       push()
     } else if (spawnRequest.kind === 'browser') {

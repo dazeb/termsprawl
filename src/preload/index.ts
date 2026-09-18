@@ -1,3 +1,4 @@
+import type { InstallableAgent } from '../shared/dependencies'
 import type { CanvasToolRequest, CanvasToolReply, IntegrationStatus } from "../core/agent-tools"
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC, agentSessionNameChannel, ptyDataChannel, ptyExitChannel } from '../shared/ipc'
@@ -56,6 +57,12 @@ import type { UpdateStatus } from '../shared/update-status'
 // The narrow API surface exposed to the renderer as window.termsprawl.
 // Grows per phase; the renderer must never touch ipcRenderer directly.
 const api = {
+  dependencies: {
+    check: (refresh?: boolean) => ipcRenderer.invoke(IPC.dependenciesCheck, refresh),
+    install: (id: InstallableAgent) => ipcRenderer.invoke(IPC.dependenciesInstall, id),
+    checkUpdates: () => ipcRenderer.invoke(IPC.dependenciesUpdates),
+    status: () => ipcRenderer.invoke(IPC.dependenciesStatus)
+  },
   agentTools: {
     onRequest: (callback: (request: CanvasToolRequest) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, request: CanvasToolRequest): void => callback(request)
