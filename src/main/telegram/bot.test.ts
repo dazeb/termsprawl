@@ -13,8 +13,8 @@ function fakeStore(): Pick<WorkspaceStore, 'snapshot'> {
     snapshot: () => ({
       index: {
         projects: [
-          { id: 'p1', name: 'termsprawl', cwd: '/home/dazeb/work', closed: false },
-          { id: 'p2', name: 'remote', cwd: null, closed: false, remote: { user: 'root', host: '192.168.8.221', path: '/srv/x' } }
+          { id: 'p1', name: 'termsprawl', cwd: '/home/dev/work', closed: false },
+          { id: 'p2', name: 'remote', cwd: null, closed: false, remote: { user: 'root', host: '192.0.2.10', path: '/srv/x' } }
         ] as never,
         version: 1 as never
       },
@@ -89,7 +89,7 @@ describe('telegram bot runtime — handleUpdate', () => {
     await bot.handleUpdate(upd('/projects', 42))
     expect(sent.length).toBe(1)
     expect(sent[0]?.text).toContain('termsprawl')
-    expect(sent[0]?.text).toContain('root@192.168.8.221') // remote label
+    expect(sent[0]?.text).toContain('root@192.0.2.10') // remote label
     expect(sent[0]?.text).toContain('remote')
   })
 

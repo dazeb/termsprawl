@@ -9,7 +9,7 @@ import type { ProjectRemote } from '../shared/types'
 describe('remote-project', () => {
   it('isRemoteProject is true only when a remote destination is set', () => {
     expect(isRemoteProject({ remote: { host: 'box', path: '/srv/x' } })).toBe(true)
-    expect(isRemoteProject({ cwd: '/home/dazeb/x' })).toBe(false)
+    expect(isRemoteProject({ cwd: '/home/dev/x' })).toBe(false)
     expect(isRemoteProject({})).toBe(false)
   })
 

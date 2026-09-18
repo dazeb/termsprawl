@@ -1,0 +1,82 @@
+name: Bug report
+description: Something in termsprawl is broken or behaves unexpectedly
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please do not include secrets, API keys,
+        tokens, or personal data in this issue — see SECURITY.md if you think
+        you have found a vulnerability (report that privately instead).
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before you file
+      options:
+        - label: I searched existing issues and this is not a duplicate.
+          required: true
+        - label: This is not a security vulnerability (those go through private reporting).
+          required: true
+  - type: input
+    id: version
+    attributes:
+      label: termsprawl version
+      description: Shown in the title bar, or in package.json for a source checkout.
+      placeholder: '0.28.0'
+    validations:
+      required: true
+  - type: dropdown
+    id: how-run
+    attributes:
+      label: How are you running it?
+      options:
+        - AppImage
+        - .deb install
+        - From source (pnpm run dev)
+        - Server Edition in a browser
+        - Hosted canvas space
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: distro
+    attributes:
+      label: Linux distribution and desktop environment
+      placeholder: 'Ubuntu 24.04, GNOME 46'
+    validations:
+      required: true
+  - type: input
+    id: tmux
+    attributes:
+      label: tmux version
+      description: Output of `tmux -V` (session continuity requires tmux >= 3.2).
+      placeholder: 'tmux 3.4'
+    validations:
+      required: false
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you expected, and what actually happened.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open a project
+        2. Add a terminal node
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or error output
+      description: |
+        Paste only what is relevant, and remove anything private first.
+        Renderer console output and the main-process terminal output are both useful.
+      render: shell
+    validations:
+      required: false

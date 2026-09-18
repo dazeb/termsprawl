@@ -2,10 +2,12 @@
 
 **termsprawl** is a spatial terminal manager for Linux: real terminals, editors,
 and agent sessions live as draggable nodes on one infinite pan/zoom canvas.
-MIT-licensed, clean-room — **no code in this repo is copied from any other
-project** (see Legal rules below). **Linux-only: no macOS-specific features
-will ever be added** (the fork's macOS phone relay is a dead end — the
-Telegram bot covers that use case).
+MIT-licensed. The code is an **independent implementation**: written from
+scratch and screened with an automated similarity check against the prior
+project's tree (see Legal rules below; the screen is a heuristic, not a legal
+guarantee). **Linux-only: no macOS-specific features will ever be added** (the
+fork's macOS phone relay is a dead end — the Telegram bot covers that use
+case).
 
 ## Commands
 
@@ -163,14 +165,15 @@ selected. Keep the handles subtle; do not add per-node handle classes.
 
 ## Project family — sibling repos (work on all of them together)
 
-termsprawl is not one repo. Three repos make up the product, all siblings under
-`/mnt/nvme1/workspace/projects/` (same layout under `/home/dazeb/workspace/`).
+termsprawl is not one repo. Three repos make up the product, all siblings in
+one projects directory on the maintainer's workstation (`<projects>/` below —
+the absolute path is checkout-specific and belongs to local configuration).
 When a task touches the product, check whether the siblings need matching
 changes IN THE SAME TASK — do not leave them for a later session.
 
 | Repo | Path | What it is | Remotes | Live at |
 |---|---|---|---|---|
-| **termsprawl** | `termsprawl/` | The app (Electron + React + tmux). This repo. | origin (hermes-box), github, gitea | downloads via GitHub Releases |
+| **termsprawl** | `termsprawl/` | The app (Electron + React + tmux). This repo. | origin (build host), github, gitea | downloads via GitHub Releases |
 | **termsprawl-web** | `termsprawl-web/` | Marketing site + download hub (Vite + React + Tailwind v4). Carries `APP_VERSION` in `src/lib/site.ts`. | origin (github), gitea | https://termsprawl.com |
 | **termsprawl-docs** | `termsprawl-docs/` | Documentation site (Fumadocs on React Router/Vite; MDX in `content/docs/`). Content reflects REAL, shipped behaviour only. | origin (github), gitea | https://docs.termsprawl.com |
 
@@ -199,8 +202,8 @@ Cross-repo rules (mandatory, not suggestions):
    `src/lib/site.ts` `APP_VERSION`, docs has no version. Never hardcode a
    version elsewhere.
 6. **Checkouts:** work in the sibling folder for that repo; never edit web or
-   docs files from the app repo. The `/home/dazeb/workspace/projects/` copies
-   and `/mnt/nvme1/...` copies are the same repos at different mount points —
+   docs files from the app repo. The same three repos may be mounted at more
+   than one path on the workstation (for example a different volume root) —
    pick one path root per session and stay on it (paths differ per checkout;
    see each repo's git status first).
 
@@ -212,25 +215,27 @@ each other:
 - **github** = `git@github.com:dazeb/termsprawl.git` — canonical public remote
   (created 2026-08-13; SSH key auth — id_ed25519 registered on GitHub, no
   tokens needed). Push there for any released/notable state.
-- **gitea** = `ssh://gitea@192.168.8.175:22/dazeb/termsprawl.git` — self-hosted
-  Gitea (CT 100 on the Proxmox host, PVE 192.168.8.195). **CI runs here only**
-  (Gitea Actions; the GitHub account is permanently Actions-disabled — never
-  add `.github/workflows`, never suggest GitHub Actions, don't re-open PRs
-  about it). Push every branch push here so CI sees it (`git push gitea main`).
-- **origin** = `hermes-box:/srv/git/termsprawl.git` — bare repo on hermes-box
-  (SSH alias in `~/.ssh/config`; key `~/.ssh/hermes-box_ed25519`). Working
-  remote for the parallel-agent loop (fast, no auth churn). Both remotes get
-  every push (`git push origin main && git push github main`).
-- **Hermes**: works in the main checkout
-  (`/home/dazeb/workspace/projects/termsprawl`) on `main`. Owns
-  checkpoint builds (AppImage → files.hermes.v0cl.one → Telegram) and
-  phase status updates in PLAN.md.
+- **gitea** = `ssh://gitea@<gitea-host>:22/dazeb/termsprawl.git` — self-hosted
+  Gitea on the operator's private infrastructure (host, ports, and container
+  details belong in private infrastructure configuration, not this repo).
+  **CI runs here only** (Gitea Actions; the GitHub account is permanently
+  Actions-disabled — never add `.github/workflows`, never suggest GitHub
+  Actions, don't re-open PRs about it). Push every branch push here so CI sees
+  it (`git push gitea main`).
+- **origin** = `<build-host>:/srv/git/termsprawl.git` — bare repo on the
+  maintainer's build/checkpoint host (SSH alias configured locally; key paths
+  are operator-specific and stay out of the repository). Working remote for the
+  parallel-agent loop (fast, no auth churn). Both remotes get every push
+  (`git push origin main && git push github main`).
+- **Hermes**: works in the main checkout on `main`. Owns checkpoint builds
+  (AppImage → the maintainer's file host → Telegram) and phase status updates
+  in PLAN.md.
 - **Parallel feature work**: historical worktrees `termsprawl-agent`
   (`feature/editor-node`) and `termsprawl-grok` (`feature/grok-agent`) were
   deleted 2026-08-23 after their branches merged to main during Phase 6/7.
-  Worktree checkouts now live as sibling folders under
-  `/home/dazeb/workspace/projects/` (no `active/` segment since the WSL→
-  Linux migration). New ones go there too.
+  Worktree checkouts now live as sibling folders in the same projects
+  directory as the repos (no `active/` segment since the WSL→ Linux
+  migration). New ones go there too.
 - Protocol: pull before starting; commit per task; push when a unit of work
   is done; never edit files in the other's checkout. Main stays
   release-ready (gates must pass before pushing to main). Feature branches
@@ -242,8 +247,9 @@ each other:
 
 **CI runs on self-hosted Gitea only** (`.gitea/workflows/ci.yml`). The GitHub
 account is permanently Actions-disabled — never add `.github/workflows` or
-suggest GitHub Actions. Pipeline (runner CT 109 `actrunner` at
-192.168.8.221, `gitea-runner` v3.2.0, host executor, label `ubuntu-latest`):
+suggest GitHub Actions. Pipeline (self-hosted `gitea-runner` v3.2.0, host
+executor, label `ubuntu-latest`; the runner's host is operator-specific and
+configured privately):
 
 - push to `main` → `verify`: checkout, install, typecheck, test, build
 - `v*` tag → `verify` + `release`: builds once, publishes the AppImage,
@@ -263,8 +269,8 @@ pnpm run typecheck && pnpm test          # gates first
 ./scripts/check-originality.sh           # clean-room gate (local-only, see above)
 bash scripts/space-e2e.sh                # spaces e2e — seed→boot-restore→ws-drive→pty→restart→push
 bash scripts/github-import-e2e.sh        # github import e2e (real git host, token via env)
-scripts/release.sh X.Y.Z                 # bump → gates → push main → tag; the Gitea
-                                         # Actions builder (CT 109) builds + publishes
+scripts/release.sh X.Y.Z                 # bump → gates → push main → tag; the
+                                         # Gitea Actions builder builds + publishes
                                          # to Gitea AND GitHub on the tag (see release.sh)
 ```
 
@@ -344,7 +350,11 @@ not shed its license. Therefore:
 3. `scripts/check-originality.py` diffs the tree against the prior project and
    fails on identical blocks ≥ 5 lines. Known-benign matches are documented in
    the script (library export names, channel names, generic CSS). Run it after
-   significant changes; a FAIL is a hard stop, not a suggestion.
+   significant changes; a FAIL is a hard stop, not a suggestion. It is a
+   textual heuristic — it cannot prove originality (paraphrased copying, copied
+   structure, or other upstream sources are invisible to it), so never describe
+   the result as "100% original" or as a legal guarantee. The public statement
+   of methodology and limits is docs/VERIFICATION.md.
 4. No use of the "nodeterm" name, logo, or branding.
 
 ## Conventions

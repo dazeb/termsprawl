@@ -5,8 +5,22 @@
   "main": "out/main/index.js",
   "type": "module",
   "license": "MIT",
-  "author": "termsprawl contributors",
+  "author": {
+    "name": "Darren Bennett",
+    "email": "daz@dazeb.dev"
+  },
   "homepage": "https://github.com/dazeb/termsprawl",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dazeb/termsprawl.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dazeb/termsprawl/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@11.21.0",
   "desktopName": "termsprawl",
   "scripts": {
     "dev": "pnpm run build:cli && electron-vite dev",
@@ -76,7 +90,7 @@
       "category": "Development",
       "icon": "build/icon.png",
       "synopsis": "A spatial terminal manager for Linux — terminals sprawled across one infinite canvas",
-      "maintainer": "termsprawl contributors",
+      "maintainer": "Darren Bennett <daz@dazeb.dev>",
       "syncDesktopName": true
     },
     "appImage": {

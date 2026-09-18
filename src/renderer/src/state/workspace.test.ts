@@ -448,7 +448,7 @@ describe('editor nodes', () => {
 
 describe('projectNameFromPath', () => {
   it('uses the folder basename', () => {
-    expect(projectNameFromPath('/home/dazeb/work/termsprawl', 'fallback')).toBe('termsprawl')
+    expect(projectNameFromPath('/home/dev/work/termsprawl', 'fallback')).toBe('termsprawl')
   })
 
   it('handles trailing slashes', () => {

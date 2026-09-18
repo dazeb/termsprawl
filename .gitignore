@@ -40,3 +40,7 @@ npm-debug.log*
 # they vary per agent/session and would otherwise make the tree look dirty to
 # release.sh's clean-tree check.
 .zcode/
+
+# Agent scratch space (SDD ledgers, task briefs, review packages). Same reason
+# as .zcode/ above: never product files, never committed.
+.superpowers/

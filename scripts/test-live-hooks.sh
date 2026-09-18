@@ -3,7 +3,8 @@
 # hook installer writes Claude hooks pointing at a live loopback server, then
 # POST a lifecycle event and confirm it's accepted. Fail-open checks too.
 set -u
-cd /home/dazeb/workspace/projects/termsprawl
+# Run from the repository root regardless of where the script is invoked from.
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 # Snapshot the current settings.json so we can restore it after.
 SETTINGS=~/.claude/settings.json

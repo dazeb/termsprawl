@@ -91,7 +91,7 @@ macOS-specific features are in scope, ever.
   projects/terminals, send keys, attach to live output. Local, zero-dep,
   secure-by-default pairing.
 - ✅ Online canvas spaces (Phase 15): a hosted Server Edition canvas per Pro
-  member at `canvas.termsprawl.com/<login>` (Docker per user on hermes-box,
+  member at `canvas.termsprawl.com/<login>` (Docker per user on the hosting box,
   token-gated router, wake-on-connect), synced with the desktop through
   backup-shaped snapshots (workspace + projects + terminal scrollback) —
   "in sync like when we do a backup": one writer at a time, no merge logic.

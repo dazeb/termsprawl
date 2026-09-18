@@ -4,7 +4,9 @@ A spatial terminal manager for Linux. Real terminals, editors, and agent
 sessions live as draggable nodes on one infinite pan/zoom canvas — everything
 sprawls, nothing hides in tabs.
 
-![License: MIT](https://img.shields.io/badge/license-MIT-green) ![Platform: Linux](https://img.shields.io/badge/platform-Linux-blue)
+![The termsprawl canvas: terminal, agent, sticky-note, and browser nodes connected by labelled links on one dark canvas](docs/media/termsprawl-canvas.png)
+
+![License: MIT](https://img.shields.io/badge/license-MIT-green) ![Platform: Linux](https://img.shields.io/badge/platform-Linux-blue) ![Status: pre-1.0](https://img.shields.io/badge/status-pre--1.0-yellow)
 
 ## What it does
 
@@ -19,48 +21,66 @@ sprawls, nothing hides in tabs.
   scrollback intact (cold starts replay a byte-capped scrollback snapshot).
 - **Projects & persistence** — tabs, one project per tab; layouts persist to a
   git-shareable project file, so you can commit and share a workspace.
-- **Agent nodes** — spawn Claude / Codex / Antigravity / Grok / OpenClaude
-  right on the canvas, with hook-driven status badges (RUNNING / NEEDS YOU),
-  unread dots, and OS notifications when an agent finishes. OpenClaude points
-  at any OpenAI-compatible endpoint, including local models.
+- **Agent nodes** — spawn Claude Code / Codex / Antigravity / Grok / OpenClaude
+  / OpenCode right on the canvas, with hook-driven status badges where the CLI
+  supports hooks (RUNNING / NEEDS YOU), unread dots, and OS notifications when
+  an agent finishes. OpenClaude points at any OpenAI-compatible endpoint,
+  including local models; each preset reports its real capabilities instead of
+  claiming features its CLI does not expose.
 - **Sticky, group, editor, and diff nodes** — notes, frames, and Monaco-based
   editors/diffs as first-class canvas citizens.
 - **Embedded browser nodes** — a real sandboxed Chromium browser on the canvas,
   one guest per tab, hardened (no Node/preload, navigation policy), with an
   opt-in, localhost-only CDP surface so an external agent (Playwright/Puppeteer)
-  can drive the exact page you're watching. Opens as a small mini-window
-  (it's the agent's browser; viewing is a bonus) and stays capped at a compact
-  size.
+  can drive the exact page you're watching. New browser nodes open at a
+  readable size (1000×720) and are **user-resizable with no artificial
+  maximum**. Shared authenticated sessions mean a sign-in done in the canvas
+  browser is the session agents use.
 - **Source control** — stage, commit, branch, push/pull, and manage worktrees
   from a panel bound to the active project.
 - **Undo/redo, keyboard canvas navigation, dark lime-on-black UI.**
 
 ## Status
 
-Feature-complete — every phase of [PLAN.md](PLAN.md) (0–19 plus
-user-directed deviations) is shipped:
+**Pre-1.0 · actively maintained.** Current version: **0.28.0**.
 
-- **Desktop app** — terminal canvas, tmux session continuity, projects &
-  persistence, sticky/group/editor/diff nodes, agents with context links
-  and managed accounts, source control (git status, staging, commits,
-  branches, sync, worktrees, AI commit messages), SSH remote projects,
+"Pre-1.0" is deliberate and not a hedge: the desktop application is usable and
+maintained today, but the on-disk project format and internal interfaces are
+not frozen, and the only supported release line is the current one (0.28.x).
+See [CHANGELOG.md](CHANGELOG.md) for what shipped recently and
+[ROADMAP.md](ROADMAP.md) for the 1.0 readiness criteria and non-goals.
+
+What ships today:
+
+- **Desktop app** (free, offline, no account) — terminal canvas, tmux session
+  continuity, projects & persistence, sticky/group/editor/diff nodes, agents
+  with context links and managed accounts, source control (git status, staging,
+  commits, branches, sync, worktrees, AI commit messages), SSH remote projects,
   embedded browser nodes (opt-in agent control via CDP), Telegram bot v2,
   provider-agnostic chat nodes (OpenAI-compatible + Anthropic, streaming,
   thinking blocks, permission cards, slash commands), keyboard canvas
-  navigation, named node links, first-run onboarding, and auto-update
-  with announcements.
-- **Server Edition** — the same app runs in a browser via plain `node:http`
-  + WebSocket RPC. Serves the built renderer, tunnels all core services
-  (terminals, projects, git, agent hooks, file tree, chat), with auto-save
-  and shutdown safety.
-- **Standalone relay service** (`relay/`) — E2E-encrypted host↔client frames
-  (the relay sees ciphertext only), GitHub device-flow auth, single-use
-  invites with expiry/revocation/quotas, admin API. In-app pairing with
-  fingerprint confirm and remote terminal frames over the tunnel.
+  navigation, named node links, first-run onboarding, and auto-update with
+  announcements.
+- **Server Edition** — the same app runs in a browser via plain `node:http` +
+  WebSocket RPC. Serves the built renderer, tunnels all core services
+  (terminals, projects, git, agent hooks, file tree, chat), with auto-save and
+  shutdown safety. Binds to loopback by default; see [SECURITY.md](SECURITY.md).
+- **Standalone relay service** (`relay/`) — host↔client terminal frames are
+  sealed with X25519 key agreement (HKDF-SHA256) and AES-256-GCM; the relay
+  routes ciphertext envelopes only and never holds the keys, with GitHub
+  device-flow auth, single-use invites with expiry/revocation/quotas, and an
+  admin API. In-app pairing with fingerprint confirm and remote terminal frames
+  over the tunnel.
 
-Current version: **0.28.0**.
+**Hosted services are separate and optional.** Encrypted backup and hosted
+canvas spaces run as private preview services with **test-mode billing**; they
+are preview-stage, their pricing and quotas are not final, and the project
+claims no revenue or paying customers. The desktop app never requires them.
+This repository contains the client code and the relay service; the hosted
+control plane is not in this repository.
 
-Linux only — AppImage and `.deb` artifacts. No macOS support, by design.
+**Linux only** — AppImage and `.deb` artifacts. No macOS or Windows support, by
+design.
 
 ## Install
 
@@ -79,7 +99,9 @@ Runtime requirements:
 
 ## Build from source
 
-Requires Node 20+, pnpm, and Linux build tools for `node-pty`.
+Requires Node 20+, pnpm 11, tmux, and Linux build tools for `node-pty`. Full
+setup, the gate order, and contribution rules are in
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ```bash
 pnpm install        # deps + rebuilds node-pty against Electron's ABI
@@ -104,18 +126,74 @@ The Server Edition serves the same UI, tunnels all core services (terminals,
 projects, git, agent hooks, file tree) over a WebSocket RPC shim, and
 persists state to `~/.config/termsprawl/` (or `$TERMSPRAWL_DATA`).
 
-## Docs
+## Project
+
+- **Maintainer:** Darren Bennett (sole maintainer) — `daz@dazeb.dev`
+- **License:** MIT — see [LICENSE](LICENSE). No CLA or DCO for contributions.
+- **Platform:** Linux only, by design. No macOS or Windows roadmap.
+
+### Verification snapshot
+
+At commit `ebc5f66139ec3161653a84fc9e1044c61f557921` (v0.28.0), on 2026-09-18:
+`pnpm run typecheck` passed, the desktop and Server Edition builds passed, and
+the vitest suite reported **1,112 passed with one opt-in skip** (the live
+installer smoke test, which only runs when explicitly enabled). The
+[originality screen](docs/VERIFICATION.md) reported no copied blocks across 273
+source files. This was **self-verified** — no external reviewer was present.
+Full record, including which gates were *not* run, in
+[docs/VERIFICATION.md](docs/VERIFICATION.md) and
+[docs/PROJECT-HEALTH.md](docs/PROJECT-HEALTH.md).
+
+### Known limitations
+
+- **One maintainer** — the main sustainability risk; succession intent is in
+  [GOVERNANCE.md](GOVERNANCE.md).
+- **Pre-1.0** — project files and internal APIs can change between minor
+  releases.
+- **No independent assessment** — the two published audits are maintainer
+  self-audits, and no independent security or accessibility review has been
+  performed.
+- **CI is not publicly visible** — CI runs on a self-hosted Gitea runner;
+  results are republished in the verification record.
+- **No signed releases, SBOM, or build provenance** — download integrity relies
+  on HTTPS and GitHub Releases.
+- **Hosted services are preview-stage**, with test-mode billing and quotas that
+  are not final.
+
+### Trust and project documents
+
+- [SECURITY.md](SECURITY.md) — supported versions and private reporting
+- [CONTRIBUTING.md](CONTRIBUTING.md) — setup, gates, clean-room rules
+- [GOVERNANCE.md](GOVERNANCE.md) — decision process and maintainer path
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — Contributor Covenant 2.1
+- [ROADMAP.md](ROADMAP.md) — priorities, funded work packages, non-goals
+- [FUNDING.md](FUNDING.md) — current funding status and priorities
+- [CHANGELOG.md](CHANGELOG.md) — release history
+- [docs/PROJECT-HEALTH.md](docs/PROJECT-HEALTH.md) — project state in one page
+- [docs/VERIFICATION.md](docs/VERIFICATION.md) — dated verification record
+- [docs/AUDIT-2026-08-29.md](docs/AUDIT-2026-08-29.md) and
+  [docs/AUDIT-2026-09-13.md](docs/AUDIT-2026-09-13.md) — maintainer self-audits
+- [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) — bundled dependencies and
+  licenses
+- Project background: https://termsprawl.com/project · funding priorities:
+  https://termsprawl.com/funders · docs: https://docs.termsprawl.com
+
+### Repository notes
 
 - `docs/FEATURES.md` — the feature spec (what we're building toward)
 - `docs/OWN-WORK.md` — concept reference for features we originated
-- `PLAN.md` — the implementation plan (phases, tasks, verification)
+- `PLAN.md` — the historical implementation plan (phases, tasks, verification)
 - `AGENTS.md` — operational guide for AI agents working in this repo
-- `THIRD-PARTY-NOTICES.md` — bundled dependencies and licenses
 
-## License
+## License and originality
 
 MIT — see [LICENSE](LICENSE).
 
-This is an independent, clean-room implementation. It shares no code with any
-other terminal-manager project; it is inspired by the general concept of
-canvas-based terminals and implements that concept from scratch.
+This is an independent implementation: termsprawl's code was written from
+scratch, and it is screened for textual similarity against the prior project
+with an automated checker (`scripts/check-originality.sh`) that flags identical
+blocks of five or more non-trivial lines. That check is a heuristic, not a
+legal guarantee — it cannot detect paraphrased copying or copied ideas, and it
+only compares against one prior tree. The project therefore makes no absolute
+originality claim; the methodology and its limits are documented in
+[docs/VERIFICATION.md](docs/VERIFICATION.md).

@@ -6,7 +6,15 @@ Development/verification tooling. Not shipped in the app.
 
 - `check-originality.py` / `check-originality.sh` — clean-room guard. Diffs the
   tree against the prior project and FAILs on identical blocks >= 5 lines.
-  Run after significant changes; a FAIL is a hard stop.
+  Run after significant changes; a FAIL is a hard stop. It is a heuristic, not
+  a legal guarantee — see docs/VERIFICATION.md for methodology and limits.
+- `trust-surface.test.ts` — repository policy test (runs in the normal vitest
+  suite). Asserts the public trust documents exist, that maturity wording is
+  pre-1.0, that the audits are labelled self-audits, that no `.github/workflows`
+  or absolute originality/revenue claims exist, that links resolve, that
+  machine-specific infrastructure details stay out of tracked docs, and that
+  package metadata is present. Run it alone with
+  `pnpm test scripts/trust-surface.test.ts` after editing any trust document.
 - `make-icon.mjs` — regenerates `build/icon.png` (`pnpm run make-icon`).
 - `test-live-hooks.sh` — live hook-server gate: boots the app, POSTs lifecycle
   events, verifies fail-open behavior. Manual integration check.

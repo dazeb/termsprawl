@@ -104,8 +104,8 @@ phone pairing, Continuity-style flows) is out of scope by rule.
 
 ## Our planning docs (context for v2 specs)
 
-- `.hermes/PLAN-telegram-team-access.md` in the fork — our original plan for
-  Telegram + team access. Ours; useful background for Phase 11 spec writing.
+- The maintainer's private plan notes for Telegram + team access (originally
+  written for the fork) — ours; useful background for Phase 11 spec writing.
 
 ## Phase 11 workflow (maps to PLAN.md)
 

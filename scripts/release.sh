@@ -10,7 +10,7 @@
 #                     (the Gitea Actions builder is the canonical publisher)
 #
 # Default (builder) flow: merge (optional) → bump → gates → push main→3 remotes
-# → tag+push. The Gitea Actions `release` job on the builder (CT 109) picks up
+# → tag+push. The Gitea Actions `release` job on the builder (the runner host) picks up
 # the tag, builds, and publishes to BOTH Gitea and GitHub. Nothing else to do
 # but watch the run and verify the release read-back.
 # With --local-dist it also: dist → stage artifacts → gh release create →
@@ -134,7 +134,7 @@ git push gitea "$TAG"
 git push github "$TAG"
 
 # ---- 6. dist + stage + publish (only with the explicit --local-dist hatch) ----
-# Default flow ends at the tag: the Gitea Actions builder (CT 109) picks up the
+# Default flow ends at the tag: the Gitea Actions builder (the runner host) picks up the
 # tag push and publishes to Gitea + GitHub itself.
 if [[ "$LOCAL_DIST" -eq 1 ]]; then
   echo "==> --local-dist: pnpm run dist (local build; AppImageLauncher danger)"

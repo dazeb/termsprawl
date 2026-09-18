@@ -1,19 +1,28 @@
 # SPACES-OPS — operating online canvas spaces (Phase 15)
 
-Audience: whoever operates hermes-box. Written at v1 launch; keep honest.
+Audience: whoever operates the hosted preview services. Written at v1 launch;
+keep honest.
+
+**Where operator-specific values live.** Host names, IP addresses, container
+IDs, key paths, and secrets are deliberately not recorded in this public
+repository — they belong in private infrastructure configuration. Commands
+below use role-based names (`<services-dir>`, `<host>`) that the operator maps
+to real values there. Public product hostnames users need (`termsprawl.com`,
+`canvas.termsprawl.com`) are kept.
 
 ## What is running
 
 | Piece | Where | What it is |
 |---|---|---|
-| `termsprawl-cloud.service` | box, `/opt/termsprawl-cloud`, port 8787 (loopback) | Cloud API: auth, billing, backups, spaces control plane, space-content store |
-| `space-router.service` | box, same checkout, port 3030 (loopback) | Maps `canvas.termsprawl.com/<login>` → the user's container port; auth gate + wake |
-| `ts-space-<login>` containers | docker on the box, loopback ports 3101–3199 | One Server Edition instance per Pro user (image `ts-space:latest`) |
-| Caddy | box | TLS for `canvas.termsprawl.com` → 127.0.0.1:3030; `termsprawl.com/api` → 8787 |
+| `termsprawl-cloud.service` | hosting box, `<services-dir>/termsprawl-cloud`, port 8787 (loopback) | Cloud API: auth, billing, backups, spaces control plane, space-content store |
+| `space-router.service` | hosting box, same checkout, port 3030 (loopback) | Maps `canvas.termsprawl.com/<login>` → the user's container port; auth gate + wake |
+| `ts-space-<login>` containers | docker on the hosting box, loopback ports 3101–3199 | One Server Edition instance per Pro user (image `ts-space:latest`) |
+| Caddy | hosting box | TLS for `canvas.termsprawl.com` → 127.0.0.1:3030; `termsprawl.com/api` → 8787 |
 
-DNS: `canvas.termsprawl.com` A → 178.104.6.193, **DNS-only** (grey cloud) so
-Caddy terminates TLS and ACME stays clean. Do not orange-cloud it without
-re-thinking the WebSocket path.
+DNS: `canvas.termsprawl.com` points at the hosting box's address (recorded in
+the operator's private configuration), **DNS-only** (grey cloud) so Caddy
+terminates TLS and ACME stays clean. Do not orange-cloud it without re-thinking
+the WebSocket path.
 
 ## What's in the image
 
@@ -68,7 +77,8 @@ helper — installs are explicit, never automatic on import.
 - Container caps: `--memory 384m --cpus 0.5 --pids-limit 128` per space.
   The cap is a ceiling, not usage: an idle space runs ~60–100 MB RSS
   (node + tmux). Budget ~100 MB/idle space, ~384 MB under load.
-- Box: 7.6 GB RAM shared with the cloud API, Caddy, docker, and the host.
+- Hosting box: ~7.6 GB RAM shared with the cloud API, Caddy, docker, and the
+  host system.
 - Practical ceiling before RAM pressure: **~20 concurrent spaces**.
   Alert threshold: **60% of memory** (`free -m` used ≥ 4600).
 - Port pool 3101–3199 caps the design at 99 spaces — the harder limit is RAM.
@@ -117,7 +127,7 @@ reconcile (cloud API) or on first visit (router wake).
   `docker volume rm ts-space-<login>` (the sweep handles an already-gone
   volume gracefully and clears the bookkeeping mark).
 
-## Tokens and secrets (all in /opt/termsprawl-cloud/.env)
+## Tokens and secrets (all in `<services-dir>/termsprawl-cloud/.env`)
 
 - `SPACE_JWT_SECRET` — signs 5-min browser hand-off tokens AND the
   `space-sync` tokens given to containers (30-day TTL since 2026-09-06,
@@ -148,16 +158,17 @@ WS boot token from `:3110`). Closed + live-verified since:
   never fetchable from the app port by an anonymous LAN/container client.
 - **Probe-verified today**: from a live tenant container AND from a
   throwaway default-bridge container, ALL host listeners are refused
-  (8642, 9911, 3005, 22, 443, 8787, 3030). The box's ufw posture
-  (default deny incoming, `deny (routed)`) already blocks the
-  container→host path the review worried about; Phase 3's proposed
-  iptables/loopback-bind changes were therefore **not applied** — the
-  premise ("reachable from the docker gateway") is stale on this box.
+  (SSH, HTTPS, the cloud API, the router, and the other services' ports).
+  The host's firewall posture (default deny incoming, `deny (routed)`)
+  already blocks the container→host path the review worried about; the
+  proposed iptables/loopback-bind changes were therefore **not applied** —
+  the premise ("reachable from the docker gateway") is stale on this host.
 - **Deferred with this rationale**: `userns-remap` (docker daemon restart
-  + volume-ownership churn on a live box with a running tenant; the
+  + volume-ownership churn on a live host with a running tenant; the
   cross-tenant reachability it defended against is already gone).
-  `hermes` (8642/9911) and `moltex` (3005) keep their `0.0.0.0` binds —
-  they are gateway/LAN products, and ufw already restricts sources.
+  Unrelated LAN/gateway services on the same host keep their `0.0.0.0`
+  binds — they are not part of this product, and the host firewall already
+  restricts sources.
 - **Cloud API hygiene** (2026-09-06, all live): OAuth state binding
   (single-use `ts_oauth_state` cookie + server-side consumed-state set),
   device/poll rate limit (30/min/IP), `Cache-Control: no-store` on all
@@ -188,14 +199,14 @@ WS boot token from `:3110`). Closed + live-verified since:
 
 ## Deploy ritual
 
-1. Web repo: `scripts/deploy-hermes-box.sh` publishes the site AND
-   server/index.mjs + units (extend it for space-router when onboarding the
-   service — see deploy/space-router.service).
+1. Web repo: the deploy script publishes the site AND server/index.mjs + units
+   (extend it for space-router when onboarding the service — see
+   deploy/space-router.service). Its host alias is operator-specific.
 2. App repo: `pnpm run build && pnpm run build:server`, then
    `scripts/build-space-image.sh` (app repo) → `docker save ts-space:latest |
-   ssh hermes-box docker load` (no registry in v1).
+   ssh <host> docker load` (no registry in v1).
 3. `caddy reload --config /etc/caddy/Caddyfile` after vhost edits (the
-   deploy script does this; note systemd ExecReload is broken on the box —
+   deploy script does this; note systemd ExecReload is broken on the host —
    reload directly).
 
 ## Decisions locked at kickoff (do not relitigate casually)

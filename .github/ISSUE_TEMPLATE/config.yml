@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability (private)
+    url: https://github.com/dazeb/termsprawl/security/advisories/new
+    about: Please report suspected vulnerabilities privately — never in a public issue. See SECURITY.md.
+  - name: Contribution guide
+    url: https://github.com/dazeb/termsprawl/blob/main/CONTRIBUTING.md
+    about: Setup, the gate order, and what a pull request should look like.
+  - name: Documentation
+    url: https://docs.termsprawl.com
+    about: Usage documentation for the desktop app, Server Edition, agents, and cloud spaces.
+  - name: Roadmap and funding priorities
+    url: https://github.com/dazeb/termsprawl/blob/main/ROADMAP.md
+    about: What is planned, what is funding-dependent, and what is out of scope.
