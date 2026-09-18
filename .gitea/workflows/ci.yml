@@ -30,12 +30,15 @@ jobs:
       - name: raise node heap limit
         run: echo "NODE_OPTIONS=--max-old-space-size=4096" >> "$GITHUB_ENV"
 
-      # Canonical gate list lives in scripts/verify.sh (package.json "verify"):
-      # typecheck -> desktop build -> Server build -> release-safety checks ->
-      # vitest. Do not expand the gate list here — edit scripts/verify.sh so CI
-      # and local runs can never drift apart. Both builds must precede the
-      # suite: src/server/server-boot-gate.test.ts GETs '/' and asserts the
-      # served renderer shell, which only exists after `pnpm run build`.
+      # scripts/verify.sh is the ONE executable gate list (package.json
+      # "verify"): typecheck -> desktop build -> Server build -> release-safety
+      # checks -> vitest. Do not add gate steps here — edit scripts/verify.sh
+      # and update the documents that mirror it (AGENTS.md, CONTRIBUTING.md,
+      # .github/PULL_REQUEST_TEMPLATE.md, docs/PROJECT-HEALTH.md,
+      # docs/VERIFICATION.md) in the same change; scripts/trust-surface.test.ts
+      # fails unless each mirror matches the script, both ways. Both builds
+      # must precede the suite: src/server/server-boot-gate.test.ts GETs '/'
+      # and asserts the served renderer shell, which only exists after build.
       - name: verify
         run: pnpm run verify
 

@@ -11,7 +11,9 @@ Security issues go through [SECURITY.md](SECURITY.md) — never a public issue.
 
 - **Linux** — termsprawl is Linux-only by design; macOS and Windows are not
   supported, and PRs adding platform-specific code for them will be declined.
-- **Node 20+** (Node 22 is what CI and the maintainer's workstation use)
+- **Node 20+** for the app (Node 22 is what CI and the maintainer's
+  workstation use). The `relay/` workspace declares `"node": ">=22"` in its own
+  `package.json`, so working on relay code needs Node 22+.
 - **pnpm 11** (`packageManager` in `package.json` pins the exact version;
   the repo uses `node-linker=hoisted` from `.npmrc`)
 - **tmux >= 3.2** — terminals run inside tmux sessions; without it the app
@@ -49,10 +51,15 @@ It executes the gates in a fixed order and stops at the first failure:
 
 The order is load-bearing: the vitest suite includes a Server Edition boot gate
 that reads the built renderer, so both builds must precede the test suite. CI
-(`.gitea/workflows/ci.yml`) and `scripts/release.sh` call the same command;
-the gate list lives only in `scripts/verify.sh`, so local runs and CI cannot
-drift apart. A single gate can still be run on its own when iterating (for
-example `pnpm run typecheck`, the fastest correctness gate).
+(`.gitea/workflows/ci.yml`) and `scripts/release.sh` call the same command.
+`scripts/verify.sh` is the one *executable* gate list — nothing else may run
+the gates — and the documents above (this file, AGENTS.md, the PR template,
+docs/PROJECT-HEALTH.md, docs/VERIFICATION.md) mirror it in prose.
+`scripts/trust-surface.test.ts` asserts those documented lists match
+`scripts/verify.sh` exactly, in both directions, so adding or removing a gate
+in the script fails the suite until every copy is updated. A single gate can
+still be run on its own when iterating (for example `pnpm run typecheck`, the
+fastest correctness gate).
 
 Extra checks, run when your change touches what they cover — these are **not**
 part of `pnpm run verify` because they need an environment CI does not have:
@@ -116,8 +123,14 @@ docs must be written from scratch:
 - Run `./scripts/check-originality.sh` before opening a PR that changes code.
   It is an automated similarity screen: it compares this repository against the
   prior project's tree and flags identical blocks of five or more non-trivial
-  lines. A failure is a hard stop, not a nitpick. The screen is a heuristic,
-  not a legal guarantee — see
+  lines. A failure is a hard stop, not a nitpick. When the prior project's tree
+  is not checked out locally the script warns and skips — that is acceptable
+  for a local run, but the release ritual runs it in **strict mode**
+  (`TS_REQUIRE_PRIOR=1 ./scripts/check-originality.sh`, set by
+  `scripts/release.sh`), where a missing prior tree fails the run instead of
+  skipping, so a release cannot pass the gate vacuously. CI does not run the
+  screen at all (CI never checks out the prior tree). The screen is a
+  heuristic, not a legal guarantee — see
   [docs/VERIFICATION.md](docs/VERIFICATION.md) for its methodology and limits.
 
 ## Licensing of contributions

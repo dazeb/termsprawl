@@ -6,12 +6,17 @@ Development/verification tooling. Not shipped in the app.
 
 - `check-originality.py` / `check-originality.sh` — clean-room guard. Diffs the
   tree against the prior project and FAILs on identical blocks >= 5 lines.
-  Run after significant changes; a FAIL is a hard stop. It is a heuristic, not
-  a legal guarantee — see docs/VERIFICATION.md for methodology and limits.
+  Run after significant changes; a FAIL is a hard stop. When the prior tree is
+  absent it warns and exits 0 (local runs, CI); `TS_REQUIRE_PRIOR=1` makes that
+  a non-zero failure, which `release.sh` sets so a release cannot pass the gate
+  vacuously. It is a heuristic, not a legal guarantee — see docs/VERIFICATION.md
+  for methodology and limits.
 - `verify.sh` — the canonical gate runner behind `pnpm run verify` (typecheck →
-  desktop build → Server build → release-safety checks → vitest). CI and
-  `release.sh` call it; never duplicate the gate list elsewhere. The build
-  order matters (the Server Edition boot-gate test asserts the built renderer).
+  desktop build → Server build → release-safety checks → vitest). The one
+  *executable* gate list: CI and `release.sh` call it, and the documents that
+  describe the gates mirror it (checked both ways by
+  `scripts/trust-surface.test.ts`). The build order matters (the Server Edition
+  boot-gate test asserts the built renderer).
 - `release-safety.test.py` — offline release failure-path checks: verifies the
   canonical gate ordering and its use from release.sh/CI, annotated-tag reuse,
   CHANGELOG-sourced release notes, SHA256SUMS generation and artifact gates,

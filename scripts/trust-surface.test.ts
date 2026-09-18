@@ -8,7 +8,7 @@
 //
 // Runs with the normal suite (`pnpm test`).
 import { existsSync, readFileSync, statSync } from 'node:fs'
-import { execSync } from 'node:child_process'
+import { execSync, spawnSync } from 'node:child_process'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -124,6 +124,220 @@ describe('honesty rules', () => {
     expect(health).toMatch(/no public/i)
     expect(health).toMatch(/SBOM/i)
     expect(health).toMatch(/signed releases|release signing/i)
+  })
+
+  it('labels each published audit as a maintainer self-review inside the file', () => {
+    for (const rel of ['docs/AUDIT-2026-08-29.md', 'docs/AUDIT-2026-09-13.md']) {
+      const text = read(rel)
+      expect(text, `${rel} must label itself a maintainer self-review`).toMatch(
+        /maintainer self-(?:review|audit)/i
+      )
+      expect(text, `${rel} must say it is not an independent assessment`).toMatch(
+        /not an independent/i
+      )
+    }
+  })
+})
+
+describe('documented gate lists mirror scripts/verify.sh', () => {
+  // scripts/verify.sh is the one executable gate list. Every documented copy
+  // (prose, numbered list, code comments, the Python constant) must name the
+  // same gates in the same order. Adding, removing, or reordering a gate in
+  // the script fails here until every copy is updated — and a documented gate
+  // the script does not run fails too. That is what makes the copies safe:
+  // none of them is a second source of truth, and none can drift silently.
+  //
+  // The script's structure is the contract: each gate is an
+  // `echo "==> verify: <name>"` line followed by the command it runs. Deriving
+  // the list from those markers (rather than from command prefixes) means any
+  // command kind is captured, and the extra assertion below rejects a command
+  // line that was slipped in without the marker.
+  const VERIFY = read('scripts/verify.sh')
+  const SCRIPT_GATES: string[] = []
+  const MARKERS_WITHOUT_COMMAND: string[] = []
+  {
+    const lines = VERIFY.split('\n')
+    for (let i = 0; i < lines.length; i++) {
+      const marker = lines[i].match(/^\s*echo "==> verify: (.+)"\s*$/)
+      if (!marker || /all gates passed/.test(marker[1])) continue
+      const command = lines.slice(i + 1).find((line) => line.trim() !== '')
+      if (command === undefined) MARKERS_WITHOUT_COMMAND.push(marker[1])
+      else SCRIPT_GATES.push(command.trim())
+    }
+  }
+
+  const GATE_ALIASES: Array<[RegExp, string]> = [
+    [/^(?:pnpm run typecheck|typecheck)\b/, 'pnpm run typecheck'],
+    [/^(?:pnpm run build:server|server(?: edition)? build)\b/i, 'pnpm run build:server'],
+    [/^(?:pnpm run build|desktop build)\b/, 'pnpm run build'],
+    [
+      /^(?:python3 scripts\/release-safety\.test\.py|release-safety)\b/,
+      'python3 scripts/release-safety.test.py'
+    ],
+    [/^(?:pnpm test|tests?|vitest)\b/, 'pnpm test']
+  ]
+
+  function normaliseGate(item: string, where: string): string {
+    const cleaned = item.replace(/[`*]/g, '').replace(/^#\s*/, '').trim()
+    for (const [pattern, gate] of GATE_ALIASES) if (pattern.test(cleaned)) return gate
+    throw new Error(
+      `${where}: unrecognised gate "${cleaned}" — it is not a gate scripts/verify.sh runs; ` +
+        'update the documented list to match the script'
+    )
+  }
+
+  /** Arrow chains that start at a typecheck gate, e.g. `typecheck → … → tests`. */
+  function arrowGateLists(text: string): string[][] {
+    // Markdown and shell-comment lists wrap across lines; join them first.
+    const flat = text.replace(/\r/g, '').replace(/\n[ \t]*#?[ \t]*/g, ' ')
+    const lists: string[][] = []
+    const pattern = /(pnpm run typecheck|typecheck)((?:\s*(?:→|->)\s*[^→,.;()]+)+)/g
+    let match: RegExpExecArray | null
+    while ((match = pattern.exec(flat)) !== null) {
+      const items = match[2]
+        .split(/→|->/)
+        .map((item) => item.trim())
+        .filter((item) => item !== '')
+      lists.push([match[1], ...items])
+    }
+    return lists
+  }
+
+  /** The numbered, backticked gate list in CONTRIBUTING.md. */
+  function numberedGateList(text: string): string[][] {
+    const commands = [...text.matchAll(/^\d+\.\s+`([^`]+)`\s*$/gm)].map((m) => m[1])
+    return commands.length > 0 ? [commands] : []
+  }
+
+  /** The `GATES` constant in scripts/release-safety.test.py. */
+  function pythonGateList(text: string): string[][] {
+    const start = text.indexOf('GATES = [')
+    const end = text.indexOf(']', start)
+    if (start === -1 || end === -1) return []
+    return [[...text.slice(start, end).matchAll(/'([^']+)'/g)].map((m) => m[1])]
+  }
+
+  const DOCUMENTS: Array<{ file: string; extract: (text: string) => string[][] }> = [
+    { file: 'CONTRIBUTING.md', extract: numberedGateList },
+    { file: 'AGENTS.md', extract: arrowGateLists },
+    { file: 'README.md', extract: arrowGateLists },
+    { file: '.github/PULL_REQUEST_TEMPLATE.md', extract: arrowGateLists },
+    { file: 'docs/PROJECT-HEALTH.md', extract: arrowGateLists },
+    { file: 'docs/VERIFICATION.md', extract: arrowGateLists },
+    { file: '.gitea/workflows/ci.yml', extract: arrowGateLists },
+    { file: 'scripts/release-safety.test.py', extract: pythonGateList }
+  ]
+
+  it('parses a non-empty gate list from scripts/verify.sh', () => {
+    expect(SCRIPT_GATES.length, 'no gates parsed from scripts/verify.sh').toBeGreaterThan(0)
+    expect(MARKERS_WITHOUT_COMMAND, 'a gate marker has no command below it').toEqual([])
+  })
+
+  it('scripts/verify.sh declares every command it runs with a gate marker', () => {
+    const commandLike = VERIFY.split('\n')
+      .map((line) => line.trim())
+      .filter((line) => /^(?:pnpm|python3|node|bash|\.\/)/.test(line) && !line.startsWith('#'))
+    expect(commandLike.filter((line) => !SCRIPT_GATES.includes(line))).toEqual([])
+    expect(commandLike).toEqual(SCRIPT_GATES)
+  })
+
+  it.each(DOCUMENTS)(
+    '$file documents exactly the gates scripts/verify.sh runs, in order',
+    ({ file, extract }) => {
+      const lists = extract(read(file))
+      expect(lists.length, `${file} documents no gate list`).toBeGreaterThan(0)
+      for (const list of lists) {
+        expect(
+          list.map((item) => normaliseGate(item, file)),
+          `${file} gate list`
+        ).toEqual(SCRIPT_GATES)
+      }
+    }
+  )
+})
+
+describe('release versions are not claimed outside the maintained places', () => {
+  const pkg = JSON.parse(read('package.json')) as { version: string }
+
+  /** Release-version-looking text: `0.28.0`, `v0.28.0`, `0.28.x`. */
+  const RELEASE_VERSION = /(?<![\w./-])v?(\d+\.\d+\.(?:x|\d+))(?![\w./-])/g
+
+  function versionStringsIn(text: string): string[] {
+    // Link targets and URLs may legitimately contain version-like path
+    // segments (e.g. a changelog-spec URL); only prose counts as a claim.
+    const prose = text.replace(/\]\([^)]*\)/g, ']').replace(/https?:\/\/\S+/g, '')
+    return [...prose.matchAll(RELEASE_VERSION)].map((m) => m[1])
+  }
+
+  function compareVersions(a: string, b: string): number {
+    const pa = a.split('.').map(Number)
+    const pb = b.split('.').map(Number)
+    for (let i = 0; i < 3; i++) if (pa[i] !== pb[i]) return pa[i] - pb[i]
+    return 0
+  }
+
+  // Live policy documents point at the Releases page instead of naming a
+  // version: scripts/release.sh rewrites only package.json and README's
+  // "Current version" marker, so a version in these files would go stale
+  // silently on the next release. The most recent release is described by
+  // reference ("the current release line"), never by number.
+  const LIVE_DOCS = [
+    'SECURITY.md',
+    'CONTRIBUTING.md',
+    'CODE_OF_CONDUCT.md',
+    'GOVERNANCE.md',
+    'ROADMAP.md',
+    'FUNDING.md',
+    'HERMES.md'
+  ] as const
+
+  it.each(LIVE_DOCS)('%s names no release version', (rel) => {
+    expect(
+      versionStringsIn(read(rel)),
+      `${rel} hardcodes a release version as a live claim — point at the Releases page instead`
+    ).toEqual([])
+  })
+
+  it('README advertises the package version the release script bumps', () => {
+    const match = read('README.md').match(/Current version:\s*\*\*(\d+\.\d+\.\d+)\*\*/)
+    expect(match, 'README has no "Current version: **x.y.z**" marker').toBeTruthy()
+    expect(match![1]).toBe(pkg.version)
+  })
+
+  // The dated evidence records (PROJECT-HEALTH, VERIFICATION) legitimately name
+  // the release they snapshot — that is history, not a live claim — but only
+  // when they pin the commit the snapshot was taken at. A version there must
+  // agree with what that commit actually carried, so editing one without the
+  // other fails; and a snapshot can never name a version newer than the
+  // package. On a shallow CI checkout the pinned commit is absent, in which
+  // case only the "not newer" bound and the anchor requirement apply.
+  const SNAPSHOT_DOCS = ['docs/PROJECT-HEALTH.md', 'docs/VERIFICATION.md'] as const
+
+  it.each(SNAPSHOT_DOCS)('%s anchors its snapshot version to a commit', (rel) => {
+    const text = read(rel)
+    const header = text.split('\n').slice(0, 12).join('\n')
+    const commit = header.match(/\*\*Commit:\*\*\s*`([0-9a-f]{40})`/)
+    expect(commit, `${rel} must pin the snapshot to a full 40-char commit`).toBeTruthy()
+    const release = header.match(/\*\*Release:\*\*\s*v?(\d+\.\d+\.\d+)/)
+    expect(release, `${rel} must name the release its snapshot recorded`).toBeTruthy()
+
+    const recorded = release![1]
+    const sha = commit![1]
+    const commitPresent =
+      spawnSync('git', ['cat-file', '-e', `${sha}^{commit}`], { cwd: ROOT }).status === 0
+    if (commitPresent) {
+      const atCommit = JSON.parse(
+        execSync(`git show ${sha}:package.json`, { cwd: ROOT, encoding: 'utf8' })
+      ) as { version: string }
+      expect(
+        recorded,
+        `${rel} names v${recorded} but ${sha.slice(0, 7)} carried v${atCommit.version}`
+      ).toBe(atCommit.version)
+    }
+    expect(
+      compareVersions(recorded, pkg.version),
+      `${rel} names v${recorded}, newer than package.json's v${pkg.version}`
+    ).toBeLessThanOrEqual(0)
   })
 })
 
@@ -256,25 +470,12 @@ describe('policy document essentials', () => {
     expect(security).toMatch(/secrets|tokens|credentials/i)
   })
 
-  it('CONTRIBUTING.md carries prerequisites, the gate order, and licensing terms', () => {
+  it('CONTRIBUTING.md carries prerequisites, the gate command, and licensing terms', () => {
     const contributing = read('CONTRIBUTING.md')
     expect(contributing).toContain('Node 20')
     expect(contributing).toContain('pnpm 11')
     expect(contributing).toMatch(/tmux/)
-    const gates = [
-      'pnpm run typecheck',
-      'pnpm run build',
-      'pnpm run build:server',
-      'python3 scripts/release-safety.test.py',
-      'pnpm test'
-    ]
-    let cursor = -1
-    for (const gate of gates) {
-      const at = contributing.indexOf(gate)
-      expect(at, `missing gate: ${gate}`).toBeGreaterThan(-1)
-      expect(at, `gate out of order: ${gate}`).toBeGreaterThan(cursor)
-      cursor = at
-    }
+    expect(contributing).toContain('pnpm run verify')
     expect(contributing).toMatch(/MIT/)
     expect(contributing).toMatch(/no CLA or DCO/i)
     expect(contributing).toMatch(/GitHub Actions/i)

@@ -5,9 +5,12 @@ from, and where we're going. For operational rules (commands, architecture,
 clean-room guard), read AGENTS.md in this repo; for the public roadmap and
 current priorities, read ROADMAP.md.*
 
-**Current state:** v0.28.0 (2026-09-18), pre-1.0, actively maintained by a
-single maintainer. See [docs/PROJECT-HEALTH.md](docs/PROJECT-HEALTH.md) for the
-current evidence snapshot and [CHANGELOG.md](CHANGELOG.md) for recent releases.
+**Current state:** pre-1.0, actively maintained by a single maintainer. The
+current version and downloads are on the
+[Releases](https://github.com/dazeb/termsprawl/releases) page; the dated
+evidence snapshot (2026-09-18) is in
+[docs/PROJECT-HEALTH.md](docs/PROJECT-HEALTH.md), and
+[CHANGELOG.md](CHANGELOG.md) records recent releases.
 
 ## Why this project exists
 
@@ -58,9 +61,12 @@ no copied blocks found, one known-benign generic CSS block reviewed (see
 originality. It cannot detect paraphrased copying, copied ideas, or copied
 structure written with different identifiers; it compares only against the one
 prior tree; and it is skipped (with a warning) when that tree is absent, so a
-pass with the prior checkout missing means nothing. CI does not run it. The
-project therefore describes itself as an *independent implementation screened
-for textual similarity against the prior project* — not as "100% original".
+local pass with the prior checkout missing means nothing — the release path
+therefore runs it in strict mode (`TS_REQUIRE_PRIOR=1`, set by
+`scripts/release.sh`), where a missing tree fails the release instead of
+skipping. CI does not run it. The project therefore describes itself as an
+*independent implementation screened for textual similarity against the prior
+project* — not as "100% original".
 
 If you are ever unsure whether something is too close to another project,
 rewrite it from the idea. When in doubt, assume it is and start over.
@@ -72,7 +78,8 @@ rewrite it from the idea. When in doubt, assume it is and start over.
   canvas; tmux continuity with cold-start scrollback replay; projects and
   git-shareable project files; sticky/group/editor/diff nodes; agents with
   hooks, managed accounts, and context links; source control; SSH remote
-  projects; Server Edition; the rebuilt extras (relay, Telegram bot,
+  projects (terminals, git, and file operations over SSH; the agent workspace
+  tools stay local); Server Edition; the rebuilt extras (relay, Telegram bot,
   provider-agnostic chat); packaging, auto-update and CI; browser nodes;
   workspace bundles; node links; A2A.
 - **Verification is public.** The current gate results, the test categories,

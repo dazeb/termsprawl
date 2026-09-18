@@ -55,8 +55,10 @@ Recent completed implementation:
   Launch preparation picks an adapter from the executable's own advertised
   capabilities, never its display name, and unverified mechanisms report
   **Needs setup** instead of claiming success. Managed runtime files install
-  under app user data at 0600/0700. Shipped in 0.27.0; remote SSH and Server
-  Edition transport are deferred, and transcript reading is advertised only for
+  under app user data at 0600/0700. Shipped in 0.27.0. Within this agent-tools
+  scope, remote SSH and Server Edition transport are deferred — the tools are
+  local-only; SSH terminal/git/file transport for projects is a separate,
+  shipped feature (Phase 9) — and transcript reading is advertised only for
   Claude transcripts.
 - Shared browser sessions (2026-09-16): sandboxed sign-in popups use the
   canvas browser profile; authenticated agent cookie read/write/clear commands
@@ -812,14 +814,19 @@ concepts, not a porting source.*
   the self-hosted runner. Pushing only to GitHub or the build host does not
   activate this runner. An ordinary feature-branch push does not match the
   workflow's branch filter; pull requests also run CI.
-- Verification installs app and relay dependencies, then runs typecheck, app
-  build, Server Edition build, and tests. Build precedes tests because the
-  server boot gate needs the built renderer.
-- The tag release job builds Linux artifacts and publishes to Gitea and,
-  using the required `GH_TOKEN`, GitHub Releases. GitHub remains the desktop
-  auto-update source and must contain `latest-linux.yml`.
+- Verification installs app and relay dependencies, then runs the canonical
+  gate command `pnpm run verify` (`scripts/verify.sh`: typecheck → desktop
+  build → Server Edition build → release-safety checks → vitest). Both builds
+  precede the tests because the server boot gate needs the built renderer.
+- The tag release job builds Linux artifacts, writes release notes from the
+  `CHANGELOG.md` section for the version (`scripts/release-notes.mjs`), and
+  generates `dist/SHA256SUMS` (`scripts/release-checksums.sh`) before
+  publishing to Gitea and, using the required `GH_TOKEN`, GitHub Releases.
+  GitHub remains the desktop auto-update source and must contain
+  `latest-linux.yml`.
 - **Release hardening (2026-09-16):** the release job now requires a successful
-  verify job, a configured `GH_TOKEN`, and all three nonempty release assets
+  verify job, a configured `GH_TOKEN`, and all four nonempty release artifacts
+  (AppImage, `.deb`, `latest-linux.yml`, `SHA256SUMS` — plus the notes file)
   before publishing. The app release script reuses an existing tag only when
   it points to HEAD; a conflicting tag fails. Site deployment resumes when
   the version is already committed and fails on unsuccessful HTTP requests,
@@ -830,9 +837,11 @@ concepts, not a porting source.*
 ### Task 12.4: Required release checklist
 
 1. Check the working tree and actual remote URLs (`git remote -v`), integrate
-   the intended work into `main`, and run typecheck, tests, and the local
-   originality gate. Run the spaces and GitHub-import E2E gates documented
-   in `AGENTS.md` before pushing the release tag.
+   the intended work into `main`, and run `pnpm run verify` (the canonical gate
+   command: typecheck, desktop and Server Edition builds, release-safety
+   checks, tests) plus the local originality gate. Run the spaces and
+   GitHub-import E2E gates documented in `AGENTS.md` before pushing the
+   release tag.
 2. Run `scripts/release.sh X.Y.Z` from clean `main` (or use its explicit
    `--from <branch>` option). It bumps the version, runs local gates, pushes
    `main` to origin, Gitea, and GitHub, then pushes the version tag to all three.
@@ -840,9 +849,10 @@ concepts, not a porting source.*
 3. **Do not skip `git push gitea main` or `git push gitea vX.Y.Z`.** These are
    the runner triggers already included in the release script. Read back the
    branch/tag refs and inspect the corresponding Gitea Actions jobs.
-4. Verify successful verify and release jobs and read back all three assets
-   (AppImage, `.deb`, `latest-linux.yml`) on both Gitea and GitHub. Do not
-   label a local version bump or tag push as a completed release.
+4. Verify successful verify and release jobs and read back all four artifacts
+   (AppImage, `.deb`, `latest-linux.yml`, `SHA256SUMS` — plus the release-notes
+   asset) on both Gitea and GitHub. Do not label a local version bump or tag
+   push as a completed release.
 5. Run `scripts/release-site.sh X.Y.Z` to update and deploy the marketing
    site, and update/deploy sibling docs for changed user-facing behavior.
    Verify the live site version and relevant docs before closing the release.

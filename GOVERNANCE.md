@@ -65,8 +65,12 @@ happens, treat every statement about "the maintainer" as singular.
 
 Only the maintainer publishes releases. Releases are cut from `main` after the
 documented gates pass; the current release line is the only supported line
-(pre-1.0). Release notes are generated from the tagged commit range, and
-verification evidence is recorded in [docs/VERIFICATION.md](docs/VERIFICATION.md).
+(pre-1.0). Release notes are the `CHANGELOG.md` section for the released
+version (`scripts/release-notes.mjs`, run by the release pipeline) — not a
+commit-log summary: the changelog entry has to be written before tagging, an
+empty section is refused, and a version with no section gets an explicit
+fallback notice instead of silent empty notes. Verification evidence is
+recorded in [docs/VERIFICATION.md](docs/VERIFICATION.md).
 
 ## Succession and archival
 

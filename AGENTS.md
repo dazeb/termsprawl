@@ -26,11 +26,17 @@ pnpm run make-icon  # regenerate build/icon.png
 ```
 
 `pnpm run verify` (a wrapper over `scripts/verify.sh`) is the canonical gate
-list: typecheck → `pnpm run build` → `pnpm run build:server` → release-safety
+command: typecheck → `pnpm run build` → `pnpm run build:server` → release-safety
 checks → `pnpm test`. The builds must run before the suite because
 `src/server/server-boot-gate.test.ts` asserts the served renderer shell that
-only exists after `pnpm run build`. CI and `release.sh` call the same command —
-never duplicate the gate list elsewhere.
+only exists after `pnpm run build`. CI and `release.sh` call the same command.
+`scripts/verify.sh` holds the one executable gate list — never run the gates
+from anywhere else — while AGENTS.md, CONTRIBUTING.md,
+`.github/PULL_REQUEST_TEMPLATE.md`, `docs/PROJECT-HEALTH.md`,
+`docs/VERIFICATION.md`, and `scripts/release-safety.test.py` mirror it in
+prose. `scripts/trust-surface.test.ts` fails unless every mirror matches the
+script both ways, so a gate added to or removed from `scripts/verify.sh` must
+be reflected in the documents in the same change.
 
 ## Runtime prerequisites (user machines)
 
@@ -155,12 +161,13 @@ touch build config, re-verify with a packaged boot test.
 ## Node kinds
 
 Implemented: `terminal`, `sticky`, `group`, `diff`, `editor` (Phase 6), and
-`browser` (Phase 13 — a sandboxed `<webview>` guest, one per tab). Agent
-sessions reuse the terminal node with a CLI preset (Phase 7). The plan
-(`PLAN.md`) still adds chat, source control, SSH remote, Server Edition, then
-rebuilds our own extras from scratch (Telegram, relay, chat driver — concepts
-only, never ported). Extend `NODE_TYPES` and the `data.kind` union in
-`state/workspace.ts` when adding kinds.
+`browser` (Phase 13 — a sandboxed `<webview>` guest, one per tab), plus SSH
+remote projects (Phase 9 — terminals, git, and file operations run on the
+remote host). Agent sessions reuse the terminal node with a CLI preset
+(Phase 7). `PLAN.md` is the historical record of the completed phases (chat,
+source control, Server Edition, and the rebuilt extras — Telegram, relay, chat
+driver — concepts only, never ported). Extend `NODE_TYPES` and the `data.kind`
+union in `state/workspace.ts` when adding kinds.
 
 **Every node is resizable** via `NodeResizer` (`@reactflow/node-resizer`,
 added 0.8.3). Each node component renders `<NodeResizer isVisible={selected}
@@ -277,9 +284,10 @@ the root dependency tree.
 Releasing a version (the ritual):
 
 ```bash
-pnpm run verify                          # canonical gates (typecheck → builds →
-                                         # release-safety → tests)
-./scripts/check-originality.sh           # clean-room gate (local-only, see above)
+pnpm run verify                          # canonical gate command: typecheck → desktop
+                                         # build → Server build → release-safety → tests
+./scripts/check-originality.sh           # clean-room screen (local-only, see above;
+                                         # release.sh runs it in strict mode)
 bash scripts/space-e2e.sh                # spaces e2e — seed→boot-restore→ws-drive→pty→restart→push
 bash scripts/github-import-e2e.sh        # github import e2e (real git host, token via env)
 scripts/release.sh X.Y.Z                 # bump → gates → push main → annotated tag; the
@@ -377,7 +385,10 @@ not shed its license. Therefore:
 3. `scripts/check-originality.py` diffs the tree against the prior project and
    fails on identical blocks ≥ 5 lines. Known-benign matches are documented in
    the script (library export names, channel names, generic CSS). Run it after
-   significant changes; a FAIL is a hard stop, not a suggestion. It is a
+   significant changes; a FAIL is a hard stop, not a suggestion. A missing
+   prior tree makes it warn and exit 0 by default (local runs, CI); the release
+   ritual sets `TS_REQUIRE_PRIOR=1`, which turns that skip into a non-zero exit
+   so a release cannot pass the clean-room gate vacuously. It is a
    textual heuristic — it cannot prove originality (paraphrased copying, copied
    structure, or other upstream sources are invisible to it), so never describe
    the result as "100% original" or as a legal guarantee. The public statement

@@ -7,11 +7,13 @@ change. `PLAN.md` is the historical implementation record, not this document.
 
 ## Current priorities
 
-The shipped baseline is a Linux desktop application (v0.28.0): an infinite
-canvas with terminal, editor, browser, sticky, group, and diff nodes; real PTYs
-in persistent tmux sessions; agent presets; a git panel; a browser-based Server
-Edition; and a standalone encrypted relay service. Current maintenance work
-focuses on:
+The shipped baseline is a Linux desktop application: an infinite canvas with
+terminal, editor, browser, sticky, group, and diff nodes; real PTYs in
+persistent tmux sessions; agent presets; a git panel; a browser-based Server
+Edition; and a standalone encrypted relay service. The current version is on
+the [Releases](https://github.com/dazeb/termsprawl/releases) page — this file
+does not repeat it, because that number changes and this document is reviewed
+less often. Current maintenance work focuses on:
 
 - reliability of the shipped paths — terminal/tmux continuity, project
   persistence, and the release pipeline
@@ -57,8 +59,15 @@ none of them is in progress today.
 
 ### 2. Server Edition and secure remote access
 
+SSH remote projects ship today: terminals (remote tmux), git, and file
+operations run on the remote host. The funded work is the narrower remaining
+surface, not "SSH support" as a whole:
+
 - hardening the browser Server Edition for non-localhost deployment
-- completing remote project transport over SSH, tested against real hosts
+- extending the shipped SSH remote transport to the remaining surfaces — the
+  agent workspace tools and the Server Edition bridge are local-only today —
+  and testing the transport against a wider range of real hosts (the shipped
+  path was verified against one)
 - independent review of the authentication and isolation model before any
   hosted default changes
 - a written threat model that matches what is implemented

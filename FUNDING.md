@@ -30,9 +30,11 @@ packages are listed on the project's funders page
    accessibility remediation with a published before/after audit, and
    documentation aimed at new users.
 2. **Server Edition and secure remote access** — hardening the browser server
-   for non-localhost deployment, completing SSH remote transport, an
-   independent review of the authentication and isolation model, and a written
-   threat model.
+   for non-localhost deployment, extending the shipped SSH remote transport
+   (terminals, git, and files already run on the remote host) to the agent
+   workspace tools and the Server Edition bridge, and testing it against a
+   wider range of real hosts, an independent review of the authentication and
+   isolation model, and a written threat model.
 3. **Provider-neutral agent interoperability** — a documented interface between
    the canvas and agent CLIs, conformance tests per preset, and honest
    capability reporting.

@@ -7,10 +7,13 @@ report a vulnerability privately, and what to realistically expect.
 
 ## Supported versions
 
-Only the current release line receives security fixes. At the time of writing
-that is **0.28.x** (pre-1.0). Older releases are not backported; a fix ships in
-a new release on the current line. There is no bug bounty and no response-time
-guarantee — see [What to expect](#what-to-expect).
+Only the current release line receives security fixes: that is the most recent
+published version on the
+[Releases page](https://github.com/dazeb/termsprawl/releases). This document
+deliberately does not name a version — it would be stale within one release.
+Fixes ship as a new release on the current line; older releases are not
+backported. There is no bug bounty and no response-time guarantee — see
+[What to expect](#what-to-expect).
 
 ## Reporting a vulnerability
 

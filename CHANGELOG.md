@@ -14,11 +14,13 @@ and users should expect the on-disk project format and internal APIs to evolve
 between releases. Patch releases are bug fixes and small corrections.
 
 Releases in this repository are cut from `main` after the documented gates
-pass; released artifacts are on the
-[Releases page](https://github.com/dazeb/termsprawl/releases), and tags exist for
-every published version. Earlier release history (roughly 0.2–0.25.7, recorded
-sporadically) is in [PLAN.md](PLAN.md), which was the working implementation
-record at the time; this file is maintained from 0.26.0 onward.
+pass; released artifacts and their tags are on the
+[Releases page](https://github.com/dazeb/termsprawl/releases), and tags exist
+for every published version. This file is maintained from 0.26.0 onward;
+earlier releases (roughly 0.2–0.25.7) predate the changelog, and their tags
+and artifacts — not a prose record — are the authoritative history. (PLAN.md
+is the historical implementation log and also notes those releases, but it is
+not a release-history document.)
 
 ## [Unreleased]
 

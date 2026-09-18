@@ -34,12 +34,17 @@ Recorded on the commit above, after the declared builds:
 The table records the snapshot taken at the commit above. Those five gates are
 now one command — `pnpm run verify` (`scripts/verify.sh`) — running them in the
 order typecheck → desktop build → Server build → release-safety checks → tests
-and stopping at the first failure; CI and `scripts/release.sh` call the same
-command, so the list cannot drift.
+and stopping at the first failure. CI and `scripts/release.sh` call the same
+command, so the executable sequence exists once; the documents that describe it
+(this page, CONTRIBUTING.md, AGENTS.md, docs/VERIFICATION.md, the PR template)
+are kept in sync by `scripts/trust-surface.test.ts`, which fails if any
+documented list names different gates or a different order.
 
-A fresh `pnpm run verify` on the branch that carries this page reports 1,166
-passed and the same single skip: the 54-test trust-surface policy test runs in
-the normal suite (1,112 + 54). See the delta note in
+A fresh `pnpm run verify` on the branch that carries this page reports **1,187
+passed and the same single skip**: the trust-surface policy test
+(`scripts/trust-surface.test.ts`, 75 tests as of the final review pass) runs in
+the normal suite, so the suite grew from the recorded 1,112 by the trust-layer
+tests plus the cross-document review assertions. See the delta note in
 [VERIFICATION.md](VERIFICATION.md).
 
 The single skip is the opt-in live installer smoke test
@@ -59,8 +64,10 @@ and the gates that were **not** run for this snapshot, is in
   stated rather than hidden.
 - **Linux only.** No macOS or Windows support, by decision.
 - **Pre-1.0.** The on-disk project format and internal interfaces can change
-  between releases. The current release line (0.28.x) is the only supported
-  line. See [SECURITY.md](../SECURITY.md) and [ROADMAP.md](../ROADMAP.md).
+  between releases. At this snapshot the current release line (0.28.x, the
+  release named above) was the only supported line; the current supported
+  line is always the most recent release. See [SECURITY.md](../SECURITY.md)
+  and [ROADMAP.md](../ROADMAP.md).
 - **Bus factor.** The codebase is documented (AGENTS.md, PLAN.md, docs/) so a
   new contributor can pick it up, but no second maintainer exists today.
 

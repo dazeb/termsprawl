@@ -99,13 +99,15 @@ fs.writeFileSync(p, JSON.stringify(j,null,2)+'\n');
 sed -i -E "s/Current version: \*\*[0-9]+\.[0-9]+\.[0-9]+\*\*/Current version: **$NEW_VER**/" README.md
 
 # ---- 3. gates ----
-# One canonical gate list (scripts/verify.sh via `pnpm run verify`), shared
-# with CI — never duplicate the individual steps here. The originality screen
+# One canonical gate command (scripts/verify.sh via `pnpm run verify`), shared
+# with CI — never repeat the individual gate steps here. The originality screen
 # stays a separate explicit gate: it needs the prior project's tree, which CI
-# (and a fresh clone) does not have, and a skip is not a pass.
+# (and a fresh clone) does not have — but for a RELEASE a skip is not a pass,
+# so it runs in strict mode: a missing prior tree aborts the release instead of
+# warning and exiting 0 (see TS_REQUIRE_PRIOR in check-originality.py).
 echo "==> gates"
 pnpm run verify
-./scripts/check-originality.sh
+TS_REQUIRE_PRIOR=1 ./scripts/check-originality.sh
 
 # ---- 4. commit bump + push main to all 3 remotes ----
 echo "==> commit bump + push main"

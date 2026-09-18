@@ -46,8 +46,8 @@ sprawls, nothing hides in tabs.
 
 "Pre-1.0" is deliberate and not a hedge: the desktop application is usable and
 maintained today, but the on-disk project format and internal interfaces are
-not frozen, and the only supported release line is the current one (0.28.x).
-See [CHANGELOG.md](CHANGELOG.md) for what shipped recently and
+not frozen, and the only supported release line is the most recent one. See
+[CHANGELOG.md](CHANGELOG.md) for what shipped recently and
 [ROADMAP.md](ROADMAP.md) for the 1.0 readiness criteria and non-goals.
 
 What ships today:
@@ -55,7 +55,8 @@ What ships today:
 - **Desktop app** (free, offline, no account) — terminal canvas, tmux session
   continuity, projects & persistence, sticky/group/editor/diff nodes, agents
   with context links and managed accounts, source control (git status, staging,
-  commits, branches, sync, worktrees, AI commit messages), SSH remote projects,
+  commits, branches, sync, worktrees, AI commit messages), SSH remote projects
+  (terminals, git, and file operations run on the remote host),
   embedded browser nodes (opt-in agent control via CDP), Telegram bot v2,
   provider-agnostic chat nodes (OpenAI-compatible + Anthropic, streaming,
   thinking blocks, permission cards, slash commands), keyboard canvas
@@ -101,9 +102,9 @@ Runtime requirements:
 
 ## Build from source
 
-Requires Node 20+, pnpm 11, tmux, and Linux build tools for `node-pty`. Full
-setup, the gate order, and contribution rules are in
-[CONTRIBUTING.md](CONTRIBUTING.md).
+Requires Node 20+ (Node 22+ for the `relay/` workspace), pnpm 11, tmux, and
+Linux build tools for `node-pty`. Full setup, the gate order, and contribution
+rules are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ```bash
 pnpm install        # deps + rebuilds node-pty against Electron's ABI

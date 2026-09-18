@@ -37,12 +37,13 @@ the trust-layer test added by the grant-readiness task is counted):
 
 > **Delta note (added 2026-09-18, same day).** Row 4 records the snapshot at
 > `ebc5f66` before this trust layer existed. The trust-surface policy test
-> added with this documentation (`scripts/trust-surface.test.ts`, 54 tests)
-> runs in the normal suite, so a fresh `pnpm run verify` on the branch that
-> carries this file reports **1,166 passed + 1 skipped (1,167) across 118
-> files** — exactly the recorded 1,112 plus the 54 new tests. That run was
-> executed after the release tooling in this file landed and passed. The
-> counts above are left as recorded for the named commit.
+> added with this documentation (`scripts/trust-surface.test.ts`) runs in the
+> normal suite, so a fresh `pnpm run verify` on the branch that carries this
+> file reports **1,187 passed + 1 skipped (1,188) across 118 files** — the
+> recorded 1,112 plus the trust-layer tests (75 after the final cross-document
+> review pass, which added the gate-list and version assertions). That run was
+> executed after the release tooling in this file landed and passed. The counts
+> above are left as recorded for the named commit.
 
 | Area | What it covers |
 |---|---|
@@ -112,8 +113,11 @@ precede the test suite because `src/server/server-boot-gate.test.ts` GETs `/`
 and asserts the served shell, which only exists after `pnpm run build`. Running
 the suite before the build produces one spurious failure; this is the known
 gate-order behaviour behind that single failing test, not flakiness. CI
-(`.gitea/workflows/ci.yml`) and `scripts/release.sh` both call this command, so
-there is no separate copy of the gate list to drift.
+(`.gitea/workflows/ci.yml`) and `scripts/release.sh` both call this command;
+`scripts/verify.sh` is the one executable gate list, and the documents that
+mirror it (this page, CONTRIBUTING.md, AGENTS.md, docs/PROJECT-HEALTH.md, the
+PR template) are checked against it by `scripts/trust-surface.test.ts`, which
+fails if any mirror adds, drops, or reorders a gate.
 
 ## Release pipeline (from the next version onward)
 
@@ -158,8 +162,10 @@ the tree of the prior project (a BUSL-1.1 fork) and flags identical blocks.
 - It only compares against the prior project's tree; it does not compare against
   any other terminal manager or any other upstream source.
 - It requires the prior project's checkout to be present locally; when it is
-  absent the script warns and skips, so a "pass" with the prior tree missing
-  means nothing.
+  absent the script warns and skips, so an ordinary "pass" with the prior tree
+  missing means nothing. The release path closes that hole: `scripts/release.sh`
+  runs the screen with `TS_REQUIRE_PRIOR=1`, which turns the skip into a
+  non-zero exit, so a release cannot be published without a real comparison.
 - It is run locally, and CI does not run it (CI never checks out the prior
   tree). At this snapshot it was run on the maintainer's workstation and
   reported OK.

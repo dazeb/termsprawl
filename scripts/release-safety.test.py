@@ -105,6 +105,68 @@ class ReleaseSafety(unittest.TestCase):
             self.assertEqual(git('rev-parse', 'v1.2.3').stdout.strip(), tag_object)
             self.assertIn(b'reusing existing', second.stdout)
 
+    def test_originality_screen_is_strict_on_the_release_path(self):
+        """A skip must not be a pass for a release: strict mode fails loudly."""
+        script = read('scripts/release.sh')
+        gates = script[script.index('# ---- 3. gates ----'):script.index('# ---- 4.')]
+        self.assertIn('TS_REQUIRE_PRIOR=1 ./scripts/check-originality.sh', gates)
+        # The plain invocation is still what CONTRIBUTING tells contributors to
+        # run, so only the release path becomes strict.
+        self.assertIn('./scripts/check-originality.sh', read('CONTRIBUTING.md'))
+
+        checker = str(ROOT / 'scripts/check-originality.py')
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'src'
+            source.mkdir()
+            (source / 'app.ts').write_text('const answer = 42\n')
+            missing_prior = str(Path(directory) / 'no-such-prior-project')
+
+            # Default: the prior tree is legitimately absent (fresh clone, CI),
+            # so a warning + exit 0 is the intended behaviour.
+            default = subprocess.run(
+                ['python3', checker, str(source), missing_prior], capture_output=True)
+            self.assertEqual(default.returncode, 0, default.stderr)
+            self.assertIn(b'WARN: prior project not found', default.stdout)
+
+            # Strict: the same missing tree is a hard failure — the release
+            # script cannot pass the clean-room gate vacuously.
+            for value in ('1', 'yes', 'true'):
+                strict = subprocess.run(
+                    ['python3', checker, str(source), missing_prior],
+                    env={**os.environ, 'TS_REQUIRE_PRIOR': value}, capture_output=True)
+                self.assertNotEqual(strict.returncode, 0, 'strict mode accepted a missing prior tree')
+                self.assertIn(b'FAIL: prior project not found', strict.stdout)
+
+            # An explicit opt-out value keeps the non-strict behaviour.
+            opt_out = subprocess.run(
+                ['python3', checker, str(source), missing_prior],
+                env={**os.environ, 'TS_REQUIRE_PRIOR': '0'}, capture_output=True)
+            self.assertEqual(opt_out.returncode, 0, opt_out.stderr)
+
+            # Strict mode does not change the result when the prior tree IS
+            # present — a real comparison still runs to its normal verdict.
+            prior = Path(directory) / 'prior'
+            prior.mkdir()
+            (prior / 'old.ts').write_text('\n'.join(
+                f'const copiedLine{i} = "value number {i}"' for i in range(6)) + '\n')
+            honest = Path(directory) / 'honest-src'
+            honest.mkdir()
+            (honest / 'own.ts').write_text('const fresh = "written from scratch"\n')
+            strict = subprocess.run(
+                ['python3', checker, str(honest), str(prior)],
+                env={**os.environ, 'TS_REQUIRE_PRIOR': '1'}, capture_output=True)
+            self.assertEqual(strict.returncode, 0, strict.stdout + strict.stderr)
+            self.assertIn(b'OK: no copied blocks found', strict.stdout)
+
+            # And it still catches a real copy, strictly or not.
+            (honest / 'lifted.ts').write_text('\n'.join(
+                f'const copiedLine{i} = "value number {i}"' for i in range(6)) + '\n')
+            caught = subprocess.run(
+                ['python3', checker, str(honest), str(prior)],
+                env={**os.environ, 'TS_REQUIRE_PRIOR': '1'}, capture_output=True)
+            self.assertNotEqual(caught.returncode, 0)
+            self.assertIn(b'SUSPICIOUS', caught.stdout)
+
     def test_github_token_is_required(self):
         command = workflow_step('require GitHub publishing credentials')
         for token, succeeds in [('', False), ('test-token', True)]:
