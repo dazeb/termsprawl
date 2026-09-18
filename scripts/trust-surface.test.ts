@@ -8,6 +8,7 @@
 //
 // Runs with the normal suite (`pnpm test`).
 import { existsSync, readFileSync, statSync } from 'node:fs'
+import { execSync } from 'node:child_process'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -211,6 +212,25 @@ describe('private infrastructure is not published', () => {
       expect(line, `personal identifier in: ${line}`).not.toMatch(/(?<!\d)\d{9,}(?!\d)/)
     }
   })
+
+  // Screenshots leak the same class of data as prose — absolute home paths,
+  // account emails, host names — but no text assertion can see inside a PNG.
+  // This does not inspect pixels; it forces new imagery to be a deliberate,
+  // reviewed addition instead of an unnoticed one.
+  it('published screenshots are explicitly listed as reviewed', () => {
+    const REVIEWED_SCREENSHOTS = ['docs/media/termsprawl-canvas.png'] as const
+    const tracked = execSync('git ls-files docs/media', { cwd: ROOT, encoding: 'utf8' })
+      .split('\n')
+      .filter(Boolean)
+
+    for (const asset of tracked) {
+      expect(
+        REVIEWED_SCREENSHOTS as readonly string[],
+        `${asset} is published but not listed as reviewed — check it for personal paths, emails, and host names, then add it here`
+      ).toContain(asset)
+    }
+    expect(tracked.sort()).toEqual([...REVIEWED_SCREENSHOTS].sort())
+  })
 })
 
 describe('package metadata', () => {
@@ -265,7 +285,10 @@ describe('policy document essentials', () => {
     expect(conduct).toContain('Contributor Covenant')
     expect(conduct).toContain('2.1')
     expect(conduct).toContain('daz@dazeb.dev')
-    expect(conduct).toMatch(/CC BY-SA/)
+    // Contributor Covenant 2.1 ships under CC BY 4.0 — asserting BY-SA here
+    // would encode a license the upstream project never used.
+    expect(conduct).toMatch(/CC BY 4\.0/)
+    expect(conduct).not.toMatch(/CC BY-SA/)
   })
 
   it('GOVERNANCE.md names the sole maintainer and a successor path', () => {

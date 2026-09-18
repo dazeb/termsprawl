@@ -138,7 +138,7 @@ For answers to common questions about this code of conduct, see the FAQ at
 [translations]: https://www.contributor-covenant.org/translations
 
 The Contributor Covenant is licensed under
-[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/); this adaptation
-keeps the same license for the covenant text. Project-specific notes added above
-(for example the single-maintainer enforcement note) are part of this
-repository and are not part of the upstream document.
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); the covenant text
+above is reused under that license with attribution. Project-specific notes
+added here (for example the single-maintainer enforcement note) are part of
+this repository and are not part of the upstream document.
