@@ -60,7 +60,7 @@ export function Onboarding({ onDismiss }: OnboardingProps): React.JSX.Element {
     <div className="onboarding-scrim" role="dialog" aria-label="Getting started with termsprawl">
       <div className="onboarding-card">
         <h2 className="onboarding-title">
-          Welcome to termsprawl<span className="brand-pill">alpha</span>
+          Welcome to termsprawl<span className="brand-pill">pre-1.0</span>
         </h2>
         <p className="onboarding-sub">Terminals, editors, and AI agents — on one canvas, not in a tab bar.</p>
         <ol className="onboarding-steps">

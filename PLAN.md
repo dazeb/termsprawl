@@ -3,16 +3,18 @@
 > **For Hermes:** implement task-by-task; use subagent-driven-development for
 > task batches. Every task: TDD where feasible, exact commands, verify, commit.
 
-**Goal:** build an independent, clean-room spatial terminal manager for Linux —
-canvas, real terminals with tmux continuity, agents, editors, source control,
-and our own extras (Telegram, relay) — with zero code from any prior project.
+**Goal:** build an independent spatial terminal manager for Linux — canvas,
+real terminals with tmux continuity, agents, editors, source control, and our
+own extras (Telegram, relay) — written from scratch and screened against the
+prior project's tree by an automated similarity check (a heuristic, not a legal
+guarantee; see docs/VERIFICATION.md).
 **Linux only** (no macOS-specific features); better experience than
 competitors, including the feature set we already added to the nodeterm fork.
 
 **Architecture:** three-process Electron app (main / preload / renderer) with a
 framework-free core behind a platform interface, so the same core also boots in
 a plain Node server shell (Server Edition). The renderer talks to terminal
-sessions only through a transport interface (local now, remote/SSH later).
+sessions only through a transport interface (`local` and `ssh` both ship).
 tmux provides session continuity; React Flow drives the canvas; xterm.js renders
 terminals; Monaco renders editors/diffs.
 
@@ -53,8 +55,10 @@ Recent completed implementation:
   Launch preparation picks an adapter from the executable's own advertised
   capabilities, never its display name, and unverified mechanisms report
   **Needs setup** instead of claiming success. Managed runtime files install
-  under app user data at 0600/0700. Shipped in 0.27.0; remote SSH and Server
-  Edition transport are deferred, and transcript reading is advertised only for
+  under app user data at 0600/0700. Shipped in 0.27.0. Within this agent-tools
+  scope, remote SSH and Server Edition transport are deferred — the tools are
+  local-only; SSH terminal/git/file transport for projects is a separate,
+  shipped feature (Phase 9) — and transcript reading is advertised only for
   Claude transcripts.
 - Shared browser sessions (2026-09-16): sandboxed sign-in popups use the
   canvas browser profile; authenticated agent cookie read/write/clear commands
@@ -82,7 +86,7 @@ Recent completed implementation:
 Release state verified on 2026-09-17: **0.27.0 is shipped.** `main` and tag
 `v0.27.0` both resolve to `dbbcf8bc46db90c2bfcb90a1dd34691380627b5b` on all
 three remotes. The Gitea `verify` (#182, on the bump) and `release` (#183, on
-the tag) jobs succeeded — no repeat of the CT 100 disk failure, which was
+the tag) jobs succeeded — no repeat of the Gitea host disk failure, which was
 checked first (51% used, 7.4G free before the build). The AppImage, `.deb` and
 `latest-linux.yml` were read back from **both** the Gitea release and GitHub
 Releases with matching sizes, the downloaded AppImage's sha512 matches the
@@ -119,15 +123,17 @@ with the new agent names present on the live pages.
 
 Release blocker found and fixed while verifying: the first `release` job for
 `v0.26.0` failed its `publish gitea release` step (`curl: (22)` → HTTP 500)
-because Gitea CT 100's root filesystem was **100% full** (7.4G/7.8G, 45M free).
+because the Gitea host's root filesystem was **full** (7.4G/7.8G, 45M free).
 Gitea's own SQLite writes failed with `database or disk is full (13)`, so it
-never recorded the failure and the run stayed "running" in the UI. The CT
-rootfs was grown 8G → 16G (`pct resize 100 rootfs +8G`, non-destructive, no
-snapshots present) and the tag was re-pushed to Gitea to re-trigger the
-idempotent publish; that run published to both destinations cleanly. The stale
-run #175 record on Gitea was left as-is (harmless) — it cannot be corrected
-retroactively. **Watch CT 100 disk headroom before every release**; the 6.3G of
-Gitea release attachments is what fills it.
+never recorded the failure and the run stayed "running" in the UI. The host
+rootfs was grown (8G → 16G, non-destructive, no snapshots present) and the tag
+was re-pushed to Gitea to re-trigger the idempotent publish; that run published
+to both destinations cleanly. The stale run #175 record on Gitea was left as-is
+(harmless) — it cannot be corrected retroactively. **Watch the Gitea host's
+disk headroom before every release**; the 6.3G of Gitea release attachments is
+what fills it. (Host names, addresses, and container identifiers for the
+operator's infrastructure are deliberately not recorded here — they belong in
+private infrastructure configuration.)
 
 Next release work:
 - Agent workspace tools and the browser fill repair shipped in **0.27.0**
@@ -137,10 +143,11 @@ Next release work:
   speaks to agents rather than to a browsing visitor.
 - Deferred within the agent-tools scope: remote SSH and Server Edition
   transport, and transcript reading beyond Claude. The design note lives
-  outside the repo (`~/.codex/plans/`, "Automatic agent integration for
-  termsprawl"); its remaining acceptance items are the per-agent real-launch
-  smoke tests and the two-agent concurrency exercise, which the Electron smoke
-  test covers in fixture form rather than against each installed CLI.
+  outside the repo ("Automatic agent integration for termsprawl", in the
+  maintainer's private agent notes); its remaining acceptance items are the
+  per-agent real-launch smoke tests and the two-agent concurrency exercise,
+  which the Electron smoke test covers in fixture form rather than against
+  each installed CLI.
 - No further phase is defined beyond this; choose the next scope explicitly.
 
 ## Legal ground rules (Phase 0 enforced, applies forever)
@@ -305,7 +312,7 @@ extension, one feature at a time.**
 > with an AppImage checkpoint — build, upload to files.dazeb.dev
 > (r2-file-upload skill), send the link to the default Telegram channel with
 > "what to test" notes; the user tests on their machine and reports what
-> worked. Detailed plan: `.hermes/plans/2026-08-13_phase6-node-kinds.md`.
+> worked. Detailed plan: the maintainer's private plan notes for that phase.
 
 ### Task 6.1: Sticky node
 - Colored note (muted palette fitting the dark theme), double-click to edit
@@ -528,17 +535,19 @@ extension, one feature at a time.**
   (`git -C`), `core/remote-file.ts` (quoted remote read), `core/remote-pty.ts` +
   PtyManager remote routing (`ssh -tt` + remote tmux; create/destroy/fresh over
   ssh, local spawn cwd fixed, remote sessions skip local scrollback) — all
-  verified against a real host (hermes-box): remote terminal spawns + streams.
+  verified against a real host (the maintainer's build host): remote terminal
+  spawns + streams.
   Surface added: `ProjectMeta.remote` + `addProject(name, cwd, remote?)`
   (persists, round-trip tested), `@shared/remote-project` helpers
   (isRemoteProject/remoteLabel/normalizeRemote), the add-project IPC wired main
   + preload + renderer store, `TerminalNode` passes the owning project's remote
   on pty.create (so a remote terminal spawns over ssh), and a TabBar "New
   remote (SSH) project" dialog (validate via normalizeRemote).
-- **Live transport re-verification 2026-08-27 (real Proxmox LXC):** exercised
-  the actual modules against `root@192.168.8.221` (actrunner CT 109 on PVE
-  192.168.8.195; tmux 3.5a + git 2.47.3; user's ed25519 key deployed to its
-  authorized_keys). Verified: runSsh command exec, remote tmux session lifecycle
+- **Live transport re-verification 2026-08-27 (real remote host):** exercised
+  the actual modules against the maintainer's CI runner host over SSH (tmux
+  3.5a + git 2.47.3; the maintainer's key deployed to its authorized_keys;
+  address and container identifiers omitted — see private infrastructure
+  configuration). Verified: runSsh command exec, remote tmux session lifecycle
   (create / has-session / kill, both async and sync variants), remote file read
   (/etc/hostname), and a remote git status→add→commit round-trip in a scratch
   repo. **Found + fixed a real bug:** `runSsh` joined argv elements unquoted and
@@ -553,7 +562,7 @@ extension, one feature at a time.**
 ### Task 9.1b: Source control + file panel over ssh (DONE, verified 2026-08-27)
 
 **Status: DONE.** Phase 9 remaining work shipped + verified end-to-end against
-the live LXC (`root@192.168.8.221`). 391 tests green, typecheck + originality OK.
+the live remote host (SSH). 391 tests green, typecheck + originality OK.
 
 - **ControlMaster multiplexing (`core/ssh.ts`):** `connectionArgs(remote, opts)`
   now takes an optional `controlPath` → `ControlMaster=auto` +
@@ -649,8 +658,9 @@ concepts, not a porting source.*
 - Read `docs/OWN-WORK.md` for the feature concepts we originated in the fork
   (relay: GitHub device flow, host sessions, invite quotas, E2E relay frames;
   Telegram bot; provider-agnostic chat driver).
-- Write v2 specs for each with better features than the fork had. Zero code
-  is copied from the fork; every file is written fresh.
+- Write v2 specs for each with better features than the fork had. Every file is
+  written fresh, then screened with `scripts/check-originality.sh` (automated
+  similarity heuristic — see docs/VERIFICATION.md for its limits).
 
 ### Task 11.2: Relay service v2
 - Build standalone: `relay/` — GitHub device flow, host sessions, invite
@@ -710,11 +720,12 @@ concepts, not a porting source.*
   - PtyManager gained `liveSessionIds()` + `capturePane()` (local tmux capture;
     remote via ssh); remote-pty gained `remoteTmuxCapture(Sync)`.
   - Verified: 47 new tests (438 total green, typecheck + originality OK);
-    **live end-to-end**: token validated (bot = @termsprawlbot, no webhook →
-    long-poll OK), app booted headless with the env token enabled the bot, a
-    real phone `/start` was received and chat `1033877751` auto-paired +
-    persisted to settings.json, and a confirmation message was delivered to
-    that chat (`sendMessage` ok). App + Xvfb killed by PID after.
+    **live end-to-end**: token validated (bot = the project's bot account, no
+    webhook → long-poll OK), app booted headless with the env token enabled the
+    bot, a real phone `/start` was received and the sending chat auto-paired +
+    persisted to settings.json, and a confirmation message was delivered back
+    to that chat (`sendMessage` ok). App + Xvfb killed by PID after. The
+    maintainer's own chat identifier is deliberately not recorded here.
   - Follow-ups (OWN-WORK.md §A ideas): desktop approval UI, inline keyboards
     for node pick, read-only viewer mode, per-node allowlist, session-scoped
     attach tokens.
@@ -772,7 +783,8 @@ concepts, not a porting source.*
 - **Status: DONE.** Phase 11 complete (2026-08-28): 11.3 Telegram bot v2
   (local, live-verified), 11.4 chat driver v2 (SDK chat node, live-verified),
   11.2 relay service v2 (standalone + app-side client seam, live-verified).
-  All rebuilt fresh from the OWN-WORK.md concepts — zero code ported.
+  All rebuilt fresh from the OWN-WORK.md concepts; no file was ported, and the
+  tree is screened by the automated similarity check (see docs/VERIFICATION.md).
 
 ## Phase 12 — Packaging & release
 
@@ -793,22 +805,28 @@ concepts, not a porting source.*
 ### Task 12.3: CI and release delivery — Gitea only
 
 - **Implemented:** `.gitea/workflows/ci.yml` is the sole CI/release workflow.
-  [Gitea repository](http://192.168.8.175:3000/dazeb/termsprawl) and
-  [Actions runs](http://192.168.8.175:3000/dazeb/termsprawl/actions).
-  GitHub Actions is permanently disabled; do not add a mirror workflow.
+  The Gitea instance is self-hosted on private infrastructure, so its web UI
+  URL is operator-specific and not recorded here; CI results are not publicly
+  visible (see docs/VERIFICATION.md). GitHub Actions is permanently disabled;
+  do not add a mirror workflow.
 - **Required trigger:** push `main` to `gitea` to run verification; push the
   release `v*` tag to `gitea` to run verification and packaging/publishing on
-  the self-hosted runner (CT 109, `actrunner`). Pushing only to GitHub or
-  hermes-box does not activate this runner. An ordinary feature-branch push
-  does not match the workflow's branch filter; pull requests also run CI.
-- Verification installs app and relay dependencies, then runs typecheck, app
-  build, Server Edition build, and tests. Build precedes tests because the
-  server boot gate needs the built renderer.
-- The tag release job builds Linux artifacts and publishes to Gitea and,
-  using the required `GH_TOKEN`, GitHub Releases. GitHub remains the desktop
-  auto-update source and must contain `latest-linux.yml`.
+  the self-hosted runner. Pushing only to GitHub or the build host does not
+  activate this runner. An ordinary feature-branch push does not match the
+  workflow's branch filter; pull requests also run CI.
+- Verification installs app and relay dependencies, then runs the canonical
+  gate command `pnpm run verify` (`scripts/verify.sh`: typecheck → desktop
+  build → Server Edition build → release-safety checks → vitest). Both builds
+  precede the tests because the server boot gate needs the built renderer.
+- The tag release job builds Linux artifacts, writes release notes from the
+  `CHANGELOG.md` section for the version (`scripts/release-notes.mjs`), and
+  generates `dist/SHA256SUMS` (`scripts/release-checksums.sh`) before
+  publishing to Gitea and, using the required `GH_TOKEN`, GitHub Releases.
+  GitHub remains the desktop auto-update source and must contain
+  `latest-linux.yml`.
 - **Release hardening (2026-09-16):** the release job now requires a successful
-  verify job, a configured `GH_TOKEN`, and all three nonempty release assets
+  verify job, a configured `GH_TOKEN`, and all four nonempty release artifacts
+  (AppImage, `.deb`, `latest-linux.yml`, `SHA256SUMS` — plus the notes file)
   before publishing. The app release script reuses an existing tag only when
   it points to HEAD; a conflicting tag fails. Site deployment resumes when
   the version is already committed and fails on unsuccessful HTTP requests,
@@ -819,9 +837,11 @@ concepts, not a porting source.*
 ### Task 12.4: Required release checklist
 
 1. Check the working tree and actual remote URLs (`git remote -v`), integrate
-   the intended work into `main`, and run typecheck, tests, and the local
-   originality gate. Run the spaces and GitHub-import E2E gates documented
-   in `AGENTS.md` before pushing the release tag.
+   the intended work into `main`, and run `pnpm run verify` (the canonical gate
+   command: typecheck, desktop and Server Edition builds, release-safety
+   checks, tests) plus the local originality gate. Run the spaces and
+   GitHub-import E2E gates documented in `AGENTS.md` before pushing the
+   release tag.
 2. Run `scripts/release.sh X.Y.Z` from clean `main` (or use its explicit
    `--from <branch>` option). It bumps the version, runs local gates, pushes
    `main` to origin, Gitea, and GitHub, then pushes the version tag to all three.
@@ -829,29 +849,28 @@ concepts, not a porting source.*
 3. **Do not skip `git push gitea main` or `git push gitea vX.Y.Z`.** These are
    the runner triggers already included in the release script. Read back the
    branch/tag refs and inspect the corresponding Gitea Actions jobs.
-4. Verify successful verify and release jobs and read back all three assets
-   (AppImage, `.deb`, `latest-linux.yml`) on both Gitea and GitHub. Do not
-   label a local version bump or tag push as a completed release.
+4. Verify successful verify and release jobs and read back all four artifacts
+   (AppImage, `.deb`, `latest-linux.yml`, `SHA256SUMS` — plus the release-notes
+   asset) on both Gitea and GitHub. Do not label a local version bump or tag
+   push as a completed release.
 5. Run `scripts/release-site.sh X.Y.Z` to update and deploy the marketing
    site, and update/deploy sibling docs for changed user-facing behavior.
    Verify the live site version and relevant docs before closing the release.
 
-**Pre-flight: Gitea runner and CT 100 disk headroom.** Each release adds ~280M
-of attachments to Gitea, whose data lives on CT 100 (an 8G rootfs until it was
-grown to 16G on 2026-09-16). When that filesystem fills, the publish step fails
-with `curl: (22)` → HTTP 500 *and* Gitea cannot record the failure, so the run
-stays "running" forever while publishing nothing. Before pushing a release tag,
-check headroom:
+**Pre-flight: Gitea runner and its host's disk headroom.** Each release adds
+~280M of attachments to Gitea, whose data lives on the Gitea host's root
+filesystem (an 8G rootfs until it was grown to 16G on 2026-09-16). When that
+filesystem fills, the publish step fails with `curl: (22)` → HTTP 500 *and*
+Gitea cannot record the failure, so the run stays "running" forever while
+publishing nothing. Before pushing a release tag, check headroom on the Gitea
+host (the exact command depends on how the host is reached — run it from the
+operator's private infrastructure configuration and want well under 90% used).
 
-```bash
-ssh root@192.168.8.195 'pct exec 100 -- df -h /'   # want well under 90% used
-```
-
-If it is tight, prune old releases or grow it with `pct resize 100 rootfs +8G`
-(non-destructive; the `pve` VG had ~14G free). If a release job fails this way,
-grow the disk and re-push the tag to Gitea (`git push gitea :refs/tags/vX.Y.Z`
-then `git push gitea refs/tags/vX.Y.Z`) — the publish steps are idempotent and
-reuse the existing release.
+If it is tight, prune old releases or grow the host's root filesystem
+(non-destructive; the volume group had ~14G free at the time). If a release job
+fails this way, grow the disk and re-push the tag to Gitea
+(`git push gitea :refs/tags/vX.Y.Z` then `git push gitea refs/tags/vX.Y.Z`) —
+the publish steps are idempotent and reuse the existing release.
 
 ---
 
@@ -1078,7 +1097,7 @@ DuckDuckGo, which the user can point at their own SearXNG (localhost or LAN).*
 *The whole workspace as ONE json file: all projects, every canvas, terminal
 scrollback. Format = the spaces-sync envelope (`SpaceSnapshotPayload`) plus a
 `bundle` header, so file export, cloud sync, and the space boot path all
-speak one format. Plan: `.hermes/plans/2026-08-30_123805-workspace-bundle.md`.*
+speak one format. Plan: the maintainer's private plan notes for the workspace bundle.*
 
 - ✅ Core: `buildBundle` / `applyBundlePlan` / `isValidBundle`
   (`src/core/workspace-bundle.ts`, 17 tests) — fresh project ids,
@@ -1145,7 +1164,7 @@ speak one format. Plan: `.hermes/plans/2026-08-30_123805-workspace-bundle.md`.*
 
 *User-directed: canvas edges become first-class "links" — extract a node's
 content, inject it somewhere (file / chat conversation / agent terminal / A2A
-peer). Plan: `.hermes/plans/2026-09-01_123613-node-links-a2a.md`. Branch
+peer). Plan: the maintainer's private plan notes for node links and A2A. Branch
 `feature/node-links`. Executed parent-side after both Phase-18 subagent
 dispatches died to provider API errors (HTTP 405 / non-streaming timeouts).*
 
@@ -1343,10 +1362,10 @@ pnpm run dist        # AppImage + .deb
 ## Phase 15 — Online canvas spaces (deviation — user-directed 2026-08-29)
 
 *Hosted "canvas space" per Pro member at `canvas.termsprawl.com/<login>`: a
-Server Edition instance per user in a Docker container on hermes-box, synced
-with the desktop via backup-shaped snapshots. Full plan:
-`.hermes/plans/2026-08-29_210125-online-canvas-spaces.md`. Sync model = the
-pull-model, backup-shaped option (D1-B) the user chose: spaces push
+Server Edition instance per user in a Docker container on the operator's
+hosting box, synced with the desktop via backup-shaped snapshots. The full plan
+lives in the maintainer's private plan notes. Sync model = the pull-model,
+backup-shaped option (D1-B) the user chose: spaces push
 snapshots (workspace + project files + terminal scrollback) to the cloud
 store; desktop pulls them in as a NEW local project ("Open online snapshot")
 and can push a project back up. One writer at a time; no merge logic.*

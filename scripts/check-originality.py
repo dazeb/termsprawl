@@ -12,6 +12,12 @@ Usage:
       prior_project_dir: the project to check  (default: ../nodeterm-linux)
 Env:
     MIN_BLOCK: minimum identical consecutive lines to flag (default: 5)
+    TS_REQUIRE_PRIOR: when set to a non-empty value other than "0", a missing
+        prior project's tree is a hard error (exit 2) instead of a skip. The
+        release script sets this (scripts/release.sh) so a release cannot pass
+        the clean-room gate vacuously on a machine without the prior tree;
+        ordinary local runs and CI leave it unset, where the prior tree is
+        legitimately absent and the check warns and skips.
 """
 
 import os
@@ -22,6 +28,12 @@ CODE_EXTS = {".ts", ".tsx", ".js", ".jsx", ".css", ".mjs", ".cjs", ".py"}
 MIN_BLOCK = int(os.environ.get("MIN_BLOCK", "5"))
 MIN_LINE_LEN = 8  # ignore trivial lines (brackets, short imports, boilerplate)
 TRIVIAL = re.compile(r"^[\s{}()\[\];,.*'\"`~!@#$%^&+=<>|/:\\-]+$")
+
+
+def require_prior():
+    """True when a missing prior tree must fail instead of skipping."""
+    value = os.environ.get("TS_REQUIRE_PRIOR", "").strip()
+    return value != "" and value != "0"
 
 
 def code_files(root):
@@ -56,6 +68,11 @@ def main():
         print(f"OK: {source_dir} does not exist yet — nothing to check.")
         return 0
     if not os.path.isdir(prior_dir):
+        if require_prior():
+            print(f"FAIL: prior project not found at {prior_dir} and "
+                  f"TS_REQUIRE_PRIOR is set — a skip is not a pass for this "
+                  f"run (release gate). Check the prior project's checkout.")
+            return 2
         print(f"WARN: prior project not found at {prior_dir} — skipping check.")
         return 0
 

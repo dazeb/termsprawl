@@ -89,7 +89,7 @@ export function App(): React.JSX.Element {
       <div className="toolbar">
         <span className="brand">
           termsprawl
-          <span className="brand-pill">alpha</span>
+          <span className="brand-pill">pre-1.0</span>
           <HelpBadge
             label="what is termsprawl"
             text="A Linux canvas of terminals, editors, and agents — not a tab bar. Each project is a folder. Drag nodes, pan the empty canvas, scroll to zoom. Sessions live in tmux, so closing a tab detaches instead of killing shells. Hover a canvas edge for the project file tree."

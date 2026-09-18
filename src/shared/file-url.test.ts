@@ -3,7 +3,7 @@ import { FILE_PROTOCOL, fromFilePreviewUrl, toFilePreviewUrl } from './file-url'
 
 describe('file-url', () => {
   it('round-trips an absolute path through the custom protocol', () => {
-    const path = '/home/dazeb/Pictures/shot.png'
+    const path = '/home/dev/Pictures/shot.png'
     const url = toFilePreviewUrl(path)
     expect(url.startsWith(`${FILE_PROTOCOL}://`)).toBe(true)
     expect(fromFilePreviewUrl(url)).toBe(path)

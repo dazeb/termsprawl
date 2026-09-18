@@ -2,10 +2,12 @@
 
 **termsprawl** is a spatial terminal manager for Linux: real terminals, editors,
 and agent sessions live as draggable nodes on one infinite pan/zoom canvas.
-MIT-licensed, clean-room — **no code in this repo is copied from any other
-project** (see Legal rules below). **Linux-only: no macOS-specific features
-will ever be added** (the fork's macOS phone relay is a dead end — the
-Telegram bot covers that use case).
+MIT-licensed. The code is an **independent implementation**: written from
+scratch and screened with an automated similarity check against the prior
+project's tree (see Legal rules below; the screen is a heuristic, not a legal
+guarantee). **Linux-only: no macOS-specific features will ever be added** (the
+fork's macOS phone relay is a dead end — the Telegram bot covers that use
+case).
 
 ## Commands
 
@@ -13,15 +15,28 @@ Telegram bot covers that use case).
 pnpm install        # deps + rebuilds node-pty against Electron's ABI (postinstall)
 pnpm run dev        # dev mode with renderer HMR
 pnpm run build      # production build into out/
+pnpm run verify     # canonical gate: typecheck → desktop build → Server build →
+                    # release-safety checks → vitest (the order is load-bearing)
 pnpm start          # preview the production build
 pnpm run typecheck  # tsc for both node (main/preload) and web (renderer) projects
-pnpm test           # vitest suite (unit + integration)
+pnpm test           # vitest suite (unit + integration) — after the builds
 pnpm run dist       # AppImage + .deb into dist/ (electron-builder)
 pnpm run make-icon  # regenerate build/icon.png
 ./scripts/check-originality.sh   # clean-room guard — run after any large change
 ```
 
-`pnpm run typecheck` is the fastest correctness gate.
+`pnpm run verify` (a wrapper over `scripts/verify.sh`) is the canonical gate
+command: typecheck → `pnpm run build` → `pnpm run build:server` → release-safety
+checks → `pnpm test`. The builds must run before the suite because
+`src/server/server-boot-gate.test.ts` asserts the served renderer shell that
+only exists after `pnpm run build`. CI and `release.sh` call the same command.
+`scripts/verify.sh` holds the one executable gate list — never run the gates
+from anywhere else — while AGENTS.md, CONTRIBUTING.md,
+`.github/PULL_REQUEST_TEMPLATE.md`, `docs/PROJECT-HEALTH.md`,
+`docs/VERIFICATION.md`, and `scripts/release-safety.test.py` mirror it in
+prose. `scripts/trust-surface.test.ts` fails unless every mirror matches the
+script both ways, so a gate added to or removed from `scripts/verify.sh` must
+be reflected in the documents in the same change.
 
 ## Runtime prerequisites (user machines)
 
@@ -146,12 +161,13 @@ touch build config, re-verify with a packaged boot test.
 ## Node kinds
 
 Implemented: `terminal`, `sticky`, `group`, `diff`, `editor` (Phase 6), and
-`browser` (Phase 13 — a sandboxed `<webview>` guest, one per tab). Agent
-sessions reuse the terminal node with a CLI preset (Phase 7). The plan
-(`PLAN.md`) still adds chat, source control, SSH remote, Server Edition, then
-rebuilds our own extras from scratch (Telegram, relay, chat driver — concepts
-only, never ported). Extend `NODE_TYPES` and the `data.kind` union in
-`state/workspace.ts` when adding kinds.
+`browser` (Phase 13 — a sandboxed `<webview>` guest, one per tab), plus SSH
+remote projects (Phase 9 — terminals, git, and file operations run on the
+remote host). Agent sessions reuse the terminal node with a CLI preset
+(Phase 7). `PLAN.md` is the historical record of the completed phases (chat,
+source control, Server Edition, and the rebuilt extras — Telegram, relay, chat
+driver — concepts only, never ported). Extend `NODE_TYPES` and the `data.kind`
+union in `state/workspace.ts` when adding kinds.
 
 **Every node is resizable** via `NodeResizer` (`@reactflow/node-resizer`,
 added 0.8.3). Each node component renders `<NodeResizer isVisible={selected}
@@ -163,14 +179,15 @@ selected. Keep the handles subtle; do not add per-node handle classes.
 
 ## Project family — sibling repos (work on all of them together)
 
-termsprawl is not one repo. Three repos make up the product, all siblings under
-`/mnt/nvme1/workspace/projects/` (same layout under `/home/dazeb/workspace/`).
+termsprawl is not one repo. Three repos make up the product, all siblings in
+one projects directory on the maintainer's workstation (`<projects>/` below —
+the absolute path is checkout-specific and belongs to local configuration).
 When a task touches the product, check whether the siblings need matching
 changes IN THE SAME TASK — do not leave them for a later session.
 
 | Repo | Path | What it is | Remotes | Live at |
 |---|---|---|---|---|
-| **termsprawl** | `termsprawl/` | The app (Electron + React + tmux). This repo. | origin (hermes-box), github, gitea | downloads via GitHub Releases |
+| **termsprawl** | `termsprawl/` | The app (Electron + React + tmux). This repo. | origin (build host), github, gitea | downloads via GitHub Releases |
 | **termsprawl-web** | `termsprawl-web/` | Marketing site + download hub (Vite + React + Tailwind v4). Carries `APP_VERSION` in `src/lib/site.ts`. | origin (github), gitea | https://termsprawl.com |
 | **termsprawl-docs** | `termsprawl-docs/` | Documentation site (Fumadocs on React Router/Vite; MDX in `content/docs/`). Content reflects REAL, shipped behaviour only. | origin (github), gitea | https://docs.termsprawl.com |
 
@@ -199,8 +216,8 @@ Cross-repo rules (mandatory, not suggestions):
    `src/lib/site.ts` `APP_VERSION`, docs has no version. Never hardcode a
    version elsewhere.
 6. **Checkouts:** work in the sibling folder for that repo; never edit web or
-   docs files from the app repo. The `/home/dazeb/workspace/projects/` copies
-   and `/mnt/nvme1/...` copies are the same repos at different mount points —
+   docs files from the app repo. The same three repos may be mounted at more
+   than one path on the workstation (for example a different volume root) —
    pick one path root per session and stay on it (paths differ per checkout;
    see each repo's git status first).
 
@@ -212,25 +229,27 @@ each other:
 - **github** = `git@github.com:dazeb/termsprawl.git` — canonical public remote
   (created 2026-08-13; SSH key auth — id_ed25519 registered on GitHub, no
   tokens needed). Push there for any released/notable state.
-- **gitea** = `ssh://gitea@192.168.8.175:22/dazeb/termsprawl.git` — self-hosted
-  Gitea (CT 100 on the Proxmox host, PVE 192.168.8.195). **CI runs here only**
-  (Gitea Actions; the GitHub account is permanently Actions-disabled — never
-  add `.github/workflows`, never suggest GitHub Actions, don't re-open PRs
-  about it). Push every branch push here so CI sees it (`git push gitea main`).
-- **origin** = `hermes-box:/srv/git/termsprawl.git` — bare repo on hermes-box
-  (SSH alias in `~/.ssh/config`; key `~/.ssh/hermes-box_ed25519`). Working
-  remote for the parallel-agent loop (fast, no auth churn). Both remotes get
-  every push (`git push origin main && git push github main`).
-- **Hermes**: works in the main checkout
-  (`/home/dazeb/workspace/projects/termsprawl`) on `main`. Owns
-  checkpoint builds (AppImage → files.hermes.v0cl.one → Telegram) and
-  phase status updates in PLAN.md.
+- **gitea** = `ssh://gitea@<gitea-host>:22/dazeb/termsprawl.git` — self-hosted
+  Gitea on the operator's private infrastructure (host, ports, and container
+  details belong in private infrastructure configuration, not this repo).
+  **CI runs here only** (Gitea Actions; the GitHub account is permanently
+  Actions-disabled — never add `.github/workflows`, never suggest GitHub
+  Actions, don't re-open PRs about it). Push every branch push here so CI sees
+  it (`git push gitea main`).
+- **origin** = `<build-host>:/srv/git/termsprawl.git` — bare repo on the
+  maintainer's build/checkpoint host (SSH alias configured locally; key paths
+  are operator-specific and stay out of the repository). Working remote for the
+  parallel-agent loop (fast, no auth churn). Both remotes get every push
+  (`git push origin main && git push github main`).
+- **Hermes**: works in the main checkout on `main`. Owns checkpoint builds
+  (AppImage → the maintainer's file host → Telegram) and phase status updates
+  in PLAN.md.
 - **Parallel feature work**: historical worktrees `termsprawl-agent`
   (`feature/editor-node`) and `termsprawl-grok` (`feature/grok-agent`) were
   deleted 2026-08-23 after their branches merged to main during Phase 6/7.
-  Worktree checkouts now live as sibling folders under
-  `/home/dazeb/workspace/projects/` (no `active/` segment since the WSL→
-  Linux migration). New ones go there too.
+  Worktree checkouts now live as sibling folders in the same projects
+  directory as the repos (no `active/` segment since the WSL→ Linux
+  migration). New ones go there too.
 - Protocol: pull before starting; commit per task; push when a unit of work
   is done; never edit files in the other's checkout. Main stays
   release-ready (gates must pass before pushing to main). Feature branches
@@ -242,13 +261,19 @@ each other:
 
 **CI runs on self-hosted Gitea only** (`.gitea/workflows/ci.yml`). The GitHub
 account is permanently Actions-disabled — never add `.github/workflows` or
-suggest GitHub Actions. Pipeline (runner CT 109 `actrunner` at
-192.168.8.221, `gitea-runner` v3.2.0, host executor, label `ubuntu-latest`):
+suggest GitHub Actions. Pipeline (self-hosted `gitea-runner` v3.2.0, host
+executor, label `ubuntu-latest`; the runner's host is operator-specific and
+configured privately):
 
-- push to `main` → `verify`: checkout, install, typecheck, test, build
-- `v*` tag → `verify` + `release`: builds once, publishes the AppImage,
-  `.deb`, and `latest-linux.yml` to **both** the Gitea release and GitHub
-  Releases (via `gh`, token = `GH_TOKEN` secret, user-scoped in Gitea).
+- push to `main` → `verify`: checkout, install, install relay deps, then
+  **one** `pnpm run verify` step (the canonical gate list in
+  `scripts/verify.sh`; CI no longer repeats the individual commands)
+- `v*` tag → `verify` + `release`: builds once, generates release notes from
+  `CHANGELOG.md` (`scripts/release-notes.mjs`) and `dist/SHA256SUMS`
+  (`scripts/release-checksums.sh`), then publishes the AppImage, `.deb`,
+  `latest-linux.yml`, `SHA256SUMS`, and the notes to **both** the Gitea
+  release and GitHub Releases (via `gh`, token = `GH_TOKEN` secret,
+  user-scoped in Gitea).
 
 CI does **not** run `check-originality.sh` (it needs the prior fork's tree,
 which CI never checks out) — that gate stays local: run it after significant
@@ -259,13 +284,15 @@ the root dependency tree.
 Releasing a version (the ritual):
 
 ```bash
-pnpm run typecheck && pnpm test          # gates first
-./scripts/check-originality.sh           # clean-room gate (local-only, see above)
+pnpm run verify                          # canonical gate command: typecheck → desktop
+                                         # build → Server build → release-safety → tests
+./scripts/check-originality.sh           # clean-room screen (local-only, see above;
+                                         # release.sh runs it in strict mode)
 bash scripts/space-e2e.sh                # spaces e2e — seed→boot-restore→ws-drive→pty→restart→push
 bash scripts/github-import-e2e.sh        # github import e2e (real git host, token via env)
-scripts/release.sh X.Y.Z                 # bump → gates → push main → tag; the Gitea
-                                         # Actions builder (CT 109) builds + publishes
-                                         # to Gitea AND GitHub on the tag (see release.sh)
+scripts/release.sh X.Y.Z                 # bump → gates → push main → annotated tag; the
+                                         # Gitea Actions builder builds, writes notes +
+                                         # SHA256SUMS, and publishes to Gitea AND GitHub
 ```
 
 Both e2e scripts are NOT in CI — the runner CT has no docker and the CI job
@@ -279,6 +306,20 @@ GitHub Releases still feeds the app's auto-updater via `latest-linux.yml` —
 it must be in the GitHub release, so `--publish never` on electron-builder in
 CI is deliberate (its implicit tag-publish to the github provider would crash
 without a GH_TOKEN env and would fight the workflow's own uploads).
+
+Release details worth knowing before touching the pipeline:
+
+- **Tags are annotated** (`git tag -a "$TAG" -m ...`); an existing tag at the
+  same commit is reused as-is (the object is not rewritten), and a tag at a
+  different commit aborts.
+- **Release notes come from `CHANGELOG.md`** (`scripts/release-notes.mjs`):
+  the section for the released version is the published body. An empty
+  section is a hard error; a missing section uses an explicit fallback that
+  says so. Finish the CHANGELOG entry before tagging.
+- **`dist/SHA256SUMS`** (`scripts/release-checksums.sh`, standard `sha256sum`)
+  covers the AppImage, the `.deb`, and `latest-linux.yml`, and is uploaded to
+  both hosts. Verify a download with `sha256sum -c SHA256SUMS`. This is not
+  release signing — no SBOM, signatures, or provenance attestation exists.
 
 ## Tests
 
@@ -300,8 +341,8 @@ front rather than improvising:
 - **Testing** — `playwright-best-practices` (E2E, flaky-fix, POM, CI),
   `webapp-testing` (unit/integration/e2e for web + local apps),
   `electron-cdp-ui-testing` (headless Electron UI via raw CDP), and
-  `test-driven-development` (RED–GREEN–REFACTOR). Run `pnpm test` + `pnpm run
-  typecheck` before claiming a change is verified.
+  `test-driven-development` (RED–GREEN–REFACTOR). Run `pnpm run verify`
+  before claiming a change is verified.
 - **Electron internals** — `electron-app-development`, `electron-builder`
   (packaging/AppImage/.deb/auto-update), `electron-renderer-ui`,
   `electron-core-web-bridge` / `electron-web-shell` (Server Edition seam),
@@ -344,7 +385,14 @@ not shed its license. Therefore:
 3. `scripts/check-originality.py` diffs the tree against the prior project and
    fails on identical blocks ≥ 5 lines. Known-benign matches are documented in
    the script (library export names, channel names, generic CSS). Run it after
-   significant changes; a FAIL is a hard stop, not a suggestion.
+   significant changes; a FAIL is a hard stop, not a suggestion. A missing
+   prior tree makes it warn and exit 0 by default (local runs, CI); the release
+   ritual sets `TS_REQUIRE_PRIOR=1`, which turns that skip into a non-zero exit
+   so a release cannot pass the clean-room gate vacuously. It is a
+   textual heuristic — it cannot prove originality (paraphrased copying, copied
+   structure, or other upstream sources are invisible to it), so never describe
+   the result as "100% original" or as a legal guarantee. The public statement
+   of methodology and limits is docs/VERIFICATION.md.
 4. No use of the "nodeterm" name, logo, or branding.
 
 ## Conventions

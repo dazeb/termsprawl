@@ -1,0 +1,29 @@
+# CODEOWNERS
+#
+# termsprawl has one maintainer. Every path is owned by @dazeb, who reviews
+# pull requests and is the release authority; see GOVERNANCE.md. There is no
+# team, so paths are not split between owners — this file records the review
+# requirement, not a delegation.
+#
+# Blanket rule first (CODEOWNERS uses the last matching pattern, so the more
+# specific entries below only re-state the same owner).
+
+* @dazeb
+
+# Release and CI pipeline: changes here can publish artifacts.
+/.gitea/ @dazeb
+/scripts/ @dazeb
+
+# Security-relevant surfaces.
+/SECURITY.md @dazeb
+/src/server/ @dazeb
+/relay/ @dazeb
+
+# Trust and governance documents.
+/GOVERNANCE.md @dazeb
+/CONTRIBUTING.md @dazeb
+/CODE_OF_CONDUCT.md @dazeb
+/ROADMAP.md @dazeb
+/FUNDING.md @dazeb
+/docs/PROJECT-HEALTH.md @dazeb
+/docs/VERIFICATION.md @dazeb

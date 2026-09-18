@@ -17,8 +17,8 @@ import {
 function fakeAdapter(overrides: Partial<AppAdapter> = {}): AppAdapter & { written: { id: string; text: string }[] } {
   const written: { id: string; text: string }[] = []
   const projects: BotProject[] = [
-    { id: 'p1', name: 'termsprawl', location: '/home/dazeb/work', liveTerminalCount: 1 },
-    { id: 'p2', name: 'lxc', location: 'root@192.168.8.221:/srv/x', liveTerminalCount: 0 }
+    { id: 'p1', name: 'termsprawl', location: '/home/dev/work', liveTerminalCount: 1 },
+    { id: 'p2', name: 'lxc', location: 'root@192.0.2.10:/srv/x', liveTerminalCount: 0 }
   ]
   const terminals: BotTerminal[] = [
     { id: 'term-abc', projectName: 'termsprawl' },
@@ -95,7 +95,7 @@ describe('sanitizePane', () => {
 describe('formatProjects / formatTerminals', () => {
   it('renders projects with location and terminal counts', () => {
     expect(formatProjects(fakeAdapter().listProjects())).toBe(
-      '1. termsprawl — /home/dazeb/work (1 terminal)\n2. lxc — root@192.168.8.221:/srv/x (0 terminals)'
+      '1. termsprawl — /home/dev/work (1 terminal)\n2. lxc — root@192.0.2.10:/srv/x (0 terminals)'
     )
   })
 
@@ -150,7 +150,7 @@ describe('handlers', () => {
     const { ctx: c } = ctx(42, '/projects')
     const res = handleCommand(c, fakeAdapter())
     expect(res.replies[0]).toContain('termsprawl')
-    expect(res.replies[0]).toContain('root@192.168.8.221')
+    expect(res.replies[0]).toContain('root@192.0.2.10')
   })
 
   it('/terminals lists live terminals', () => {

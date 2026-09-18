@@ -1252,7 +1252,8 @@ function UserSection({ ctx }: { ctx: SectionCtx }): React.JSX.Element {
       {cloudUser ? (
         <>
           <CardNote>
-            signed in as {cloudUser.github_login} · {cloudUser.plan} plan. Backups are encrypted server-side with your key.
+            signed in as {cloudUser.github_login} · {cloudUser.plan} plan. One active project's canvas
+            state is uploaded over HTTPS and encrypted at rest on the service.
           </CardNote>
           <Row>
             <Button variant="primary" onClick={() => void cloudBackupNow()}>back up now</Button>

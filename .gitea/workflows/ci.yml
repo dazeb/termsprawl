@@ -30,24 +30,17 @@ jobs:
       - name: raise node heap limit
         run: echo "NODE_OPTIONS=--max-old-space-size=4096" >> "$GITHUB_ENV"
 
-      - name: typecheck
-        run: pnpm run typecheck
-
-      # The renderer build must come before the suite: the container boot-gate
-      # test (src/server/server-boot-gate.test.ts) GETs '/' and asserts the
-      # served shell, which only exists once out/renderer/index.html is built.
-      # On a fresh checkout, test-then-build 404s that assertion every run.
-      - name: build
-        run: pnpm run build
-
-      - name: build server
-        run: pnpm run build:server
-
-      - name: release safety checks
-        run: python3 scripts/release-safety.test.py
-
-      - name: test
-        run: pnpm test
+      # scripts/verify.sh is the ONE executable gate list (package.json
+      # "verify"): typecheck -> desktop build -> Server build -> release-safety
+      # checks -> vitest. Do not add gate steps here — edit scripts/verify.sh
+      # and update the documents that mirror it (AGENTS.md, CONTRIBUTING.md,
+      # .github/PULL_REQUEST_TEMPLATE.md, docs/PROJECT-HEALTH.md,
+      # docs/VERIFICATION.md) in the same change; scripts/trust-surface.test.ts
+      # fails unless each mirror matches the script, both ways. Both builds
+      # must precede the suite: src/server/server-boot-gate.test.ts GETs '/'
+      # and asserts the served renderer shell, which only exists after build.
+      - name: verify
+        run: pnpm run verify
 
   release:
     needs: verify
@@ -80,11 +73,31 @@ jobs:
         # GH_TOKEN). The publish steps below upload to Gitea + GitHub.
         run: pnpm run build && pnpm exec electron-builder --linux --publish never
 
+      - name: write release notes
+        # Sourced from CHANGELOG.md for this exact version; the helper prints an
+        # explicit fallback (and warns) if no entry exists, so the release notes
+        # are never an empty page. A section that exists but is empty is a hard
+        # error — the version must record its changes.
+        run: |
+          set -euo pipefail
+          version="$(node -p 'require("./package.json").version')"
+          node scripts/release-notes.mjs "$version" > dist/RELEASE_NOTES.md
+          test -s dist/RELEASE_NOTES.md
+
+      - name: generate release checksums
+        # SHA256SUMS covers the AppImage, the .deb, and the updater manifest.
+        # The script itself gates on the primary artifacts being present and
+        # non-empty, so checksums can never be generated over a partial release.
+        run: |
+          set -euo pipefail
+          version="$(node -p 'require("./package.json").version')"
+          bash scripts/release-checksums.sh dist "$version"
+
       - name: verify release artifacts
         run: |
           set -euo pipefail
           version="$(node -p 'require("./package.json").version')"
-          for f in "dist/termsprawl-${version}.AppImage" "dist/termsprawl_${version}_amd64.deb" dist/latest-linux.yml; do
+          for f in "dist/termsprawl-${version}.AppImage" "dist/termsprawl_${version}_amd64.deb" dist/latest-linux.yml dist/SHA256SUMS; do
             test -s "$f" || { echo "Missing or empty release artifact: $f" >&2; exit 1; }
           done
 
@@ -96,18 +109,24 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          # Create the release (idempotent: reuse if it already exists).
+          notes="$(cat dist/RELEASE_NOTES.md)"
+          test -n "$notes" || { echo "release notes are empty" >&2; exit 1; }
+          # Create the release (idempotent: reuse if it already exists, and
+          # refresh its notes so a retried run republishes the same body).
           api="${GITEA_URL}/api/v1/repos/${REPO}/releases"
-          body="{\"tag_name\":\"${TAG}\",\"name\":\"${TAG}\",\"draft\":false,\"prerelease\":false}"
+          body="$(jq -nc --arg tag "$TAG" --arg notes "$notes" '{tag_name:$tag, name:$tag, body:$notes, draft:false, prerelease:false}')"
           resp="$(curl -fsS -X POST -H "Authorization: token ${TOKEN}" -H 'Content-Type: application/json' \
             -d "${body}" "${api}" 2>/dev/null || true)"
           if [[ -z "${resp}" || "${resp}" == *"already exists"* ]]; then
             resp="$(curl -fsS -H "Authorization: token ${TOKEN}" "${api}/tags/${TAG}")"
+            rel_id="$(printf '%s' "${resp}" | jq -r '.id')"
+            curl -fsS -X PATCH -H "Authorization: token ${TOKEN}" -H 'Content-Type: application/json' \
+              -d "$(jq -nc --arg notes "$notes" '{body:$notes}')" "${api}/${rel_id}"
           fi
           rel_id="$(printf '%s' "${resp}" | jq -r '.id')"
           echo "gitea release id: ${rel_id}"
 
-          for f in dist/termsprawl-*.AppImage dist/termsprawl_*_amd64.deb dist/latest-linux.yml; do
+          for f in dist/termsprawl-*.AppImage dist/termsprawl_*_amd64.deb dist/latest-linux.yml dist/SHA256SUMS dist/RELEASE_NOTES.md; do
             [[ -s "$f" ]] || { echo "Missing or empty artifact: $f" >&2; exit 1; }
             name="$(basename "$f")"
             echo "gitea uploading ${name}"
@@ -134,13 +153,20 @@ jobs:
             echo "GH_TOKEN not set — GitHub release is required." >&2
             exit 1
           fi
+          test -s dist/RELEASE_NOTES.md || { echo "release notes are empty" >&2; exit 1; }
           echo "creating/updating GitHub release ${TAG}"
+          # Idempotent retry: create on the first run; on a rerun where the
+          # release already exists, refresh the notes and re-upload assets.
           gh release create "${TAG}" \
             --repo "${REPO}" \
             --title "${TAG}" \
-            dist/termsprawl-*.AppImage dist/termsprawl_*_amd64.deb dist/latest-linux.yml 2>/dev/null \
-          || gh release upload "${TAG}" \
-            --repo "${REPO}" \
-            --clobber \
-            dist/termsprawl-*.AppImage dist/termsprawl_*_amd64.deb dist/latest-linux.yml
+            --notes-file dist/RELEASE_NOTES.md \
+            dist/termsprawl-*.AppImage dist/termsprawl_*_amd64.deb dist/latest-linux.yml dist/SHA256SUMS \
+          || {
+            gh release edit "${TAG}" --repo "${REPO}" --notes-file dist/RELEASE_NOTES.md
+            gh release upload "${TAG}" \
+              --repo "${REPO}" \
+              --clobber \
+              dist/termsprawl-*.AppImage dist/termsprawl_*_amd64.deb dist/latest-linux.yml dist/SHA256SUMS
+          }
           echo "github release ${TAG} published"

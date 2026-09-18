@@ -19,9 +19,9 @@ describe('parseRemote', () => {
   })
 
   it('parses user@host', () => {
-    expect(parseRemote('root@178.104.6.193')).toEqual({
+    expect(parseRemote('root@203.0.113.10')).toEqual({
       user: 'root',
-      host: '178.104.6.193'
+      host: '203.0.113.10'
     })
   })
 
@@ -107,8 +107,8 @@ describe('control-master multiplexing (connectionArgs opts)', () => {
 describe('sshControlPath', () => {
   it('builds a sanitized per-host socket under userData/ssh and creates the dir', () => {
     const base = mkdtempSync(join(tmpdir(), 'ts-ctl-'))
-    const cp = sshControlPath(base, { user: 'root', host: '192.168.8.221' })
-    expect(cp).toBe(join(base, 'ssh', 'ctl-root@192.168.8.221'))
+    const cp = sshControlPath(base, { user: 'root', host: '192.0.2.10' })
+    expect(cp).toBe(join(base, 'ssh', 'ctl-root@192.0.2.10'))
     expect(statSync(join(base, 'ssh')).isDirectory()).toBe(true)
   })
 

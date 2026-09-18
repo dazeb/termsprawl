@@ -1,0 +1,50 @@
+name: Feature request
+description: Suggest an improvement or a new capability
+labels: ['enhancement']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing: termsprawl is Linux-only by design — macOS and Windows
+        requests will be declined. Check ROADMAP.md for what is already planned,
+        and PLAN.md for the historical scope.
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before you file
+      options:
+        - label: I read the roadmap and this is not already listed there.
+          required: true
+        - label: This request is about Linux (the only supported platform).
+          required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe the situation, not just the solution you have in mind.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you have considered
+      description: Existing workarounds, other tools, or a smaller version of the idea.
+    validations:
+      required: false
+  - type: dropdown
+    id: contribute
+    attributes:
+      label: Would you be willing to work on this?
+      options:
+        - 'Yes, I can open a pull request'
+        - 'Yes, with guidance'
+        - 'No, but I can test or give feedback'
+        - 'No'
+    validations:
+      required: false

@@ -5,16 +5,17 @@
 #   <version> e.g. 0.8.4
 #
 # Bumps termsprawl-web/src/lib/site.ts APP_VERSION, commits, pushes to
-# origin (github) + gitea, then runs scripts/deploy-hermes-box.sh (builds,
-# rsyncs to hermes-box, reloads Caddy). Verifies the live site afterwards.
+# origin (github) + gitea, then runs the web repo's deploy script (builds,
+# rsyncs to the hosting box, reloads Caddy). Verifies the live site afterwards.
 #
-# Run from the APP repo (locates the web repo via a sibling path) or from the
-# web repo itself.
+# Run from the APP repo (locates the web repo as a sibling directory) or from
+# the web repo itself. Override the location with TERMSPRAWL_WEB.
 
 set -euo pipefail
 
 NEW_VER=""
-WEB_REPO="${TERMSPRAWL_WEB:-/home/dazeb/workspace/projects/termsprawl-web}"
+# Default: the sibling checkout of termsprawl-web next to this repo.
+WEB_REPO="${TERMSPRAWL_WEB:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/termsprawl-web}"
 
 if [[ $# -ge 1 ]]; then NEW_VER="$1"; fi
 if [[ -z "$NEW_VER" ]]; then
@@ -62,7 +63,9 @@ fi
 git push origin main
 git push gitea main
 
-echo "==> deploying to hermes-box"
+echo "==> deploying the site"
+# The web repo owns the deploy script; its host alias and target path are
+# operator-specific and live in the maintainer's private configuration.
 bash scripts/deploy-hermes-box.sh
 
 echo "==> verifying live site"

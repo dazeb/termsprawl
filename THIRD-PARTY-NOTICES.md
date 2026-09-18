@@ -7,34 +7,50 @@ linked; full texts live in the respective package's `LICENSE` file under
 
 ## Runtime dependencies
 
-| Package | Version | License | Purpose |
+Resolved versions as installed by `pnpm-lock.yaml` at v0.28.0 (the ranges in
+`package.json` are caret ranges; these are what they resolve to today).
+
+| Package | Resolved version | License | Purpose |
 | --- | --- | --- | --- |
-| node-pty | ^1.1.0 | MIT | PTY spawn for terminal nodes |
-| @xterm/xterm | ^5.3.0 | MIT | Terminal rendering |
-| @xterm/addon-fit | ^0.11.0 | MIT | Terminal fit-to-node |
-| reactflow | ^11.11.4 | MIT | Canvas / node graph |
-| react | ^19.2.8 | MIT | UI framework |
-| react-dom | ^19.2.8 | MIT | UI framework |
-| zustand | ^5.0.15 | MIT | Renderer state |
-| monaco-editor | ^0.56.0 | MIT | Editor / diff rendering |
-| @monaco-editor/react | ^4.7.0 | MIT | React bindings for Monaco |
-| marked | ^18.0.9 | MIT | Markdown preview in editor nodes |
-| electron-updater | ^6.8.9 | MIT | GitHub Releases auto-update |
+| node-pty | 1.1.0 | MIT | PTY spawn for terminal nodes |
+| @xterm/xterm | 5.5.0 | MIT | Terminal rendering |
+| @xterm/addon-fit | 0.11.0 | MIT | Terminal fit-to-node |
+| reactflow | 11.11.4 | MIT | Canvas / node graph |
+| @reactflow/node-resizer | 2.2.14 | MIT | Node resize handles |
+| react | 19.2.8 | MIT | UI framework |
+| react-dom | 19.2.8 | MIT | UI framework |
+| zustand | 5.0.15 | MIT | Renderer state |
+| monaco-editor | 0.56.0 | MIT | Editor / diff rendering |
+| @monaco-editor/react | 4.7.0 | MIT | React bindings for Monaco |
+| marked | 18.0.9 | MIT | Markdown preview in editor nodes |
+| electron-updater | 6.8.9 | MIT | GitHub Releases auto-update |
+| ws | 8.21.3 | MIT | WebSocket client/server (Server Edition, relay) |
+
+Build-time and development dependencies (Electron, electron-builder, Vite,
+vitest, TypeScript, Tailwind, canvas) are not shipped inside the application
+bundle; their licenses are recorded in their own packages under `node_modules/`.
 
 ## Notes
 
 - monaco-editor ships its own web workers (editor.worker, language workers).
   termsprawl loads them locally via vite `?worker` imports — no CDN.
 - tmux is an external runtime requirement, not bundled (see README).
+- `electron-updater` reads the `latest-linux.yml` auto-update feed from GitHub
+  Releases. That file is an update manifest, not a signature; releases are not
+  code-signed.
 
 ## Agent logo SVGs
 
-Claude, OpenAI (Codex), Grok, and Antigravity marks in
-`src/renderer/src/assets/agents/` are from [Lobe Icons](https://github.com/lobehub/lobe-icons),
-commit `a94750e3f5f8fc33757b839d85030e742284e43a`,
-`packages/static-svg/icons/`. Used in monochrome to identify the corresponding
-agent; trademarks belong to their respective owners. OpenClaude uses an original
-text monogram, not an upstream logo.
+Agent marks in `src/renderer/src/assets/agents/` identify the corresponding
+agent CLI on the canvas. They are used in monochrome as identifiers only.
+
+### Lobe Icons (Claude, OpenAI/Codex, Grok, Antigravity)
+
+Claude, OpenAI (Codex), Grok, and Antigravity marks are from
+[Lobe Icons](https://github.com/lobehub/lobe-icons), commit
+`a94750e3f5f8fc33757b839d85030e742284e43a`, `packages/static-svg/icons/`,
+used in monochrome. Trademarks belong to their respective owners. OpenClaude
+uses an original text monogram, not an upstream logo.
 
 MIT License
 
@@ -57,3 +73,19 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+### Simple Icons (OpenCode)
+
+The OpenCode mark (`src/renderer/src/assets/agents/opencode.svg`) is derived
+from [Simple Icons](https://github.com/simple-icons/simple-icons), path
+`icons/opencode.svg` at pinned revision
+`f2365d33171bd1897a41aaae6c0b6e795bcc0483`. Simple Icons is licensed
+**CC0 1.0 Universal** (public domain dedication) —
+https://creativecommons.org/publicdomain/zero/1.0/.
+
+The icon file here is reduced to the project's monochrome, currentColor form
+(no changes to the vector path data). CC0 covers copyright in the icon artwork;
+**trademark rights are separate** — the OpenCode name and mark may be
+trademarks of their owner, and their use here identifies the corresponding
+software. This attribution does not imply any endorsement by, affiliation
+with, or sponsorship from the OpenCode project or its maintainers.
