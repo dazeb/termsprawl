@@ -29,10 +29,10 @@ priorities, not commitments to a date.
 These are the next tasks that are already supported by the project's own plan
 and recent work:
 
-- a single canonical verification command that wraps the documented gates, so
-  contributors run the same sequence CI does
-- release evidence improvements: hashes for published artifacts and release
-  notes generated from the tagged commit range
+- release evidence, continued: the canonical `pnpm run verify` command, notes
+  sourced from `CHANGELOG.md` per release, and `SHA256SUMS` for published
+  artifacts all landed with the current release tooling; next is a public
+  verification record per release and a packaged-app boot check in the pipeline
 - continuing the honesty pass on capability reporting so a preset never claims
   a feature its CLI cannot deliver
 - contributor onboarding material — issue templates, a good-first-issue set,

@@ -85,7 +85,9 @@ design.
 ## Install
 
 Download the latest **AppImage** or **.deb** from the
-[Releases](https://github.com/dazeb/termsprawl/releases) page.
+[Releases](https://github.com/dazeb/termsprawl/releases) page. Releases from the
+next version onward also publish `SHA256SUMS` (the AppImage, `.deb`, and
+updater manifest) — verify a download with `sha256sum -c SHA256SUMS`.
 
 Runtime requirements:
 
@@ -106,9 +108,9 @@ setup, the gate order, and contribution rules are in
 ```bash
 pnpm install        # deps + rebuilds node-pty against Electron's ABI
 pnpm run dev        # dev mode with renderer HMR
-pnpm run typecheck  # fastest correctness gate (tsc, both projects)
-pnpm test           # vitest suite (unit + integration)
-pnpm run build      # production build into out/
+pnpm run verify     # canonical gates: typecheck → desktop build → Server build →
+                    # release-safety checks → vitest suite (in that order)
+pnpm test           # vitest suite on its own (requires both builds first)
 pnpm run dist       # AppImage + .deb into dist/
 ```
 
@@ -155,8 +157,11 @@ Full record, including which gates were *not* run, in
   performed.
 - **CI is not publicly visible** — CI runs on a self-hosted Gitea runner;
   results are republished in the verification record.
-- **No signed releases, SBOM, or build provenance** — download integrity relies
-  on HTTPS and GitHub Releases.
+- **No signed releases, SBOM, or build provenance** — artifacts are not
+  code-signed and no attestation is published. Download integrity relies on
+  HTTPS plus the SHA256SUMS file that releases from the next version onward
+  publish (v0.28.0 and earlier shipped without a checksum file; the auto-update
+  manifest `latest-linux.yml` is not a signature).
 - **Hosted services are preview-stage**, with test-mode billing and quotas that
   are not final.
 

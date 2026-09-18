@@ -31,9 +31,15 @@ Recorded on the commit above, after the declared builds:
 | `pnpm test` | 1,112 passed, 1 skipped |
 | `python3 scripts/release-safety.test.py` | passed (offline release failure paths) |
 
-A fresh run on the branch that carries this page reports 1,165 passed and the
-same single skip: the 53-test trust-surface policy test below runs in the
-normal suite (1,112 + 53). See the delta note in
+The table records the snapshot taken at the commit above. Those five gates are
+now one command — `pnpm run verify` (`scripts/verify.sh`) — running them in the
+order typecheck → desktop build → Server build → release-safety checks → tests
+and stopping at the first failure; CI and `scripts/release.sh` call the same
+command, so the list cannot drift.
+
+A fresh `pnpm run verify` on the branch that carries this page reports 1,166
+passed and the same single skip: the 54-test trust-surface policy test runs in
+the normal suite (1,112 + 54). See the delta note in
 [VERIFICATION.md](VERIFICATION.md).
 
 The single skip is the opt-in live installer smoke test
@@ -89,6 +95,11 @@ snapshot are self-assessed.
   build-provenance attestation** (no SLSA-style provenance or reproducible-build
   attestation). Do not read the presence of `latest-linux.yml` as release
   signing: it is the auto-update feed, not a signature.
+- **`SHA256SUMS` ships with releases from the next version onward** (the
+  pipeline generates it over the AppImage, `.deb`, and updater manifest and
+  uploads it to both hosts). It is a download-integrity aid served from the
+  same release page — not signing, and not an independent trust root.
+  **v0.28.0 and earlier releases have no such asset.**
 - Dependency versions are pinned by `pnpm-lock.yaml`; `pnpm-workspace.yaml`
   records version overrides. [THIRD-PARTY-NOTICES.md](../THIRD-PARTY-NOTICES.md)
   lists bundled dependencies and licenses.
@@ -115,7 +126,8 @@ funding-dependent work package in [ROADMAP.md](../ROADMAP.md).
 - **CI is private** — the runner is self-hosted and its results are not public;
   the workflow file is, and results are republished here.
 - **No signed binaries or provenance** — download integrity relies on HTTPS and
-  GitHub Releases; hashes are not yet published with each release.
+  GitHub Releases, plus the `SHA256SUMS` file released from the next version
+  onward; there is no signing key, SBOM, or provenance attestation.
 - **Hosted services are preview-stage** with test-mode billing and quotas that
   are not final; they are not sold as hardened multi-tenant infrastructure.
 - **Agent integrations vary by vendor** — capability reporting is deliberately

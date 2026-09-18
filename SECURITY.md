@@ -112,4 +112,8 @@ whichever comes first.
 - The relay service sees ciphertext only by design; still, deploy it behind TLS
   and treat invite codes as credentials.
 - Run releases from the official GitHub Releases page and verify you are on a
-  version that is still the current line.
+  version that is still the current line. Releases from the next version onward
+  publish `SHA256SUMS` alongside the artifacts; check a download with
+  `sha256sum -c SHA256SUMS` after saving the artifacts and the checksum file
+  into the same directory. (This is download-integrity checking only — there is
+  no code signing or provenance attestation.)

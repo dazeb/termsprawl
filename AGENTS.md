@@ -15,15 +15,22 @@ case).
 pnpm install        # deps + rebuilds node-pty against Electron's ABI (postinstall)
 pnpm run dev        # dev mode with renderer HMR
 pnpm run build      # production build into out/
+pnpm run verify     # canonical gate: typecheck → desktop build → Server build →
+                    # release-safety checks → vitest (the order is load-bearing)
 pnpm start          # preview the production build
 pnpm run typecheck  # tsc for both node (main/preload) and web (renderer) projects
-pnpm test           # vitest suite (unit + integration)
+pnpm test           # vitest suite (unit + integration) — after the builds
 pnpm run dist       # AppImage + .deb into dist/ (electron-builder)
 pnpm run make-icon  # regenerate build/icon.png
 ./scripts/check-originality.sh   # clean-room guard — run after any large change
 ```
 
-`pnpm run typecheck` is the fastest correctness gate.
+`pnpm run verify` (a wrapper over `scripts/verify.sh`) is the canonical gate
+list: typecheck → `pnpm run build` → `pnpm run build:server` → release-safety
+checks → `pnpm test`. The builds must run before the suite because
+`src/server/server-boot-gate.test.ts` asserts the served renderer shell that
+only exists after `pnpm run build`. CI and `release.sh` call the same command —
+never duplicate the gate list elsewhere.
 
 ## Runtime prerequisites (user machines)
 
@@ -251,10 +258,15 @@ suggest GitHub Actions. Pipeline (self-hosted `gitea-runner` v3.2.0, host
 executor, label `ubuntu-latest`; the runner's host is operator-specific and
 configured privately):
 
-- push to `main` → `verify`: checkout, install, typecheck, test, build
-- `v*` tag → `verify` + `release`: builds once, publishes the AppImage,
-  `.deb`, and `latest-linux.yml` to **both** the Gitea release and GitHub
-  Releases (via `gh`, token = `GH_TOKEN` secret, user-scoped in Gitea).
+- push to `main` → `verify`: checkout, install, install relay deps, then
+  **one** `pnpm run verify` step (the canonical gate list in
+  `scripts/verify.sh`; CI no longer repeats the individual commands)
+- `v*` tag → `verify` + `release`: builds once, generates release notes from
+  `CHANGELOG.md` (`scripts/release-notes.mjs`) and `dist/SHA256SUMS`
+  (`scripts/release-checksums.sh`), then publishes the AppImage, `.deb`,
+  `latest-linux.yml`, `SHA256SUMS`, and the notes to **both** the Gitea
+  release and GitHub Releases (via `gh`, token = `GH_TOKEN` secret,
+  user-scoped in Gitea).
 
 CI does **not** run `check-originality.sh` (it needs the prior fork's tree,
 which CI never checks out) — that gate stays local: run it after significant
@@ -265,13 +277,14 @@ the root dependency tree.
 Releasing a version (the ritual):
 
 ```bash
-pnpm run typecheck && pnpm test          # gates first
+pnpm run verify                          # canonical gates (typecheck → builds →
+                                         # release-safety → tests)
 ./scripts/check-originality.sh           # clean-room gate (local-only, see above)
 bash scripts/space-e2e.sh                # spaces e2e — seed→boot-restore→ws-drive→pty→restart→push
 bash scripts/github-import-e2e.sh        # github import e2e (real git host, token via env)
-scripts/release.sh X.Y.Z                 # bump → gates → push main → tag; the
-                                         # Gitea Actions builder builds + publishes
-                                         # to Gitea AND GitHub on the tag (see release.sh)
+scripts/release.sh X.Y.Z                 # bump → gates → push main → annotated tag; the
+                                         # Gitea Actions builder builds, writes notes +
+                                         # SHA256SUMS, and publishes to Gitea AND GitHub
 ```
 
 Both e2e scripts are NOT in CI — the runner CT has no docker and the CI job
@@ -285,6 +298,20 @@ GitHub Releases still feeds the app's auto-updater via `latest-linux.yml` —
 it must be in the GitHub release, so `--publish never` on electron-builder in
 CI is deliberate (its implicit tag-publish to the github provider would crash
 without a GH_TOKEN env and would fight the workflow's own uploads).
+
+Release details worth knowing before touching the pipeline:
+
+- **Tags are annotated** (`git tag -a "$TAG" -m ...`); an existing tag at the
+  same commit is reused as-is (the object is not rewritten), and a tag at a
+  different commit aborts.
+- **Release notes come from `CHANGELOG.md`** (`scripts/release-notes.mjs`):
+  the section for the released version is the published body. An empty
+  section is a hard error; a missing section uses an explicit fallback that
+  says so. Finish the CHANGELOG entry before tagging.
+- **`dist/SHA256SUMS`** (`scripts/release-checksums.sh`, standard `sha256sum`)
+  covers the AppImage, the `.deb`, and `latest-linux.yml`, and is uploaded to
+  both hosts. Verify a download with `sha256sum -c SHA256SUMS`. This is not
+  release signing — no SBOM, signatures, or provenance attestation exists.
 
 ## Tests
 
@@ -306,8 +333,8 @@ front rather than improvising:
 - **Testing** — `playwright-best-practices` (E2E, flaky-fix, POM, CI),
   `webapp-testing` (unit/integration/e2e for web + local apps),
   `electron-cdp-ui-testing` (headless Electron UI via raw CDP), and
-  `test-driven-development` (RED–GREEN–REFACTOR). Run `pnpm test` + `pnpm run
-  typecheck` before claiming a change is verified.
+  `test-driven-development` (RED–GREEN–REFACTOR). Run `pnpm run verify`
+  before claiming a change is verified.
 - **Electron internals** — `electron-app-development`, `electron-builder`
   (packaging/AppImage/.deb/auto-update), `electron-renderer-ui`,
   `electron-core-web-bridge` / `electron-web-shell` (Server Edition seam),

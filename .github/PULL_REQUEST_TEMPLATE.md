@@ -16,15 +16,14 @@ Closes #
 ## How it was verified
 
 <!--
-Copy the commands you actually ran and their result. The documented order is:
-  pnpm run typecheck
-  pnpm run build
-  pnpm run build:server
-  python3 scripts/release-safety.test.py
-  pnpm test
+Copy the commands you actually ran and their result. The canonical command is:
+  pnpm run verify
+(typecheck → desktop build → Server build → release-safety checks → tests).
+Plus ./scripts/check-originality.sh if code changed.
 -->
 
-```
+```bash
+pnpm run verify
 ```
 
 - [ ] New or changed behaviour has a test (or the PR explains why not)

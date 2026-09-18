@@ -28,17 +28,21 @@ continuously updated dashboard. The narrative summary lives in
 | 5 | `python3 scripts/release-safety.test.py` | **passed** — offline release failure-path checks |
 | 6 | `./scripts/check-originality.sh` | **OK** — 273 source files scanned against 546 prior-project files; no copied blocks; one known-benign generic CSS block reviewed |
 
+Rows 1–5 are the gate sequence that `pnpm run verify` now executes as one
+command (it did not exist at this snapshot; the rows were run individually in
+this order).
+
 The test suite in row 4 covers 117 test files across the repository (118 once
 the trust-layer test added by the grant-readiness task is counted):
 
 > **Delta note (added 2026-09-18, same day).** Row 4 records the snapshot at
 > `ebc5f66` before this trust layer existed. The trust-surface policy test
-> added with this documentation (`scripts/trust-surface.test.ts`, 53 tests)
-> runs in the normal suite, so a fresh `pnpm test` on the branch that carries
-> this file reports **1,165 passed + 1 skipped (1,166) across 118 files** —
-> exactly the recorded 1,112 plus the 53 new tests. That run was executed to
-> check the test-fixture redactions in this task and passed. The counts above
-> are left as recorded for the named commit.
+> added with this documentation (`scripts/trust-surface.test.ts`, 54 tests)
+> runs in the normal suite, so a fresh `pnpm run verify` on the branch that
+> carries this file reports **1,166 passed + 1 skipped (1,167) across 118
+> files** — exactly the recorded 1,112 plus the 54 new tests. That run was
+> executed after the release tooling in this file landed and passed. The
+> counts above are left as recorded for the named commit.
 
 | Area | What it covers |
 |---|---|
@@ -101,13 +105,33 @@ successes is not useful.
 
 ## Ordering
 
-The documented gate order is: **typecheck → desktop build → Server build →
-release-safety checks → tests**. The builds must precede the test suite because
-`src/server/server-boot-gate.test.ts` GETs `/` and asserts the served shell,
-which only exists after `pnpm run build`. Running the suite before the build
-produces one spurious failure; this is the known gate-order behaviour behind
-that single failing test, not flakiness. The full sequence is in
-[CONTRIBUTING.md](../CONTRIBUTING.md).
+The gates are executed by the canonical command **`pnpm run verify`**
+(`scripts/verify.sh`): typecheck → desktop build → Server build →
+release-safety checks → vitest, stopping at the first failure. The builds must
+precede the test suite because `src/server/server-boot-gate.test.ts` GETs `/`
+and asserts the served shell, which only exists after `pnpm run build`. Running
+the suite before the build produces one spurious failure; this is the known
+gate-order behaviour behind that single failing test, not flakiness. CI
+(`.gitea/workflows/ci.yml`) and `scripts/release.sh` both call this command, so
+there is no separate copy of the gate list to drift.
+
+## Release pipeline (from the next version onward)
+
+The release path is now reproducible from the repository: `scripts/release.sh`
+runs the canonical `pnpm run verify` plus the local-only originality screen,
+pushes an **annotated** tag, and the Gitea Actions `release` job builds the
+artifacts, writes release notes from the `CHANGELOG.md` section for that
+version (`scripts/release-notes.mjs`), generates `dist/SHA256SUMS` over the
+AppImage, `.deb`, and `latest-linux.yml` (`scripts/release-checksums.sh`), and
+uploads notes, checksums, and artifacts to both the Gitea and GitHub releases.
+The failure paths are covered offline by `scripts/release-safety.test.py`,
+which runs inside `pnpm run verify`.
+
+**This is not release signing.** There is still no SBOM, no code-signing or
+project key, and no build-provenance attestation; `SHA256SUMS` lets a download
+be checked against the same page that served it, nothing more. The checksum
+asset **does not exist for v0.28.0 or any earlier release** — this snapshot
+predates the pipeline change, and no retroactive asset has been published.
 
 ## Originality screen: methodology and limits
 

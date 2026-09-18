@@ -31,24 +31,31 @@ pnpm run dev          # Electron dev mode with renderer HMR
 a fresh clone where `node_modules/electron/dist/electron` is missing, run
 `node node_modules/electron/install.js` once.
 
-## Gates (run in this order)
+## Gates
 
-The order matters: the vitest suite includes a Server Edition boot gate that
-reads the built renderer, so building first is required. CI runs the same
-sequence.
+Run the canonical verification command:
 
 ```bash
-pnpm run typecheck                        # tsc for node + web projects — start here
-pnpm run build                            # production renderer/main build
-pnpm run build:server                     # Server Edition bundle
-python3 scripts/release-safety.test.py    # offline release failure-path checks
-pnpm test                                 # vitest suite (unit + integration)
+pnpm run verify
 ```
 
-A single canonical `pnpm run verify` command that wraps these gates is planned;
-until it lands, run the sequence above.
+It executes the gates in a fixed order and stops at the first failure:
 
-Extra checks, run when your change touches what they cover:
+1. `pnpm run typecheck`
+2. `pnpm run build`
+3. `pnpm run build:server`
+4. `python3 scripts/release-safety.test.py`
+5. `pnpm test`
+
+The order is load-bearing: the vitest suite includes a Server Edition boot gate
+that reads the built renderer, so both builds must precede the test suite. CI
+(`.gitea/workflows/ci.yml`) and `scripts/release.sh` call the same command;
+the gate list lives only in `scripts/verify.sh`, so local runs and CI cannot
+drift apart. A single gate can still be run on its own when iterating (for
+example `pnpm run typecheck`, the fastest correctness gate).
+
+Extra checks, run when your change touches what they cover — these are **not**
+part of `pnpm run verify` because they need an environment CI does not have:
 
 - `./scripts/check-originality.sh` — see [Clean-room rules](#clean-room-rules)
 - `bash scripts/space-e2e.sh` and `bash scripts/github-import-e2e.sh` — the

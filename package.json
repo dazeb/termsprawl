@@ -30,6 +30,7 @@
     "build:cli": "node scripts/build-context-cli.mjs",
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "verify": "bash scripts/verify.sh",
     "test": "vitest run",
     "postinstall": "electron-rebuild -f -w node-pty",
     "make-icon": "node scripts/make-icon.mjs",
