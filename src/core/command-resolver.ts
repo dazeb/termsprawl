@@ -7,7 +7,7 @@
 // an absolute path before spawning so the preset works regardless of how the
 // app was launched.
 
-import { existsSync } from 'node:fs'
+import { accessSync, constants, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 
@@ -21,21 +21,18 @@ const COMMAND_ALIASES: Record<string, string[]> = {
   gemini: ['agy', 'antigravity']
 }
 
-function findInDirs(name: string, home: string): string | null {
+let managedBin: string | undefined
+export function setManagedBin(path: string): void { managedBin = path }
+export function executableFile(path: string): boolean {
+  try { accessSync(path, constants.X_OK); return statSync(path).isFile() } catch { return false }
+}
+
+export function commandCandidates(name: string, home: string = homedir()): string[] {
+  if (isAbsolute(name)) return [name]
   const pathEnv = process.env.PATH ?? ''
-  for (const dir of pathEnv.split(':')) {
-    if (!dir) continue
-    const candidate = join(dir, name)
-    if (existsSync(candidate)) return candidate
-  }
-
-  const userDirs = ['.local/bin', '.druk/bin', 'bin']
-  for (const sub of userDirs) {
-    const candidate = join(home, sub, name)
-    if (existsSync(candidate)) return candidate
-  }
-
-  return null
+  const userDirs = ['.local/bin', '.druk/bin', '.opencode/bin', '.grok/bin', 'bin']
+  const dirs = [...pathEnv.split(':').filter(Boolean), ...userDirs.map(sub => join(home, sub)), ...(managedBin ? [managedBin] : [])]
+  return [name, ...(COMMAND_ALIASES[name] ?? [])].flatMap(command => dirs.map(dir => join(dir, command)))
 }
 
 /**
@@ -49,14 +46,7 @@ function findInDirs(name: string, home: string): string | null {
  * Returns null when nothing matches.
  */
 export function findExecutable(name: string, home: string = homedir()): string | null {
-  if (isAbsolute(name)) return name
-  const direct = findInDirs(name, home)
-  if (direct) return direct
-  for (const alias of COMMAND_ALIASES[name] ?? []) {
-    const resolved = findInDirs(alias, home)
-    if (resolved) return resolved
-  }
-  return null
+  return commandCandidates(name, home).find(executableFile) ?? null
 }
 
 /**
@@ -70,7 +60,6 @@ export function unresolvedNotice(line: string, home: string = homedir()): string
   if (!trimmed) return null
   const space = trimmed.indexOf(' ')
   const name = space === -1 ? trimmed : trimmed.slice(0, space)
-  if (isAbsolute(name)) return null
   if (findExecutable(name, home)) return null
   return `termsprawl: '${name}' not found — install it, or add its bin dir to PATH (GUI launches check ~/.local/bin). Close and reopen this node once it's available.`
 }

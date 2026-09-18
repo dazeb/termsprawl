@@ -4,8 +4,9 @@ import claude from '../assets/agents/claude.svg'
 import openai from '../assets/agents/openai.svg'
 import grok from '../assets/agents/grok.svg'
 import antigravity from '../assets/agents/antigravity.svg'
+import opencode from '../assets/agents/opencode.svg'
 
-const logos: Partial<Record<AgentId, string>> = { claude, codex: openai, grok, gemini: antigravity }
+const logos: Partial<Record<AgentId, string>> = { claude, codex: openai, grok, gemini: antigravity, opencode }
 
 export function AgentMenuItems({ onSelect }: { onSelect: (id: AgentId) => void }): ReactNode {
   return <div className="context-section" role="group" aria-label="Open agent">

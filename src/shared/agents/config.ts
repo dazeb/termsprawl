@@ -4,7 +4,7 @@
 // declared shape; Task 7.2+ normalizes each CLI's hooks/status into the
 // shared state model (working/waiting/blocked/done).
 
-export type AgentId = 'claude' | 'codex' | 'gemini' | 'grok' | 'openclaude' | 'custom'
+export type AgentId = 'claude' | 'codex' | 'gemini' | 'grok' | 'openclaude' | 'opencode' | 'custom'
 
 export interface AgentCapabilities {
   /** Hooks/status integration (7.2 hook server). */
@@ -139,6 +139,27 @@ export const AGENT_REGISTRY: Record<AgentId, AgentConfig> = {
     name: 'OpenClaude',
     title: 'openclaude',
     command: 'openclaude',
+    enabled: true,
+    integration: { strategy: 'probe', cliFallback: true, transcriptReader: null },
+    capabilities: {
+      // Honesty: no hook normalizer exists (NORMALIZERS maps claude + codex).
+      // No capability is claimed until verified against the real CLI.
+      hooks: false,
+      resume: false,
+      subagents: false,
+      recurring: false,
+      branch: false,
+      contextLink: true,
+      usage: false,
+      chat: false,
+      permissionMode: false
+    }
+  },
+  opencode: {
+    id: 'opencode',
+    name: 'OpenCode',
+    title: 'opencode',
+    command: 'opencode',
     enabled: true,
     integration: { strategy: 'probe', cliFallback: true, transcriptReader: null },
     capabilities: {

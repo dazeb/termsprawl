@@ -1,6 +1,6 @@
+import { DependencySetup } from './DependencySetup'
 import { Fragment, useEffect, useState } from 'react'
 import type { AgentAccount, A2APeer, ApiProviderConfig, AppSettings, CloudBackup, CloudDeviceStart, CloudSpace, CloudUser } from '@shared/types'
-import { AGENT_REGISTRY } from '@shared/agents/config'
 import { HelpBadge } from './HelpBadge'
 import { discoverAgentCard } from '../../../core/a2a/client'
 import { parseRelayTermFrame, type RelayTermFrame } from '../../../core/relay-term'
@@ -28,7 +28,6 @@ interface AppSettingsPanelProps {
 
 /** The primary agent CLIs the product is built around (shown first in the
  * agents section). Claude stays registered but is optional/secondary. */
-const PRIMARY_AGENTS = ['codex', 'grok'] as const
 
 // The two panel rows that make up the General tab's pref selects.
 type PresetMode = 'standard' | 'fast' | 'full'
@@ -967,7 +966,7 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
     accounts: [
       // Canvas: the agent registry is desktop-main-only — chat-node defaults
       // live in Model settings on both editions.
-      { id: 'agents', title: 'Agents', editions: ['desktop'], render: () => <AgentsSection /> },
+      { id: 'agents', title: 'Agents', editions: ['desktop'], render: () => <DependencySetup onOpen={onClose} /> },
       {
         id: 'accounts',
         title: 'Agent accounts',
@@ -1386,25 +1385,6 @@ function UpdatesSection({ ctx, isPackaged }: { ctx: SectionCtx; isPackaged: bool
         ariaLabel="auto download updates when available"
       />
     </PrefRow>
-  )
-}
-
-function AgentsSection(): React.JSX.Element {
-  return (
-    <>
-      <CardNote>Primary agents: codex and grok. Open them from the canvas context menu (Open agent ▸). Claude stays registered but is optional.</CardNote>
-      {PRIMARY_AGENTS.map((id) => {
-        const config = AGENT_REGISTRY[id]
-        if (!config) return null
-        return (
-          <Row key={id}>
-            <span className="text-ink">{config.name}</span>
-            <Status>{config.command}</Status>
-            <Status>{config.capabilities.hooks ? 'hooks' : 'no hooks'}</Status>
-          </Row>
-        )
-      })}
-    </>
   )
 }
 

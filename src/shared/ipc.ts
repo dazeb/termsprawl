@@ -2,6 +2,10 @@
 // Never hardcode a channel string elsewhere.
 
 export const IPC = {
+  dependenciesCheck: 'dependencies:check',
+  dependenciesInstall: 'dependencies:install',
+  dependenciesUpdates: 'dependencies:updates',
+  dependenciesStatus: 'dependencies:status',
   agentToolRequest: 'agent-tools:request',
   agentToolReply: 'agent-tools:reply',
   agentToolStatus: 'agent-tools:status',

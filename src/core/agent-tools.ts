@@ -36,7 +36,7 @@ export const AGENT_TOOLS = [
   tool('terminal_interrupt', 'Send Ctrl+C to a managed terminal.', { nodeId: s }, ['nodeId']),
   tool('terminal_external', 'Attach a separate Linux terminal window to an existing managed session without detaching the canvas.', { nodeId: s }, ['nodeId']),
   tool('terminal_close', 'Permanently close a managed terminal node and destroy its session.', { nodeId: s }, ['nodeId']),
-  tool('agent_launch', 'Launch an installed agent preset with automatic termsprawl integration.', { agent: { ...s, enum: ['claude', 'codex', 'gemini', 'grok', 'openclaude', 'custom'] } }, ['agent']),
+  tool('agent_launch', 'Launch an installed agent preset with automatic termsprawl integration.', { agent: { ...s, enum: ['claude', 'codex', 'gemini', 'grok', 'openclaude', 'opencode', 'custom'] } }, ['agent']),
   tool('agent_status', 'Read integration status for agents in this project.'),
   tool('context_read', 'Read transcripts from linked peers with supported transcript readers.'),
   tool('artifact_open', 'Show a project file in an editor or diff node. Editor supports existing image previews.', { path: s, view: { ...s, enum: ['editor', 'diff'] } }, ['path'])

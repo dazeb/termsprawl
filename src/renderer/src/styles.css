@@ -3331,3 +3331,16 @@ html[data-theme='light'] option {
     transition: none;
   }
 }
+
+/* Dependency setup shares the app palette and remains usable on small windows. */
+.setup-dialog { width: min(760px, 94vw); max-height: 90vh; overflow: auto; padding: 24px; background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 12px; }
+.setup-heading, .setup-actions, .setup-notice { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.setup-heading { justify-content: space-between; }
+.setup-notice { padding: 8px 16px; border-bottom: 1px solid var(--border); }
+.dependency-setup { display: grid; gap: 14px; }
+.setup-item { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--border); border-radius: 8px; }
+.setup-item-requested { border-color: var(--accent); }
+.setup-item code, .setup-item small { overflow-wrap: anywhere; }
+.setup-item p { margin: 0; }
+.setup-item small, .setup-item span { opacity: .75; }
+.setup-item pre { max-height: 220px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }

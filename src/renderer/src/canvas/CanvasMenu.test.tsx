@@ -11,8 +11,8 @@ describe('direct agent actions', () => {
       if (agentConfig(id).enabled) expect(markup).toContain(agentName(id))
       else expect(markup).not.toContain(agentName(id))
     }
-    expect(markup.match(/role="menuitem"/g)).toHaveLength(5)
-    expect(markup.match(/class="agent-menu-logo"/g)).toHaveLength(4)
+    expect(markup.match(/role="menuitem"/g)).toHaveLength(6)
+    expect(markup.match(/class="agent-menu-logo"/g)).toHaveLength(5)
     expect(markup).not.toContain('context-submenu')
   })
 })

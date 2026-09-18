@@ -8,7 +8,8 @@
 import { create } from 'zustand'
 
 export type CanvasSpawnRequest =
-  | { kind: 'agentLogin'; command: string }
+  | { kind: 'agent'; agent: import('@shared/dependencies').InstallableAgent }
+  | { kind: 'agentLogin'; command: string; title?: string }
   | { kind: 'browser'; url: string }
   | { kind: 'switchProject'; projectId: string }
   | { kind: 'organize' }

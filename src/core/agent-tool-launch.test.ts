@@ -44,7 +44,7 @@ describe('external terminal attachment', () => {
     expect(command.args).not.toContain('-D')
   })
   it('supports an argument template without invoking a shell', () => {
-    expect(externalTerminalCommand(tmux, 'n1', { executable: '/opt/terminal app', args: ['--title', 'agent', '--', '{command}'] }).args).toContain('/tmp/socket with spaces')
+    expect(externalTerminalCommand(tmux, 'n1', { executable: '/opt/terminal app', args: ['--title', 'agent', '--', '{command}'] }, name => name).args).toContain('/tmp/socket with spaces')
     expect(() => externalTerminalCommand(tmux, 'n1', { executable: 'x', args: ['-e'] })).toThrow('placeholder')
     expect(() => externalTerminalCommand(tmux, 'n1', undefined, () => null)).toThrow('canvas terminal is still available')
   })
