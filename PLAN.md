@@ -14,7 +14,7 @@ competitors, including the feature set we already added to the nodeterm fork.
 **Architecture:** three-process Electron app (main / preload / renderer) with a
 framework-free core behind a platform interface, so the same core also boots in
 a plain Node server shell (Server Edition). The renderer talks to terminal
-sessions only through a transport interface (local now, remote/SSH later).
+sessions only through a transport interface (`local` and `ssh` both ship).
 tmux provides session continuity; React Flow drives the canvas; xterm.js renders
 terminals; Monaco renders editors/diffs.
 
