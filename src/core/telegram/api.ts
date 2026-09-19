@@ -9,6 +9,7 @@ const API_BASE = 'https://api.telegram.org'
 
 export type FetchLike = (url: string, init?: {
   method?: string
+  headers?: Record<string, string>
   body?: string
   signal?: AbortSignal
 }) => Promise<{
@@ -28,11 +29,21 @@ export interface TelegramApiResult<T> {
 
 export interface TelegramUpdate {
   update_id: number
+  callback_query?: {
+    id: string
+    from: { id: number }
+    data?: string
+    message?: { message_id: number; chat: { id: number } }
+  }
   message?: {
     chat: { id: number }
     text?: string
     from?: { id: number; username?: string; first_name?: string }
   }
+}
+
+export interface InlineKeyboardMarkup {
+  inline_keyboard: { text: string; callback_data: string }[][]
 }
 
 export interface TelegramUser {
@@ -60,9 +71,10 @@ export async function telegramRequest<T>(
 ): Promise<TelegramApiResult<T>> {
   const url = `${API_BASE}/bot${token}/${method}`
   try {
-    const init: { method?: string; body?: string; signal?: AbortSignal } = {}
+    const init: { method?: string; body?: string; headers?: Record<string, string>; signal?: AbortSignal } = {}
     if (Object.keys(params).length > 0) {
       init.method = 'POST'
+      init.headers = { 'Content-Type': 'application/json' }
       init.body = JSON.stringify(params)
     }
     if (signal) init.signal = signal
@@ -108,17 +120,29 @@ export class TelegramClient {
     return telegramRequest<TelegramUpdate[]>(
       this.token,
       'getUpdates',
-      { offset, timeout },
+      { offset, timeout, allowed_updates: ['message', 'callback_query'] },
       this.fetchImpl,
       signal
     )
   }
 
-  sendMessage(chatId: number, text: string, signal?: AbortSignal): Promise<TelegramApiResult<TelegramMessage>> {
+  answerCallbackQuery(id: string, signal?: AbortSignal): Promise<TelegramApiResult<boolean>> {
+    return telegramRequest(this.token, 'answerCallbackQuery', { callback_query_id: id }, this.fetchImpl, signal)
+  }
+
+  setMyCommands(commands: { command: string; description: string }[], signal?: AbortSignal): Promise<TelegramApiResult<boolean>> {
+    return telegramRequest(this.token, 'setMyCommands', { commands }, this.fetchImpl, signal)
+  }
+
+  setChatMenuButton(signal?: AbortSignal): Promise<TelegramApiResult<boolean>> {
+    return telegramRequest(this.token, 'setChatMenuButton', { menu_button: { type: 'commands' } }, this.fetchImpl, signal)
+  }
+
+  sendMessage(chatId: number, text: string, signal?: AbortSignal, replyMarkup?: InlineKeyboardMarkup): Promise<TelegramApiResult<TelegramMessage>> {
     return telegramRequest<TelegramMessage>(
       this.token,
       'sendMessage',
-      { chat_id: chatId, text },
+      { chat_id: chatId, text, ...(replyMarkup ? { reply_markup: replyMarkup } : {}) },
       this.fetchImpl,
       signal
     )

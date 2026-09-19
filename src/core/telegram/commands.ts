@@ -8,6 +8,21 @@
 
 import { pairingDecision, type PairingDecision } from './pairing'
 
+/** Published automatically when the configured bot starts. */
+export const BOT_COMMANDS = [
+  { command: 'start', description: 'Pair this chat and open the menu' },
+  { command: 'menu', description: 'Open the navigation buttons' },
+  { command: 'projects', description: 'List projects' },
+  { command: 'terminals', description: 'Choose a live terminal' },
+  { command: 'peek', description: 'Read terminal output' },
+  { command: 'attach', description: 'Stream terminal output for five minutes' },
+  { command: 'send', description: 'Send text and Enter to a terminal' },
+  { command: 'detach', description: 'Stop streaming output' },
+  { command: 'cancel', description: 'Cancel pending terminal input' },
+  { command: 'status', description: 'Show app version and counts' },
+  { command: 'help', description: 'Show command help' }
+]
+
 export const MAX_REPLY_CHARS = 4096 // Telegram hard limit
 
 // ---------------------------------------------------------------------------
@@ -106,12 +121,14 @@ export function formatHelp(): string {
   return [
     'termsprawl bot — control the app from your phone',
     '',
+    '/menu — open clickable navigation buttons',
     '/projects — list projects',
     '/terminals — list live terminals',
     '/send <id> <text> — type into a terminal (Enter included)',
     '/peek <id> — show a terminal\u2019s recent output',
     '/attach <id> — stream a terminal\u2019s output (auto-stops after 5 min)',
     '/detach — stop streaming',
+    '/cancel — cancel pending terminal input',
     '/status — app version + counts',
     '/help — this list'
   ].join('\n')
@@ -171,6 +188,7 @@ export function handleCommand(ctx: CommandContext, adapter: AppAdapter): Command
 
   switch (name) {
     case 'start':
+    case 'menu':
     case 'help':
       return { replies: [formatHelp()] }
 
@@ -222,6 +240,9 @@ export function handleCommand(ctx: CommandContext, adapter: AppAdapter): Command
           : `streaming ${id} — waiting for output…`
       return { replies: [first], attach: { terminalId: id } }
     }
+
+    case 'cancel':
+      return { replies: ['cancelled pending input'] }
 
     case 'detach':
       return { replies: ['stopped streaming'], detach: true }

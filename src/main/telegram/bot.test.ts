@@ -199,3 +199,155 @@ describe('telegram bot runtime — lifecycle', () => {
     expect(released).toBe(false) // the poll was aborted, not timed out
   })
 })
+
+describe('Telegram command menu setup', () => {
+  it('registers commands and the menu button before polling', async () => {
+    const calls: { method: string; body: Record<string, unknown> }[] = []
+    const fetchImpl: FetchLike = async (url, init) => {
+      const method = url.split('/').pop()!
+      calls.push({ method, body: JSON.parse(init?.body ?? '{}') })
+      return { ok: true, status: 200, json: async () => ({ ok: true, result: method === 'getMe' ? { username: 'test_bot' } : [] }) }
+    }
+    const { bot } = makeBot({ fetchImpl })
+    await bot.start()
+    bot.stop()
+    expect(calls.find(c => c.method === 'setMyCommands')?.body.commands).toEqual(expect.arrayContaining([
+      { command: 'menu', description: expect.any(String) },
+      { command: 'send', description: expect.any(String) },
+      { command: 'cancel', description: expect.any(String) }
+    ]))
+    expect(calls.find(c => c.method === 'setChatMenuButton')?.body).toEqual({ menu_button: { type: 'commands' } })
+    expect(calls.find(c => c.method === 'getUpdates')?.body.allowed_updates).toEqual(['message', 'callback_query'])
+  })
+})
+
+function menuBot(failPrompt = false) {
+  const requests: { method: string; body: any }[] = []
+  const route = makeFetchRoute([])
+  const pty = fakePty()
+  const write = vi.spyOn(pty, 'write')
+  const tags = ['42']
+  const setup = makeBot({
+    ptyManager: pty as never,
+    allowedChatIds: () => tags,
+    fetchImpl: async (url, init) => {
+      requests.push({ method: url.split('/').pop()!, body: JSON.parse(init?.body ?? '{}') })
+      if (failPrompt && url.endsWith('/sendMessage') && init?.body?.includes('next message')) {
+        return { ok: false, status: 400, json: async () => ({ ok: false, error_code: 400 }) }
+      }
+      return route.fetchImpl(url, init)
+    }
+  })
+  const last = () => requests.filter(r => r.method === 'sendMessage').at(-1)!.body
+  const button = (label: string) => {
+    const buttons = last().reply_markup?.inline_keyboard.flat() ?? []
+    const found = buttons.find((b: any) => b.text.includes(label))
+    expect(found, `button ${label}`).toBeDefined()
+    return found.callback_data as string
+  }
+  const click = (data: string, chatId = 42, sender = chatId) => setup.bot.handleUpdate({
+    update_id: 2, callback_query: { id: 'callback-1', from: { id: sender }, data, message: { message_id: 1, chat: { id: chatId } } }
+  } as never)
+  return { ...setup, requests, last, button, click, write, tags, pty }
+}
+
+it('navigates from the main menu to a terminal and reads its output', async () => {
+  const m = menuBot()
+  await m.bot.handleUpdate(upd('/menu'))
+  await m.click(m.button('Terminals'))
+  await m.click(m.button('term-a'))
+  await m.click(m.button('Read output'))
+  expect(m.last().text).toContain('pane output line 1')
+  expect(m.requests.some(r => r.method === 'answerCallbackQuery')).toBe(true)
+  await m.click(m.button('Menu'))
+  expect(m.button('Projects')).toBeTruthy()
+})
+
+it('guides send input, preserves multiline text, and consumes it only once', async () => {
+  const m = menuBot()
+  await m.bot.handleUpdate(upd('/send'))
+  await m.click(m.button('term-a'))
+  expect(m.last().text).toContain('next message')
+  await m.bot.handleUpdate(upd('printf "hi"\n  echo done'))
+  expect(m.write).toHaveBeenCalledExactlyOnceWith('term-a', 'printf "hi"\n  echo done\r')
+  await m.bot.handleUpdate(upd('another message'))
+  expect(m.write).toHaveBeenCalledTimes(1)
+})
+
+it('cancels pending input when navigating and rejects another sender', async () => {
+  const m = menuBot()
+  await m.bot.handleUpdate(upd('/send term-a'))
+  await m.bot.handleUpdate({ ...upd('unrelated'), message: { chat: { id: 42 }, from: { id: 99 }, text: 'unrelated' } })
+  expect(m.write).not.toHaveBeenCalled()
+  await m.click(m.button('Cancel'))
+  await m.bot.handleUpdate(upd('do not execute'))
+  expect(m.write).not.toHaveBeenCalled()
+})
+
+it('rejects foreign, revoked, unknown and expired menu callbacks', async () => {
+  const m = menuBot()
+  await m.bot.handleUpdate(upd('/menu'))
+  const token = m.button('Terminals')
+  m.tags.push('99')
+  await m.click(token, 99)
+  expect(m.last().text).toContain('expired')
+  m.tags.splice(0, 1)
+  await m.click(token)
+  expect(m.last().text).toContain('not paired')
+  m.tags.push('42')
+  await m.click('forged-token')
+  expect(m.last().text).toContain('expired')
+  const now = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 11 * 60 * 1000)
+  try {
+    await m.click(token)
+    expect(m.last().text).toContain('expired')
+  } finally { now.mockRestore() }
+  expect(m.write).not.toHaveBeenCalled()
+})
+
+it('does not send expired input or write after access is revoked', async () => {
+  const m = menuBot()
+  await m.bot.handleUpdate(upd('/send term-a'))
+  const now = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 6 * 60 * 1000)
+  try {
+    await m.bot.handleUpdate(upd('too late'))
+    expect(m.last().text).toContain('expired')
+  } finally { now.mockRestore() }
+  await m.bot.handleUpdate(upd('/send term-a'))
+  m.tags.splice(0, 1, '99')
+  await m.bot.handleUpdate(upd('revoked'))
+  expect(m.write).not.toHaveBeenCalled()
+})
+
+it('stops a stream when its chat is removed from the allowlist', async () => {
+  vi.useFakeTimers()
+  try {
+    const m = menuBot()
+    await m.bot.handleUpdate(upd('/attach term-a'))
+    m.tags.splice(0, 1, '99')
+    const count = m.requests.length
+    await vi.advanceTimersByTimeAsync(2500)
+    expect(m.requests).toHaveLength(count)
+  } finally { vi.useRealTimers() }
+})
+
+
+it('does not arm terminal input when Telegram rejects the prompt', async () => {
+  const m = menuBot(true)
+  await m.bot.handleUpdate(upd('/send term-a'))
+  await m.bot.handleUpdate(upd('this must not run'))
+  expect(m.write).not.toHaveBeenCalled()
+})
+
+
+it('does not reinterpret a disappeared button target as a terminal prefix', async () => {
+  const m = menuBot()
+  await m.bot.handleUpdate(upd('/send'))
+  const token = m.button('term-a')
+  vi.spyOn(m.pty, 'liveSessionIds').mockReturnValue(['term-ab'])
+  vi.spyOn(m.pty, 'has').mockImplementation(id => id === 'term-ab')
+  await m.click(token)
+  expect(m.last().text).toContain('no longer live')
+  await m.bot.handleUpdate(upd('must not execute'))
+  expect(m.write).not.toHaveBeenCalled()
+})
