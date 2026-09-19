@@ -3,13 +3,13 @@ import { describe, it, expect } from 'vitest'
 import { telegramRequest, TelegramClient, type FetchLike } from './api'
 
 function fakeFetch(
-  respond: (url: string, init?: { method?: string; body?: string }) => {
+  respond: (url: string, init?: { method?: string; body?: string; headers?: Record<string, string> }) => {
     ok: boolean
     status: number
     json: unknown
   }
-): { fetchImpl: FetchLike; calls: { url: string; init?: { method?: string; body?: string } }[] } {
-  const calls: { url: string; init?: { method?: string; body?: string } }[] = []
+): { fetchImpl: FetchLike; calls: { url: string; init?: { method?: string; body?: string; headers?: Record<string, string> } }[] } {
+  const calls: { url: string; init?: { method?: string; body?: string; headers?: Record<string, string> } }[] = []
   const fetchImpl: FetchLike = async (url, init) => {
     calls.push({ url, init })
     const res = respond(url, init)
@@ -34,6 +34,7 @@ describe('telegramRequest', () => {
     const res = await telegramRequest(TOKEN, 'sendMessage', { chat_id: 42, text: 'hi' }, fetchImpl)
     expect(res.ok).toBe(true)
     expect(calls[0]?.init?.method).toBe('POST')
+    expect(calls[0]?.init?.headers?.['Content-Type']).toBe('application/json')
     expect(JSON.parse(calls[0]?.init?.body ?? '{}')).toEqual({ chat_id: 42, text: 'hi' })
   })
 
@@ -74,7 +75,7 @@ describe('TelegramClient', () => {
     expect(updates.ok && (updates.result as unknown[]).length).toBe(1)
     // offset + timeout must be in the POST body
     const updCall = calls.find((c) => c.url.endsWith('/getUpdates'))
-    expect(JSON.parse(updCall?.init?.body ?? '{}')).toEqual({ offset: 5, timeout: 20 })
+    expect(JSON.parse(updCall?.init?.body ?? '{}')).toEqual({ offset: 5, timeout: 20, allowed_updates: ['message', 'callback_query'] })
 
     await client.deleteWebhook()
     expect(calls.some((c) => c.url.endsWith('/deleteWebhook'))).toBe(true)

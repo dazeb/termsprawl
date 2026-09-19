@@ -13,12 +13,16 @@ import {
   type TelegramUpdate
 } from '../../core/telegram/api'
 import {
+  BOT_COMMANDS,
+  parseCommand,
+  resolveTerminalId,
   handleCommand,
   truncate,
   type AppAdapter,
   type BotProject,
   type BotTerminal
 } from '../../core/telegram/commands'
+import { createTelegramMenus } from '../../core/telegram/menus'
 import { addPairedChat } from '../../core/telegram/pairing'
 import { remoteLabel } from '../../shared/remote-project'
 import type { WorkspaceStore } from '../../core/workspace-store'
@@ -60,6 +64,8 @@ interface Streamer {
 
 export function createTelegramBot(deps: TelegramBotDeps): TelegramBot {
   const client = new TelegramClient(deps.token, deps.fetchImpl ?? (fetch as unknown as FetchLike))
+  const pendingInput = new Map<string, { terminalId: string; expires: number }>()
+  const menus = createTelegramMenus()
   const streamers = new Map<number, Streamer>()
 
   let running = false
@@ -121,14 +127,64 @@ export function createTelegramBot(deps: TelegramBotDeps): TelegramBot {
   // -------------------------------------------------------------------------
 
   async function handleUpdate(update: TelegramUpdate): Promise<void> {
-    const msg = update.message
-    if (!msg || typeof msg.text !== 'string' || msg.text.length === 0) return
+    const callback = update.callback_query
+    if (callback) await client.answerCallbackQuery(callback.id, AbortSignal.timeout(12000))
+    const msg = callback?.message ?? update.message
+    if (!msg) return
     const chatId = msg.chat.id
+    const allowed = deps.allowedChatIds().includes(String(chatId))
+    let command = update.message?.text ?? ''
+    if (callback) {
+      if (!allowed) {
+        await client.sendMessage(chatId, 'this chat is not paired with termsprawl')
+        return
+      }
+      const target = menus.resolve(chatId, callback.data ?? '')
+      if (!target) {
+        await client.sendMessage(chatId, 'This menu has expired. Send /menu to open a new one.')
+        return
+      }
+      command = target
+    }
+    if (!command) return
+    const senderId = callback?.from.id ?? update.message?.from?.id
+    const inputKey = `${chatId}:${senderId}`
+    const parsed = parseCommand(command)
+    const pending = pendingInput.get(inputKey)
+    for (const [key, input] of pendingInput) if (input.expires <= Date.now()) pendingInput.delete(key)
+    if (!allowed) pendingInput.delete(inputKey)
+    if (allowed && !callback && !parsed && pending) {
+      pendingInput.delete(inputKey)
+      const reply = pending.expires <= Date.now()
+        ? 'Input expired. Choose Send text again.'
+        : adapter.writeTerminal(pending.terminalId, command)
+          ? `sent to ${pending.terminalId}`
+          : `terminal ${pending.terminalId} is gone`
+      await client.sendMessage(chatId, reply, undefined, menus.render(chatId, '/menu', adapter).markup)
+      return
+    }
+    if (parsed || callback) pendingInput.delete(inputKey)
+    // Typed ids may be prefixes; a button must keep its exact original target.
+    if (callback && parsed && ['terminal', 'peek', 'attach', 'send'].includes(parsed.name)
+      && parsed.args[0] && !adapter.listTerminals().some(t => t.id === parsed.args[0])) {
+      await client.sendMessage(chatId, 'This terminal is no longer live.', undefined, menus.render(chatId, '/menu', adapter).markup)
+      return
+    }
+    if (allowed && parsed?.name === 'send' && parsed.args.length === 1 && senderId !== undefined) {
+      const id = resolveTerminalId(adapter, parsed.args[0]!)
+      if (id) {
+        const prompt = await client.sendMessage(chatId, `Your next message will be sent to terminal ${id} with Enter. Send /cancel to cancel (expires in five minutes).`, AbortSignal.timeout(12000), menus.render(chatId, '/menu', adapter).markup)
+        if (prompt.ok) pendingInput.set(inputKey, { terminalId: id, expires: Date.now() + 5 * 60 * 1000 })
+        else deps.log(`telegram: input prompt failed (${prompt.errorCode ?? 'network error'})`)
+        return
+      }
+    }
+    const menu = allowed ? menus.render(chatId, command, adapter) : undefined
 
     const result = handleCommand(
       {
         chatId,
-        text: msg.text,
+        text: command,
         allowedChatIds: deps.allowedChatIds(),
         pairChat: (id) => {
           deps.saveAllowedChatIds(addPairedChat(deps.allowedChatIds(), id))
@@ -140,9 +196,10 @@ export function createTelegramBot(deps: TelegramBotDeps): TelegramBot {
 
     // One message per command: join the reply fragments (multi-line blocks) and
     // drop empties, so a chat never gets a blank bubble or split fragments.
-    const text = result.replies.filter((r) => r.trim().length > 0).join('\n')
+    const text = menu?.text ?? result.replies.filter((r) => r.trim().length > 0).join('\n')
     if (text.trim().length > 0) {
-      await client.sendMessage(chatId, text)
+      const markup = menu?.markup ?? (parseCommand(command)?.name === 'start' && deps.allowedChatIds().includes(String(chatId)) ? menus.render(chatId, '/menu', adapter).markup : undefined)
+      await client.sendMessage(chatId, text, undefined, markup)
     }
 
     if (result.attach) {
@@ -160,6 +217,10 @@ export function createTelegramBot(deps: TelegramBotDeps): TelegramBot {
     stopStream(chatId)
     let lastText = ''
     const timer = setInterval(() => {
+      if (!deps.allowedChatIds().includes(String(chatId))) {
+        stopStream(chatId)
+        return
+      }
       const pane = adapter.captureTerminal(terminalId)
       const streamer = streamers.get(chatId)
       if (!streamer) return
@@ -254,6 +315,15 @@ export function createTelegramBot(deps: TelegramBotDeps): TelegramBot {
         return
       }
       await client.deleteWebhook(abort.signal)
+      for (const [name, setup] of [
+        ['setMyCommands', () => client.setMyCommands(BOT_COMMANDS, AbortSignal.timeout(12000))],
+        ['setChatMenuButton', () => client.setChatMenuButton(AbortSignal.timeout(12000))]
+      ] as const) {
+        if (!running) return
+        const result = await setup()
+        if (!result.ok) deps.log(`telegram: ${name} failed (${result.errorCode ?? 'network error'}) — retry by restarting the bot`)
+      }
+      if (!running) return
       deps.log(`telegram: bot @${me.result?.username ?? '?'} online (long-polling)`)
       void pollLoop()
     },
@@ -263,6 +333,8 @@ export function createTelegramBot(deps: TelegramBotDeps): TelegramBot {
       running = false
       abort?.abort()
       abort = null
+      menus.clear()
+      pendingInput.clear()
       for (const chatId of [...streamers.keys()]) stopStream(chatId)
       deps.log('telegram: bot stopped')
     },
