@@ -5,6 +5,12 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import type { AppSettings, ChatSettings, ProviderKey, TelegramSettings } from '../shared/types'
+import {
+  CODE_THEMES,
+  DEFAULT_CODE_THEME_DARK,
+  DEFAULT_CODE_THEME_LIGHT,
+  type CodeThemeKind
+} from '../shared/code-themes'
 
 export type { AppSettings }
 
@@ -16,6 +22,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   a2aPeers: [],
   apiProviders: [],
   theme: 'system',
+  codeThemeLight: DEFAULT_CODE_THEME_LIGHT,
+  codeThemeDark: DEFAULT_CODE_THEME_DARK,
   enterBehavior: 'queue',
   // Browser nodes are usable by the user out of the box; the agent-control
   // surface (CDP facade + /open server) is opt-in, off by default.
@@ -131,6 +139,12 @@ function normalizeRelay(raw: unknown): AppSettings['relay'] | undefined {
   return out
 }
 
+/** Code-theme ids must exist in the registry AND match the slot's kind, or a
+ * stale/renamed id would silently fall back to Monaco's default look. */
+function asCodeTheme(raw: unknown, kind: CodeThemeKind, fallback: string): string {
+  return CODE_THEMES.some((t) => t.id === raw && t.kind === kind) ? (raw as string) : fallback
+}
+
 export function normalizeAppSettings(raw: unknown): AppSettings {
   const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
   const accounts = Array.isArray(obj.accounts)
@@ -200,6 +214,8 @@ export function normalizeAppSettings(raw: unknown): AppSettings {
     a2aPeers,
     apiProviders,
     theme: obj.theme === 'light' || obj.theme === 'dark' || obj.theme === 'system' ? obj.theme : 'system',
+    codeThemeLight: asCodeTheme(obj.codeThemeLight, 'light', DEFAULT_CODE_THEME_LIGHT),
+    codeThemeDark: asCodeTheme(obj.codeThemeDark, 'dark', DEFAULT_CODE_THEME_DARK),
     enterBehavior:
       typeof obj.enterBehavior === 'string' && obj.enterBehavior.length > 0 ? obj.enterBehavior : 'queue',
     agentBrowserControl: obj.agentBrowserControl === true,

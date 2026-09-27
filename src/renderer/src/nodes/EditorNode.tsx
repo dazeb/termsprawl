@@ -4,6 +4,8 @@ import type { NodeProps } from 'reactflow'
 import Editor from '@monaco-editor/react'
 import type { editor as MonacoEditor } from 'monaco-editor'
 import '../monaco'
+// Import registers our code themes with Monaco (module side effect).
+import { useCodeTheme, activeCodeThemeId } from '../state/code-themes'
 import { LinkHandles } from './LinkHandles'
 import { monaco, detectLanguage } from '../monaco'
 import { nodeTitle } from '../state/workspace'
@@ -17,6 +19,9 @@ import { HelpBadge } from '../components/HelpBadge'
 
 export function EditorNode({ id, data, selected }: NodeProps<EditorNodeData>): React.JSX.Element {
   const { updateNodeData, closeNode } = useCanvas()
+  // Code theme from Settings ▸ Appearance, kept live via the store (follows
+  // the resolved UI theme's light/dark slot).
+  const codeTheme = useCodeTheme(activeCodeThemeId)
   // Monaco's own `automaticLayout` uses a ResizeObserver that re-triggers
   // itself on fractional sizes (the "ResizeObserver loop completed with
   // undelivered notifications" warning on every node resize). We drive layout
@@ -168,7 +173,7 @@ export function EditorNode({ id, data, selected }: NodeProps<EditorNodeData>): R
             <Editor
               value={content}
               language={detectLanguage(data.path)}
-              theme="vs-dark"
+              theme={codeTheme}
               onChange={(value) => setContent(value ?? '')}
               options={{
                 minimap: { enabled: false },

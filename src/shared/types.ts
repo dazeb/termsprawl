@@ -418,6 +418,11 @@ export interface AppSettings {
   apiProviders?: ApiProviderConfig[]
   /** UI theme. 'system' follows the OS preference. Defaults to 'system'. */
   theme?: 'light' | 'dark' | 'system'
+  /** Syntax-highlighting theme for code content (editor + diff nodes) when the
+   * UI is light. A CodeThemeDef id from shared/code-themes. */
+  codeThemeLight?: string
+  /** Same, when the UI is dark. */
+  codeThemeDark?: string
   /** Enter behavior while an agent is busy: 'queue' | 'send' | 'prompt'. */
   enterBehavior?: string
   /** Allow external agents to control embedded browser nodes (13.4): when on,

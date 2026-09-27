@@ -42,6 +42,8 @@ describe('app-settings', () => {
       a2aPeers: [],
       apiProviders: [],
       theme: 'system' as const,
+      codeThemeLight: 'github-light',
+      codeThemeDark: 'one-dark',
       enterBehavior: 'queue',
       agentBrowserControl: false,
       agentA2aServer: false,
