@@ -14,6 +14,7 @@ import { useProjects } from './state/projects'
 import { resolveAccent } from './state/accent'
 import { applyTheme, resolveTheme } from './state/theme'
 import { useBrowserHome } from './state/browser-home'
+import { useCodeTheme } from './state/code-themes'
 import { Onboarding, ShouldShowOnboarding } from './components/Onboarding'
 import { TesseractSpinner } from './components/TesseractSpinner'
 import { useBootOverlay } from './hooks/useBootOverlay'
@@ -50,6 +51,7 @@ export function App(): React.JSX.Element {
   // Keep the browser home URL available to canvas nodes (they can't take props).
   useEffect(() => {
     useBrowserHome.getState().setHomeUrl(settings?.browserHomeUrl)
+    useCodeTheme.getState().sync(settings?.codeThemeLight, settings?.codeThemeDark)
   }, [settings])
 
   // Source control lives in the sidebar; the cog button opens settings only.

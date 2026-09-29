@@ -7,8 +7,17 @@ import { parseRelayTermFrame, type RelayTermFrame } from '../../../core/relay-te
 import { useCanvasRequests } from '../state/canvas-requests'
 import { useProjects } from '../state/projects'
 import { applyTheme } from '../state/theme'
+import { useCodeTheme } from '../state/code-themes'
 import { trustState, type TrustState } from './relay-trust'
 import { Button, Card, CardNote, FieldRow, Hint, PrefRow, Row, Section, Select, Status, TextArea, TextInput, Toggle } from './ui/kit'
+import {
+  CODE_THEMES,
+  DEFAULT_CODE_THEME_DARK,
+  DEFAULT_CODE_THEME_LIGHT,
+  codeThemeById,
+  type CodeThemeDef,
+  type CodeThemeKind
+} from '@shared/code-themes'
 import {
   CommandsPage,
   HooksPage,
@@ -904,6 +913,56 @@ export function AppSettingsPanel({ onClose, onSettingsChange }: AppSettingsPanel
             })}
           </div>
         )
+      },
+      {
+        id: 'code-theme',
+        title: 'Code theme',
+        render: (c) => (
+          <>
+            <PrefRow
+              label="Light code theme"
+              sub="Highlighting theme used for code content in the light interface."
+            >
+              <Select
+                selectClassName="w-[180px]"
+                value={c.settings.codeThemeLight ?? DEFAULT_CODE_THEME_LIGHT}
+                aria-label="Light code theme"
+                onChange={(e) => void c.update({ codeThemeLight: e.target.value })}
+              >
+                {CODE_THEMES.filter((t) => t.kind === 'light').map((t) => (
+                  <option key={t.id} value={t.id}>{t.label}</option>
+                ))}
+              </Select>
+            </PrefRow>
+            <PrefRow
+              label="Dark code theme"
+              sub="Highlighting theme used for code content in the dark interface."
+            >
+              <Select
+                selectClassName="w-[180px]"
+                value={c.settings.codeThemeDark ?? DEFAULT_CODE_THEME_DARK}
+                aria-label="Dark code theme"
+                onChange={(e) => void c.update({ codeThemeDark: e.target.value })}
+              >
+                {CODE_THEMES.filter((t) => t.kind === 'dark').map((t) => (
+                  <option key={t.id} value={t.id}>{t.label}</option>
+                ))}
+              </Select>
+            </PrefRow>
+          </>
+        )
+      },
+      // The preview cards need to breathe outside the section card, so this
+      // one renders its own layout (bare).
+      {
+        id: 'code-preview',
+        bare: true,
+        render: (c) => (
+          <CodePreviewSection
+            light={c.settings.codeThemeLight ?? DEFAULT_CODE_THEME_LIGHT}
+            dark={c.settings.codeThemeDark ?? DEFAULT_CODE_THEME_DARK}
+          />
+        )
       }
     ],
     models: [
@@ -1208,6 +1267,124 @@ function themeIcon(theme: ThemeChoice): React.JSX.Element {
       <line x1="8" y1="21" x2="16" y2="21" />
       <line x1="12" y1="18" x2="12" y2="21" />
     </svg>
+  )
+}
+
+/* --- Code theme previews -------------------------------------------------- */
+
+/** One tokenized line of the preview snippet. Kinds map onto the shared
+ * palette (kw→keyword, fn→fn, plain/punct→foreground). */
+type PreviewToken = { t: 'kw' | 'type' | 'str' | 'num' | 'fn' | 'comment' | 'plain' | 'punct'; s: string }
+
+// A tiny TypeScript snippet that exercises every token color in the palette:
+// keyword, type, string, number, function, comment — the same shape as the
+// editor and diff nodes will show.
+const PREVIEW_LINES: PreviewToken[][] = [
+  [
+    { t: 'kw', s: 'const' }, { t: 'plain', s: ' themePreview' }, { t: 'punct', s: ': ' },
+    { t: 'type', s: 'ThemeConfig' }, { t: 'punct', s: ' = {' }
+  ],
+  [
+    { t: 'plain', s: '  surface' }, { t: 'punct', s: ': ' }, { t: 'str', s: '"sidebar"' }, { t: 'punct', s: ',' }
+  ],
+  [
+    { t: 'plain', s: '  accent' }, { t: 'punct', s: ': ' }, { t: 'str', s: '"#c6f135"' }, { t: 'punct', s: ',' }
+  ],
+  [
+    { t: 'plain', s: '  contrast' }, { t: 'punct', s: ': ' }, { t: 'num', s: '45' }, { t: 'punct', s: ', ' },
+    { t: 'comment', s: '// lime accent' }
+  ],
+  [{ t: 'punct', s: '};' }],
+  [
+    { t: 'kw', s: 'export' }, { t: 'plain', s: ' default ' }, { t: 'fn', s: 'build' },
+    { t: 'punct', s: '(themePreview);' }
+  ]
+]
+
+function previewTokenColor(def: CodeThemeDef, t: PreviewToken['t']): string {
+  switch (t) {
+    case 'kw': return def.tokens.keyword
+    case 'type': return def.tokens.type
+    case 'str': return def.tokens.string
+    case 'num': return def.tokens.number
+    case 'fn': return def.tokens.fn
+    case 'comment': return def.tokens.comment
+    default: return def.colors.fg
+  }
+}
+
+/** The static snippet rendered with the palette's own colors — what you see
+ * here is exactly what the palette's Monaco rules produce (both sides are
+ * generated from the same shared numbers). */
+function CodeSample({ def }: { def: CodeThemeDef }): React.JSX.Element {
+  return (
+    <div
+      className="overflow-x-auto rounded-[7px] font-mono text-[11.5px] leading-[1.7]"
+      style={{ background: def.colors.bg, color: def.colors.fg }}
+    >
+      <div className="py-2">
+        {PREVIEW_LINES.map((line, i) => (
+          <div key={i} className="flex px-3">
+            <span className="w-5 shrink-0 select-none pr-3 text-right tabular-nums" style={{ color: def.colors.gutter }}>
+              {i + 1}
+            </span>
+            <span className="whitespace-pre">
+              {line.map((tok, j) => (
+                <span key={j} style={{ color: previewTokenColor(def, tok.t) }}>{tok.s}</span>
+              ))}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function CodePreviewCard({ def, active }: { def: CodeThemeDef; active: boolean }): React.JSX.Element {
+  return (
+    <div className="overflow-hidden rounded-[10px] border border-edge bg-panel">
+      <div className="flex items-center justify-between gap-2 border-b border-edge px-4 py-3">
+        <div className="min-w-0">
+          <div className="text-[13px] font-medium leading-tight text-ink">
+            {def.kind === 'light' ? 'Light preview' : 'Dark preview'}
+          </div>
+          <div className="mt-0.5 truncate text-[11px] leading-snug text-mute">{def.label}</div>
+        </div>
+        <span
+          className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] leading-none ${
+            active ? 'border-ink/50 bg-raised text-ink' : 'border-edge text-mute'
+          }`}
+        >
+          {active ? 'Active' : def.kind === 'light' ? 'Light' : 'Dark'}
+        </span>
+      </div>
+      <div className="p-3">
+        <CodeSample def={def} />
+      </div>
+    </div>
+  )
+}
+
+/** Side-by-side preview of the saved light + dark code themes; the one the
+ * current interface resolves to is marked Active (reads the resolved UI
+ * theme from the same store the editor nodes use). */
+function CodePreviewSection({ light, dark }: { light: string; dark: string }): React.JSX.Element {
+  const ui = useCodeTheme((s) => s.ui)
+  const resolve = (id: string, kind: CodeThemeKind): CodeThemeDef =>
+    codeThemeById(id)?.kind === kind ? codeThemeById(id)! : CODE_THEMES.find((t) => t.kind === kind)!
+  return (
+    <section className="flex flex-col gap-2.5">
+      <div className="flex flex-col gap-1 px-0.5">
+        <h2 className="text-[13px] font-medium leading-none text-ink">Code preview</h2>
+        <p className="text-[11px] leading-snug text-mute [text-wrap:pretty]">
+          Preview the light and dark code themes together. The theme used by the current interface is marked as active.
+        </p>
+      </div>
+      <div className="grid gap-3 lg:grid-cols-2">
+        <CodePreviewCard def={resolve(light, 'light')} active={ui === 'light'} />
+        <CodePreviewCard def={resolve(dark, 'dark')} active={ui === 'dark'} />
+      </div>
+    </section>
   )
 }
 
