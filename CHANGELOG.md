@@ -26,6 +26,26 @@ not a release-history document.)
 
 Nothing yet.
 
+## [0.29.0] — 2026-09-29
+
+### Added
+
+- Code theme selector: Settings → Appearance gains a Code theme section
+  with independent light and dark syntax-highlighting palettes (seven
+  built-in themes), a side-by-side preview whose Active badge follows the
+  resolved UI theme, and Monaco registration so editor and diff nodes
+  render the selected themes.
+- Telegram command registration and keyboard navigation for the built-in
+  bot (command list, reply keyboards).
+- Public trust layer: code of conduct, contributing guide, governance,
+  security policy, funding, roadmap, issue/PR templates, and a canonical
+  `pnpm run verify` gate with checksummed, changelog-sourced releases.
+
+### Fixed
+
+- App maturity badge and cloud wording aligned with the published facts.
+- Contributor Covenant licence reference and published-imagery guard.
+
 ## [0.28.0] — 2026-09-18
 
 ### Added
@@ -82,7 +102,8 @@ Nothing yet.
   successful verification job, configured credentials, and non-empty artifacts;
   the version bump commit is idempotent on resume.
 
-[Unreleased]: https://github.com/dazeb/termsprawl/compare/v0.28.0...HEAD
+[Unreleased]: https://github.com/dazeb/termsprawl/compare/v0.29.0...HEAD
+[0.29.0]: https://github.com/dazeb/termsprawl/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/dazeb/termsprawl/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/dazeb/termsprawl/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/dazeb/termsprawl/releases/tag/v0.26.0
