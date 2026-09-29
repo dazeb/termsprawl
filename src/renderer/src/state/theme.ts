@@ -1,6 +1,9 @@
 // App theme resolution. 'system' follows the OS via prefers-color-scheme; the
 // resolved 'light' | 'dark' is reflected onto the root <html data-theme> so the
-// stylesheet can switch variable palettes.
+// stylesheet can switch variable palettes. Code nodes read the same resolution
+// through the code-themes store (which palette is live right now).
+
+import { useCodeTheme } from './code-themes'
 
 export type ThemeChoice = 'light' | 'dark' | 'system'
 
@@ -30,6 +33,8 @@ let currentChoice: ThemeChoice = 'system'
 
 export function applyTheme(choice: ThemeChoice): void {
   currentChoice = choice
-  document.documentElement.dataset.theme = resolveTheme(choice)
+  const resolved = resolveTheme(choice)
+  document.documentElement.dataset.theme = resolved
+  useCodeTheme.getState().setUi(resolved)
   if (choice === 'system' && !onSystemChange) refreshSystemListener()
 }

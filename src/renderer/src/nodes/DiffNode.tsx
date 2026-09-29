@@ -4,6 +4,8 @@ import type { NodeProps } from 'reactflow'
 import { DiffEditor } from '@monaco-editor/react'
 import type { editor as MonacoEditor } from 'monaco-editor'
 import { nodeTitle } from '../state/workspace'
+// Import registers our code themes with Monaco (module side effect).
+import { useCodeTheme, activeCodeThemeId } from '../state/code-themes'
 import { LinkHandles } from './LinkHandles'
 import { detectLanguage } from '../monaco'
 import { useCanvas } from '../canvas/Canvas'
@@ -18,6 +20,8 @@ import { HelpBadge } from '../components/HelpBadge'
 // component state (never serialized).
 export function DiffNode({ id, data, selected }: NodeProps<DiffNodeData>): React.JSX.Element {
   const { updateNodeData, closeNode } = useCanvas()
+  // Code theme from Settings ▸ Appearance (see EditorNode).
+  const codeTheme = useCodeTheme(activeCodeThemeId)
   // automaticLayout off + rAF-deferred layout (see EditorNode for the RO-loop
   // rationale): Monaco's internal observer re-triggers on fractional sizes.
   const hostRef = useRef<HTMLDivElement>(null)
@@ -110,7 +114,7 @@ export function DiffNode({ id, data, selected }: NodeProps<DiffNodeData>): React
               original={original}
               modified={modified}
               language={detectLanguage(data.path)}
-              theme="vs-dark"
+              theme={codeTheme}
               options={{
                 readOnly: true,
                 renderSideBySide: true,
