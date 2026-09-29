@@ -42,7 +42,7 @@ sprawls, nothing hides in tabs.
 
 ## Status
 
-**Pre-1.0 · actively maintained.** Current version: **0.28.0**.
+**Pre-1.0 · actively maintained.** Current version: **0.29.0**.
 
 "Pre-1.0" is deliberate and not a hedge: the desktop application is usable and
 maintained today, but the on-disk project format and internal interfaces are
