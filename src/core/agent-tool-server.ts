@@ -3,6 +3,8 @@ import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { chmodSync, closeSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { AGENT_TOOLS, TOOL_GUIDES, validateToolRequest, type IntegrationStatus, type ToolIdentity, type ToolRequest } from './agent-tools'
+import { agentRpc, toolAgentCard } from './a2a/tool-rpc'
+import type { AgentCard } from './a2a/messaging'
 
 export interface ToolSession extends ToolIdentity {
   token: string
@@ -121,7 +123,7 @@ export class AgentToolServer {
     this.ownsLock = true
     this.server = createServer(async (req, res) => {
       const reply = (status: number, body: unknown): void => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)) }
-      if (req.headers.origin || req.method !== 'POST' || req.url !== '/call') { reply(403, { ok: false, error: 'Unsupported request' }); return }
+      if (req.headers.origin) { reply(403, { ok: false, error: 'Unsupported request' }); return }
       const supplied = Buffer.from((req.headers.authorization ?? '').replace(/^Bearer /, ''))
       const session = [...this.sessions.values()].find((s) => {
         const expected = Buffer.from(s.token)
@@ -129,6 +131,16 @@ export class AgentToolServer {
       })
       if (!session) { reply(401, { ok: false, error: 'Unknown or revoked session' }); return }
       try {
+        const path = req.url?.split('?')[0] ?? ''
+        const cardRoute = /^\/a2a\/agents\/([a-zA-Z0-9_-]{1,128})\/\.well-known\/agent-card\.json$/.exec(path)
+        const rpcRoute = /^\/a2a\/agents\/([a-zA-Z0-9_-]{1,128})\/?$/.exec(path)
+        if (req.method === 'GET' && (cardRoute || path === '/.well-known/agent-card.json')) {
+          const cards = await this.invoke(session, { operation: 'agent_cards', args: {} }) as AgentCard[]
+          const card = cards.find((agent) => agent.nodeId === (cardRoute?.[1] ?? session.nodeId))
+          if (!card) { reply(404, { ok: false, error: 'Agent not found in this project' }); return }
+          reply(200, toolAgentCard(card, this.endpoint!.url.replace(/\/call$/, ''))); return
+        }
+        if (req.method !== 'POST' || (path !== '/call' && !rpcRoute)) { reply(404, { ok: false, error: 'Unsupported request' }); return }
         let bytes = 0
         const chunks: Buffer[] = []
         for await (const chunk of req) {
@@ -136,7 +148,13 @@ export class AgentToolServer {
           if (bytes > 128 * 1024) throw new Error('Request too large')
           chunks.push(Buffer.from(chunk))
         }
-        const value = await this.invoke(session, JSON.parse(Buffer.concat(chunks).toString('utf8')))
+        const raw = Buffer.concat(chunks).toString('utf8')
+        if (rpcRoute) {
+          let parsed: unknown
+          try { parsed = JSON.parse(raw) } catch { reply(200, { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }); return }
+          reply(200, await agentRpc(rpcRoute[1], parsed, (request) => this.invoke(session, request))); return
+        }
+        const value = await this.invoke(session, JSON.parse(raw))
         reply(200, { ok: true, value })
       } catch (error) { reply(400, { ok: false, error: error instanceof Error ? error.message : 'Tool failed' }) }
     })

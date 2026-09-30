@@ -23,6 +23,12 @@ function link(overrides: Partial<NodeLink> = {}): NodeLink {
 }
 
 describe('serializeLinks', () => {
+  it('shows enabled agent requests on the edge and persists the explicit grant', () => {
+    const input = link({ kind: 'context-inject', config: { kind: 'context-inject', wrapper: true, pastePointer: true, agentMessages: true } })
+    expect(linksFromSerialized([input])[0].data.agentMessages).toBe(true)
+    expect(deserializeLinks(JSON.parse(JSON.stringify(serializeLinks([input]))))[0].config).toMatchObject({ agentMessages: true })
+  })
+
   it('returns a plain JSON-safe copy with lastRun dropped (stale after restart)', () => {
     const out = serializeLinks([link({ lastRun: { at: 5, ok: true, summary: 'wrote' } })])
     expect(out).toEqual([link()])
@@ -42,6 +48,14 @@ describe('serializeLinks', () => {
 })
 
 describe('deserializeLinks', () => {
+  it('rejects malformed agent messaging grants while preserving old context links', () => {
+    const base = { id: 'a', source: 's', target: 't', kind: 'context-inject', auto: false, createdAt: 1,
+      config: { kind: 'context-inject', wrapper: true, pastePointer: false } }
+    expect(deserializeLinks([{ ...base, config: { ...base.config, agentMessages: 'true' } }])).toEqual([])
+    expect(deserializeLinks([base])).toHaveLength(1)
+    expect(deserializeLinks([{ ...base, config: { ...base.config, agentMessages: true } }])[0].config).toMatchObject({ agentMessages: true })
+  })
+
   it('round-trips valid links', () => {
     const input = serializeLinks([link(), link({ id: 'lk-2', kind: 'context-inject', config: { kind: 'context-inject', wrapper: true, pastePointer: false } })])
     const out = deserializeLinks(JSON.parse(JSON.stringify(input)))

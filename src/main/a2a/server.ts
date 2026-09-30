@@ -83,38 +83,65 @@ export async function startA2aServer(opts: {
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     const path = (req.url ?? '/').split('?')[0]
 
-    // Discovery card — token-gated (audit 2026-09-06: was open, leaking agent
-    // node titles + commands to any local process). Peers read the token from
-    // the discovery file (a2a-agent.json) first, exactly as they do for
-    // message/send, so gating the card breaks nothing.
-    if (req.method === 'GET' && path === '/.well-known/agent-card.json') {
-      if (req.headers.authorization !== `Bearer ${token}`) {
-        json(res, 401, { ok: false, error: 'unauthorized' })
-        return
-      }
-      const nodes = opts.agentNodes()
-      json(res, 200, {
-        name: 'termsprawl agents',
-        description: 'Agent CLI nodes live on a termsprawl canvas. Address a node with "@<title>:" or "@<title>".',
-        version: '1.0.0',
-        url: `http://127.0.0.1:${boundPort}/`,
-        capabilities: { streaming: false },
-        skills: nodes.map((n) => ({
-          id: n.id,
-          name: n.title,
-          description: `${n.command} agent session`
-        }))
-      })
-      return
-    }
-
-    // Everything else is token-gated.
+    // Cards and delivery share the same per-boot bearer token.
     if (req.headers.authorization !== `Bearer ${token}`) {
       json(res, 401, { ok: false, error: 'unauthorized' })
       return
     }
 
-    if (req.method === 'POST' && (path === '/' || path === '/')) {
+    const baseUrl = `http://127.0.0.1:${boundPort}`
+    const nodeUrl = (node: A2aNodeInfo): string => `${baseUrl}/agents/${encodeURIComponent(node.id)}`
+    const cardFields = {
+      protocolVersion: '0.3.0',
+      preferredTransport: 'JSONRPC',
+      version: '1.0.0',
+      capabilities: { streaming: false, pushNotifications: false },
+      defaultInputModes: ['text/plain'],
+      defaultOutputModes: ['text/plain'],
+      securitySchemes: { bearer: { type: 'http', scheme: 'bearer' } },
+      security: [{ bearer: [] }]
+    }
+    const nodeRoute = path.match(/^\/agents\/([^/]*)(?:\/(\.well-known\/agent-card\.json)|\/)?$/)
+    let addressedId: string | null = null
+    if (nodeRoute) {
+      try {
+        addressedId = decodeURIComponent(nodeRoute[1])
+      } catch {
+        // A malformed addressed route must never use the aggregate fallback.
+      }
+    }
+    if (req.method === 'GET' && path === '/.well-known/agent-card.json') {
+      json(res, 200, {
+        ...cardFields,
+        name: 'termsprawl agents',
+        description: 'Agent CLI nodes live on a termsprawl canvas. Address a node with "@<title>:" or "@<title>". Replies acknowledge terminal delivery; they are not final model results.',
+        url: `${baseUrl}/`,
+        skills: opts.agentNodes().map((node) => ({
+          id: node.id,
+          name: node.title,
+          description: `${node.command} agent session. Agent card: ${nodeUrl(node)}/.well-known/agent-card.json`,
+          tags: ['terminal', node.command]
+        }))
+      })
+      return
+    }
+    if (req.method === 'GET' && nodeRoute?.[2]) {
+      const node = opts.agentNodes().find((candidate) => candidate.id === addressedId)
+      if (!node) {
+        json(res, 404, { ok: false, error: 'agent node not found' })
+        return
+      }
+      json(res, 200, {
+        ...cardFields,
+        name: node.title,
+        description: `${node.command} terminal agent session. A response is a terminal delivery acknowledgement, not a final model result.`,
+        url: nodeUrl(node),
+        skills: [{ id: node.id, name: node.title, description: `${node.command} agent session`, tags: ['terminal', node.command] }]
+      })
+      return
+    }
+
+    if (req.method === 'POST' && (path === '/' || (nodeRoute && !nodeRoute[2]))) {
       const raw = await readBody(req)
       let parsed: { jsonrpc?: unknown; id?: unknown; method?: unknown; params?: unknown } | null = null
       try {
@@ -159,19 +186,23 @@ export async function startA2aServer(opts: {
       if (addressMatch) targetHint = addressMatch[1]
       const nodes = opts.agentNodes()
       let target: A2aNodeInfo | null = null
-      if (targetHint) {
-        const hint = targetHint.toLowerCase()
-        target =
-          nodes.find((n) => n.id.toLowerCase() === hint) ??
-          nodes.find((n) => n.title.toLowerCase() === hint) ??
-          null
+      if (nodeRoute) {
+        target = nodes.find((node) => node.id === addressedId) ?? null
+      } else {
+        if (targetHint) {
+          const hint = targetHint.toLowerCase()
+          target =
+            nodes.find((n) => n.id.toLowerCase() === hint) ??
+            nodes.find((n) => n.title.toLowerCase() === hint) ??
+            null
+        }
+        if (!target) target = resolveTarget(text, nodes)
       }
-      if (!target) target = resolveTarget(text, nodes)
       if (!target) {
         json(res, 200, {
           jsonrpc: '2.0',
           id: parsed.id ?? null,
-          error: { code: -32602, message: 'no live agent nodes to deliver to' }
+          error: { code: -32602, message: nodeRoute ? 'addressed agent node not found' : 'no live agent nodes to deliver to' }
         })
         return
       }

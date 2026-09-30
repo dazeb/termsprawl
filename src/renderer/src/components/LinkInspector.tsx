@@ -11,6 +11,8 @@ export interface LinkInspectorProps {
   sourceKind: string
   /** Target node kind ('a2a-peer' for peer links). */
   targetKind: string
+  /** True only for two local agent presets. Transcript links grant no messaging by default. */
+  agentPair?: boolean
   onChange(patch: Partial<Pick<NodeLink, 'kind' | 'auto' | 'config' | 'label'>>): void
   onRun(): void
   onDelete(): void
@@ -117,6 +119,14 @@ export function LinkInspector(props: LinkInspectorProps): React.JSX.Element {
 
       {link.kind === 'context-inject' && (
         <>
+          {props.agentPair && <>
+            <label className="link-inspector-check">
+              <input type="checkbox" checked={link.config.kind === 'context-inject' && link.config.agentMessages === true}
+                onChange={(e) => link.config.kind === 'context-inject' && onChange({ config: { ...link.config, agentMessages: e.target.checked } })} />
+              <span>Allow agent requests</span>
+            </label>
+            <p>Requests from the source agent are submitted automatically to the target. Replies return to the sender. Enable the reverse link for new requests in the other direction.</p>
+          </>}
           {props.targetKind === 'chat' && <label className="link-inspector-check">
             <input
               type="checkbox"

@@ -24,7 +24,18 @@ not a release-history document.)
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- Agent cards and request/reply tools on the shared desktop agent backend.
+  Enable **Allow agent requests** on an agent-to-agent context link to let
+  the source submit work automatically to its peer. All managed agents
+  receive the same discovery, sending, polling, and reply instructions.
+  Requests have persistent IDs, exact-retry deduplication, and private
+  participant-scoped replies. The backend also exposes authenticated
+  per-node A2A 0.3 cards, `message/send`, and `tasks/get`.
+- Individual node cards and exact node-addressed delivery endpoints on the
+  existing opt-in external A2A receiver. Its replies remain delivery
+  acknowledgements.
 
 ## [0.29.0] — 2026-09-29
 

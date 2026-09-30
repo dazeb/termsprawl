@@ -1225,6 +1225,28 @@ dispatches died to provider API errors (HTTP 405 / non-streaming timeouts).*
 
 ## Phase 19 — A2A agent-to-agent communication — DONE 2026-09-01
 
+### 2026-09-30 enhancement — per-node cards and linked requests (unreleased)
+
+- The shared desktop agent backend now supplies local identity cards and an
+  A2A 0.3 facade (`message/send`, `tasks/get`) authenticated by node session.
+  It reuses the MCP/CLI broker rather than starting a server per agent.
+- Every managed launch receives the same `agents` workflow guide, available
+  as a generated skill and through `guide_read`; native MCP initialization
+  and CLI startup instructions both point agents to discovery and messaging.
+- An explicit **Allow agent requests** grant on a directed context link lets
+  its source submit work automatically. Replies use correlated private tasks,
+  not terminal-output scraping. Transcript links retain their prior defaults.
+- Task storage bounds, participant authorization, exact retry IDs, expiry,
+  and restart handling prevent duplicate automatic submission. Recovery runs
+  only after the backend lock is acquired.
+- The existing opt-in external receiver also publishes individual node cards
+  and exact node endpoints; external replies remain delivery acknowledgements.
+- Verification: canonical `pnpm run verify` (1,219 tests passed, one skipped),
+  originality screen, docs lint/typecheck/content tests/build, and built
+  Electron smoke with fixture Codex/Gemini agents and real tmux/PTYS. No live
+  model request was used to verify the transport. This is a limited A2A
+  surface, not a full protocol conformance claim.
+
 *User-directed: A2A (Google Agent2Agent, JSON-RPC 2.0 over HTTP) so every agent
 CLI node can exchange messages with other agents — including Hermes mesh peers
 — as a client (send to configured peers) and a server (expose live agent nodes

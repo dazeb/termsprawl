@@ -36,7 +36,8 @@ export function linksFromSerialized(links: NodeLink[]): Edge[] {
     source: l.source,
     target: l.target,
     type: 'nodelink',
-    data: { kind: l.kind, auto: l.auto, lastRun: l.lastRun, label: l.label }
+    data: { kind: l.kind, auto: l.auto, lastRun: l.lastRun, label: l.label,
+      agentMessages: l.config.kind === 'context-inject' && l.config.agentMessages === true }
   }))
 }
 

@@ -751,9 +751,11 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
     return {
       link,
       sourceKind: source?.data.kind ?? 'terminal',
-      targetKind: link.kind === 'a2a-peer' ? 'a2a-peer' : target?.data.kind ?? 'file'
+      targetKind: link.kind === 'a2a-peer' ? 'a2a-peer' : target?.data.kind ?? 'file',
+      agentPair: !remote && source?.data.kind === 'terminal' && target?.data.kind === 'terminal' &&
+        Boolean((source.data as TerminalNodeData).agentId && (target.data as TerminalNodeData).agentId)
     }
-  }, [inspectedLinkId, nodes, links])
+  }, [inspectedLinkId, nodes, links, remote])
 
   // Group the current selection (plus the right-clicked node) under a frame.
   const groupSelection = useCallback(() => {
@@ -1313,6 +1315,7 @@ export function Canvas({ cwd, remote, invertWheelZoom = false }: CanvasProps): R
           link={inspectedLink.link}
           sourceKind={inspectedLink.sourceKind}
           targetKind={inspectedLink.targetKind}
+          agentPair={inspectedLink.agentPair}
           running={linkRunBusy.has(inspectedLink.link.id)}
           onChange={(patch) => updateLink(inspectedLink.link.id, patch)}
           onRun={() => runLink(inspectedLink.link.id)}

@@ -670,7 +670,7 @@ export type LinkKind = 'file-output' | 'context-inject' | 'a2a-peer'
 /** Per-kind link options (discriminated on `kind`). */
 export type LinkConfig =
   | { kind: 'file-output'; path: string; mode: 'overwrite' | 'append'; header: boolean }
-  | { kind: 'context-inject'; wrapper: boolean; pastePointer: boolean }
+  | { kind: 'context-inject'; wrapper: boolean; pastePointer: boolean; agentMessages?: boolean }
   | { kind: 'a2a-peer'; message: 'last-output' | 'full-capture'; deliverReply: boolean }
 
 /** A persisted, typed edge between two nodes (or a node and an A2A peer). */

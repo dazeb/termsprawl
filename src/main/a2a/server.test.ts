@@ -51,6 +51,80 @@ describe('A2A server', () => {
     await handle.close()
   })
 
+  it('publishes authenticated per-node cards with stable encoded endpoints', async () => {
+    const liveNodes = [
+      { id: 'codex/node ?', title: 'Codex', command: 'codex' },
+      { id: 'gemini', title: 'Gemini', command: 'gemini' }
+    ]
+    const handle = await startA2aServer({ userDataPath: userData, agentNodes: () => liveNodes, deliverToNode: async () => {} })
+    try {
+      for (const node of liveNodes) {
+        const endpoint = `${handle.url}/agents/${encodeURIComponent(node.id)}`
+        const cardUrl = `${endpoint}/.well-known/agent-card.json`
+        expect((await fetch(cardUrl)).status).toBe(401)
+        expect((await fetch(cardUrl, { headers: { authorization: 'Bearer wrong' } })).status).toBe(401)
+        const response = await fetch(cardUrl, { headers: { authorization: `Bearer ${handle.token}` } })
+        expect(response.status).toBe(200)
+        const card = await response.json()
+        expect(card).toMatchObject({
+          protocolVersion: '0.3.0', preferredTransport: 'JSONRPC', name: node.title,
+          url: endpoint, version: '1.0.0', capabilities: { streaming: false, pushNotifications: false },
+          defaultInputModes: ['text/plain'], defaultOutputModes: ['text/plain'],
+          securitySchemes: { bearer: { type: 'http', scheme: 'bearer' } }, security: [{ bearer: [] }],
+          skills: [{ id: node.id, name: node.title, tags: ['terminal', node.command] }]
+        })
+        expect(card.description).toContain('acknowledgement')
+        expect(JSON.stringify(card)).not.toContain(handle.token)
+      }
+      const aggregate = await fetch(`${handle.url}/.well-known/agent-card.json`, { headers: { authorization: `Bearer ${handle.token}` } })
+      const card = await aggregate.json()
+      expect(card.skills[0].description).toContain(`${handle.url}/agents/${encodeURIComponent(liveNodes[0].id)}/.well-known/agent-card.json`)
+    } finally {
+      await handle.close()
+    }
+  })
+
+  it('uses the exact addressed node regardless of text hints, accepting a trailing slash', async () => {
+    const { deps, delivered } = makeDeps()
+    const handle = await startA2aServer({ userDataPath: userData, ...deps })
+    try {
+      for (const suffix of ['', '/']) {
+        const response = await fetch(`${handle.url}/agents/agent2${suffix}`, {
+          method: 'POST', headers: { authorization: `Bearer ${handle.token}`, 'content-type': 'application/json' },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'message/send', params: { message: { parts: [{ kind: 'text', text: '@claude build: review' }] } } })
+        })
+        expect(response.status).toBe(200)
+        expect((await response.json()).result.kind).toBe('message')
+      }
+      expect(delivered).toEqual([
+        { nodeId: 'agent2', text: '@claude build: review' },
+        { nodeId: 'agent2', text: '@claude build: review' }
+      ])
+      expect((await fetch(`${handle.url}/agents/agent2`, { method: 'POST', body: '{}' })).status).toBe(401)
+    } finally {
+      await handle.close()
+    }
+  })
+
+  it('never falls back for an unknown or malformed addressed node', async () => {
+    const { deps, delivered } = makeDeps()
+    const handle = await startA2aServer({ userDataPath: userData, ...deps })
+    try {
+      for (const id of ['missing', '%ZZ', '']) {
+        const endpoint = `${handle.url}/agents/${id}`
+        expect((await fetch(`${endpoint}/.well-known/agent-card.json`, { headers: { authorization: `Bearer ${handle.token}` } })).status).toBe(404)
+        const response = await fetch(endpoint, {
+          method: 'POST', headers: { authorization: `Bearer ${handle.token}`, 'content-type': 'application/json' },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'message/send', params: { message: { parts: [{ kind: 'text', text: '@codex do work' }] } } })
+        })
+        expect((await response.json()).error.code).toBe(-32602)
+      }
+      expect(delivered).toEqual([])
+    } finally {
+      await handle.close()
+    }
+  })
+
   it('message/send delivers text into the node PTY and answers with a Message', async () => {
     const { deps, delivered } = makeDeps()
     const handle = await startA2aServer({ userDataPath: userData, ...deps })

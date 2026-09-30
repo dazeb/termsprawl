@@ -25,7 +25,8 @@ function isValidLinkConfig(config: unknown, kind: string): boolean {
         typeof config.header === 'boolean'
       )
     case 'context-inject':
-      return typeof config.wrapper === 'boolean' && typeof config.pastePointer === 'boolean'
+      return typeof config.wrapper === 'boolean' && typeof config.pastePointer === 'boolean' &&
+        (config.agentMessages === undefined || typeof config.agentMessages === 'boolean')
     case 'a2a-peer':
       return (
         (config.message === 'last-output' || config.message === 'full-capture') &&

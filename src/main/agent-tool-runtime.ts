@@ -16,6 +16,7 @@ import { createRealContextIO, runContextCli } from '../core/context-cli'
 import { classifyFile } from '../core/file-service'
 import { normalizeAddress } from '../core/browser-policy'
 import { guestIdForNode } from './browser/manager'
+import { AgentMessagingService, type AgentNodeInfo } from '../core/a2a/messaging'
 
 interface Preferences { externalTerminal?: ExternalTerminalConfig; custom?: { executable: string; instructionFlag?: string } }
 type Pending = { senderId: number; finish(reply: CanvasToolReply['result']): void }
@@ -29,6 +30,7 @@ export class AgentToolRuntime {
   private owners = new Map<string, string>()
   private active = new Set<string>()
   private stopping = false
+  private messaging?: AgentMessagingService
 
   constructor(private readonly platform: CorePlatform, private readonly workspace: WorkspaceStore, private readonly pty: PtyManager, private readonly browserEnabled: () => boolean, appVersion?: string) {
     this.server = new AgentToolServer(platform.userDataPath, {
@@ -63,6 +65,16 @@ export class AgentToolRuntime {
 
   async start(executable: string, bundle: string): Promise<void> {
     await this.server.start()
+    // Recovery mutates pending records: do it only after the server owns the
+    // user-data lock, so a second app cannot fail another app's live tasks.
+    this.messaging = new AgentMessagingService(join(this.server.directory, 'tasks'), {
+      agents: (projectId) => this.agentNodes(projectId),
+      links: (projectId) => this.workspace.linksFor(projectId),
+      deliver: (nodeId, prompt) => {
+        if (!this.pty.hasReadySession(nodeId)) throw new Error('Recipient terminal is not ready')
+        this.pty.writeManaged(nodeId, `\x1b[200~${prompt}\x1b[201~`, true)
+      }
+    })
     this.launcher = installToolRuntime(this.server.directory, executable, bundle)
     ipcMain.on(IPC.agentToolReply, (event, reply: CanvasToolReply) => {
       const pending = this.pending.get(reply?.requestId)
@@ -98,6 +110,7 @@ export class AgentToolRuntime {
   revoke(nodeId: string): void {
     if (this.stopping) return // App quit detaches tmux clients; it must not revoke warm sessions.
     this.active.delete(nodeId)
+    this.messaging?.revoke(nodeId)
     this.server.revoke(nodeId)
     const previous = this.statuses.get(nodeId)
     this.statuses.delete(nodeId)
@@ -107,6 +120,21 @@ export class AgentToolRuntime {
   }
 
   private saveOwners(): void { privateJson(join(this.server.directory, 'browser-owners.json'), Object.fromEntries(this.owners)) }
+
+  private agentNodes(projectId: string, nodes = this.workspace.snapshot().projects[projectId] ?? []): AgentNodeInfo[] {
+    const sessions = this.server.statuses(projectId)
+    return nodes.flatMap((node) => {
+      const data = node.data as { command?: string; agentId?: AgentId; title?: string; relayTerm?: string }
+      if (node.type !== 'terminal' || !data.command || data.relayTerm) return []
+      const preset = data.agentId && Object.hasOwn(AGENT_REGISTRY, data.agentId) ? AGENT_REGISTRY[data.agentId] :
+        Object.values(AGENT_REGISTRY).find((agent) => agent.command === data.command?.trim().split(/\s/)[0])
+      if (!preset) return []
+      const status = sessions.find((session) => session.nodeId === node.id)?.status
+      return [{ id: node.id, title: data.title ?? preset.name, command: data.command, agentId: preset.id,
+        status: status && this.pty.hasReadySession(node.id) ? status : { state: 'needs-setup' as const, adapter: status?.adapter ?? preset.id,
+          version: status?.version ?? 'unknown', reason: 'Launch and attach this agent with termsprawl integration first' } }]
+    })
+  }
 
   private canvas(identity: ToolIdentity, request: ToolRequest): Promise<unknown> {
     const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && w.webContents.getURL().includes('index.html')) ?? BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && !w.webContents.hostWebContents)
@@ -145,6 +173,10 @@ export class AgentToolRuntime {
     if (!nodes.some((n) => n.id === identity.nodeId)) throw new Error('Agent node is no longer on this canvas')
     const node = nodes.find((n) => n.id === args.nodeId)
     if (operation === 'canvas_list') return nodes
+    if (operation === 'agent_cards') return this.messaging!.cards(identity, this.agentNodes(identity.projectId, nodes))
+    if (operation === 'agent_send') return this.messaging!.send(identity, { nodeId: String(args.nodeId), text: String(args.text), messageId: String(args.messageId) }, this.agentNodes(identity.projectId, nodes))
+    if (operation === 'agent_task') return this.messaging!.task(identity, String(args.taskId))
+    if (operation === 'agent_reply') return this.messaging!.reply(identity, { taskId: String(args.taskId), text: String(args.text), state: args.state as 'completed' | 'failed' | undefined }, this.agentNodes(identity.projectId, nodes))
     if (operation === 'context_read') {
       if (!project.cwd) return { text: '', reason: 'Linked transcripts require a folder project' }
       const io = createRealContextIO(project.cwd)
@@ -254,6 +286,7 @@ export class AgentToolRuntime {
     for (const [requestId, pending] of this.pending) pending.finish({ ok: false, error: `App stopped during request ${requestId}` })
     ipcMain.removeAllListeners(IPC.agentToolReply)
     ipcMain.removeHandler(IPC.agentToolStatusGet)
+    this.messaging?.close()
     await this.server.close()
   }
 }

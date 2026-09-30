@@ -54,7 +54,7 @@ export function NodeLinkEdge(props: EdgeProps): React.JSX.Element {
           className={`nodelink-chip kind-${kind}${selected ? ' selected' : ''}`}
         />
         <text textAnchor="middle" dominantBaseline="central" className="nodelink-chip-text">
-          {KIND_LABEL[kind] ?? kind}
+          {data?.agentMessages ? 'a2a' : KIND_LABEL[kind] ?? kind}
         </text>
       </g>
     </>
