@@ -26,6 +26,10 @@ not a release-history document.)
 
 ### Added
 
+- A dedicated Termsprawl system prompt, supplied only to managed agent
+  launches through their supported system, startup, or MCP instruction
+  route. Every launch receives the same workspace and agent-communication
+  instructions and a private prompt file for inspection.
 - Agent cards and request/reply tools on the shared desktop agent backend.
   Enable **Allow agent requests** on an agent-to-agent context link to let
   the source submit work automatically to its peer. All managed agents

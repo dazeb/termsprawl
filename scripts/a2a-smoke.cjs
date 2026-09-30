@@ -29,6 +29,13 @@ import os, sys, tty, re, json, subprocess
 if '--help' in sys.argv:
     print('--config mcp' if os.path.basename(sys.argv[0]) == 'codex' else '--prompt-interactive'); sys.exit()
 if '--version' in sys.argv: print('fixture-1'); sys.exit()
+instructions = open(os.environ['TERMSPRAWL_SYSTEM_PROMPT_FILE']).read().strip()
+assert '# Termsprawl session instructions' in instructions and 'agent_reply' in instructions
+if os.path.basename(sys.argv[0]) == 'codex':
+    connected = subprocess.run([os.environ['TERMSPRAWL_CTL'], 'mcp'], input=json.dumps({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize'}) + '\\n', text=True, capture_output=True, timeout=5)
+    assert connected.returncode == 0 and json.loads(connected.stdout)['result']['instructions'] == instructions
+else:
+    assert sys.argv[sys.argv.index('--prompt-interactive') + 1] == instructions
 tty.setraw(0)
 os.write(1, b'fixture agent ready\\r\\n')
 pending = b''
@@ -81,7 +88,10 @@ async function cleanup(code, error) {
 async function test() {
   await until(() => fs.existsSync(path.join(data, 'agent-tools/sessions/gemini.json')), 'automatic integration')
   await call('codex', 'session_info')
+  await until(async () => { try { return (await call('codex', 'terminal_read', { nodeId: 'codex' })).output.includes('fixture agent ready') } catch { return false } }, 'Codex MCP prompt')
   await until(async () => { try { return (await call('codex', 'terminal_read', { nodeId: 'gemini' })).output.includes('fixture agent ready') } catch { return false } }, 'recipient prompt')
+  const systemPrompt = fs.readFileSync(path.join(appRoot, 'src/core/prompts/termsprawl-system.md'), 'utf8').trim()
+  for (const agent of ['codex', 'gemini']) assert.equal(fs.readFileSync(path.join(data, 'agent-tools/launch', agent, 'termsprawl-system.md'), 'utf8').trim(), systemPrompt)
   const codexGuide = fs.readFileSync(path.join(data, 'agent-tools/launch/codex/skills/termsprawl-agents/SKILL.md'), 'utf8')
   assert.equal(codexGuide, fs.readFileSync(path.join(data, 'agent-tools/launch/gemini/skills/termsprawl-agents/SKILL.md'), 'utf8'))
   await assert.rejects(call('codex', 'agent_send', { nodeId: 'gemini', text: 'review', messageId: 'disabled' }), /enabled outgoing/)
@@ -101,7 +111,7 @@ async function test() {
   assert.equal((await call('codex', 'agent_task', { taskId: sent.id })).response, 'fixture Gemini reply')
   assert.equal((await call('codex', 'agent_send', args)).id, sent.id)
   assert.equal(await win.webContents.executeJavaScript("document.querySelector('.app-error-banner')?.textContent || ''"), '')
-  console.log('PASS shared launch guides, visible link opt-in, real PTY automatic submission, Gemini helper reply and exact-retry deduplication')
+  console.log('PASS shared prompt file, Codex MCP instructions, Gemini startup prompt, visible link opt-in, real PTY automatic submission, Gemini helper reply and exact-retry deduplication')
   await cleanup(0)
 }
 import(pathToFileURL(path.join(appRoot, 'out/main/index.js')).href).then(test).catch(error => cleanup(1, error))

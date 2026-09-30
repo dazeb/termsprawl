@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
 import { prepareToolLaunch, selectLaunchAdapter, shellQuote } from './agent-tool-launch'
 import { externalTerminalCommand } from './agent-tool-external'
+import { TOOL_GUIDES } from './agent-tools'
 
 const roots: string[] = []
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
@@ -18,6 +19,24 @@ describe('agent launch adapters', () => {
   it('quotes paths and prompt content as literal shell arguments', () => {
     const value = "spaces 'quotes' $(touch /tmp/never-run-agent-tool) `false` $HOME\nnext"
     expect(execFileSync('/bin/sh', ['-c', `printf %s ${shellQuote(value)}`], { encoding: 'utf8' })).toBe(value)
+  })
+  it('supplies the same dedicated Termsprawl prompt to supported launches and MCP guides', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'launch prompt ')); roots.push(directory)
+    for (const probe of [
+      { executable: '/bin/claude', help: '--mcp-config --append-system-prompt', version: '1' },
+      { executable: '/bin/gemini', help: '--prompt-interactive', version: '1' },
+      { executable: '/bin/codex', help: '--config mcp', version: '1' }
+    ]) {
+      const launch = prepareToolLaunch({ probe, commandTail: '', directory, sessionFile: join(directory, 'session.json'), launcher: join(directory, 'termsprawlctl') })
+      const promptFile = join(directory, 'termsprawl-system.md')
+      expect(launch.env.TERMSPRAWL_SYSTEM_PROMPT_FILE).toBe(promptFile)
+      const source = readFileSync(join(__dirname, 'prompts/termsprawl-system.md'), 'utf8').trim()
+      expect(readFileSync(promptFile, 'utf8').trim()).toBe(source)
+      expect(statSync(promptFile).mode & 0o777).toBe(0o600)
+      expect(TOOL_GUIDES.overview).toBe(source)
+      expect(source).toContain('agent_reply')
+      if (probe.executable !== '/bin/codex') expect(launch.command).toContain(shellQuote(source))
+    }
   })
   it('generates repeatable per-launch config and focused skills without credentials in instructions', () => {
     const directory = mkdtempSync(join(tmpdir(), 'launch agent ')); roots.push(directory)

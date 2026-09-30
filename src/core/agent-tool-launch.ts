@@ -54,7 +54,11 @@ export function prepareToolLaunch(options: {
   const adapter = selectLaunchAdapter(probe)
   if (options.customInstructionFlag && /^--[a-z][a-z-]*$/.test(options.customInstructionFlag)) adapter.instructionFlag = options.customInstructionFlag
   mkdirSync(directory, { recursive: true, mode: 0o700 })
-  const orientation = `${TOOL_GUIDES.overview}\nYour helper is ${launcher}. Workflow guides are available through guide_read.`
+  // The Markdown source is embedded by Vite for both the desktop and MCP helper.
+  const orientation = TOOL_GUIDES.overview
+  const promptFile = join(directory, 'termsprawl-system.md')
+  writeFileSync(promptFile, orientation + '\n', { mode: 0o600 })
+  chmodSync(promptFile, 0o600)
   for (const [topic, body] of Object.entries(TOOL_GUIDES)) {
     const folder = join(directory, 'skills', `termsprawl-${topic}`)
     mkdirSync(folder, { recursive: true, mode: 0o700 })
@@ -74,7 +78,7 @@ export function prepareToolLaunch(options: {
   const available = adapter.nativeMcp || adapter.instructionFlag || adapter.initialPrompt
   return {
     command: `${shellQuote(probe.executable)}${commandTail}${args.length ? ' ' + args.map(shellQuote).join(' ') : ''}`,
-    env: { TERMSPRAWL_SESSION_FILE: sessionFile, TERMSPRAWL_CTL: launcher },
+    env: { TERMSPRAWL_SESSION_FILE: sessionFile, TERMSPRAWL_CTL: launcher, TERMSPRAWL_SYSTEM_PROMPT_FILE: promptFile },
     status: { state: available && !adapter.nativeMcp ? 'cli-fallback' : 'needs-setup', adapter: adapter.kind, version: probe.version,
       reason: adapter.nativeMcp ? 'Waiting for the agent to connect to MCP' : available ? 'Instructions supplied; shell tool access is subject to agent permissions' : 'Instruction delivery is unverified. Read the generated skills and configure this agent explicitly.' }
   }

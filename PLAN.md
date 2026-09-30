@@ -1233,6 +1233,11 @@ dispatches died to provider API errors (HTTP 405 / non-streaming timeouts).*
 - Every managed launch receives the same `agents` workflow guide, available
   as a generated skill and through `guide_read`; native MCP initialization
   and CLI startup instructions both point agents to discovery and messaging.
+- Shared workspace and messaging instructions live in
+  `src/core/prompts/termsprawl-system.md`, embedded in the desktop and helper
+  builds. Managed launches supply the same content through their supported
+  system/startup/MCP route and expose a private local copy through
+  `TERMSPRAWL_SYSTEM_PROMPT_FILE`.
 - An explicit **Allow agent requests** grant on a directed context link lets
   its source submit work automatically. Replies use correlated private tasks,
   not terminal-output scraping. Transcript links retain their prior defaults.
@@ -1241,7 +1246,7 @@ dispatches died to provider API errors (HTTP 405 / non-streaming timeouts).*
   only after the backend lock is acquired.
 - The existing opt-in external receiver also publishes individual node cards
   and exact node endpoints; external replies remain delivery acknowledgements.
-- Verification: canonical `pnpm run verify` (1,219 tests passed, one skipped),
+- Verification: canonical `pnpm run verify` (1,220 tests passed, one skipped),
   originality screen, docs lint/typecheck/content tests/build, and built
   Electron smoke with fixture Codex/Gemini agents and real tmux/PTYS. No live
   model request was used to verify the transport. This is a limited A2A
