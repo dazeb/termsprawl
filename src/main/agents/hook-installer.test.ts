@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { buildClaudeHookConfig, installClaudeHooks, uninstallClaudeHooks } from './hook-installer'
 
-// The installer writes Claude Code URL hooks that POST lifecycle events to
+// The installer writes Claude Code HTTP hooks that POST lifecycle events to
 // our loopback hook server. It must merge (never clobber) an existing
 // ~/.claude/settings.json and leave the file untouched on uninstall.
 
@@ -22,11 +22,12 @@ afterEach(() => {
 })
 
 describe('buildClaudeHookConfig', () => {
-  it('produces URL hooks for every lifecycle event', () => {
+  it('produces HTTP hooks for every lifecycle event', () => {
     const hooks = buildClaudeHookConfig('http://127.0.0.1:3456/')
     expect(hooks.Stop).toHaveLength(1)
     expect(hooks.Stop[0].matcher).toBe('*')
-    expect(hooks.Stop[0].hooks[0].type).toBe('url')
+    // 'http' is the Claude Code hook type; 'url' is rejected as unknown.
+    expect(hooks.Stop[0].hooks[0].type).toBe('http')
     expect(hooks.Stop[0].hooks[0].url).toContain('127.0.0.1:3456')
     expect(hooks.Notification).toHaveLength(1)
     expect(hooks.PreToolUse).toHaveLength(1)
@@ -80,6 +81,42 @@ describe('installClaudeHooks', () => {
     expect(parsed.hooks.PreToolUse).toHaveLength(2)
     expect(parsed.hooks.PreToolUse[0].hooks[0].command).toBe('echo hi')
   })
+
+  it('replaces entries from earlier boots instead of accumulating them', () => {
+    const dir = makeSettingsDir()
+    const settingsPath = join(dir, 'settings.json')
+    installClaudeHooks(settingsPath, 'http://127.0.0.1:3456/', 'aaa')
+    installClaudeHooks(settingsPath, 'http://127.0.0.1:4567/', 'bbb')
+    installClaudeHooks(settingsPath, 'http://127.0.0.1:5678/', 'ccc')
+
+    const parsed = JSON.parse(readFileSync(settingsPath, 'utf8'))
+    for (const event of ['PreToolUse', 'PostToolUse', 'Notification', 'Stop', 'UserPromptSubmit']) {
+      expect(parsed.hooks[event]).toHaveLength(1)
+      expect(parsed.hooks[event][0].hooks[0].url).toBe('http://127.0.0.1:5678/hook/claude?key=ccc')
+    }
+  })
+
+  it('sweeps stale legacy url-type entries and keeps user hooks', () => {
+    const dir = makeSettingsDir()
+    const settingsPath = join(dir, 'settings.json')
+    const legacy = (port: number) => ({
+      matcher: '*',
+      hooks: [{ type: 'url', url: `http://127.0.0.1:${port}/hook/claude?key=old` }]
+    })
+    const user = { hooks: [{ type: 'command', command: 'echo hi' }] }
+    writeFileSync(
+      settingsPath,
+      JSON.stringify({ hooks: { Stop: [user, legacy(33051), legacy(34377)] }, __termsprawlManaged: true }),
+      'utf8'
+    )
+
+    installClaudeHooks(settingsPath, 'http://127.0.0.1:3456/', 'new')
+
+    const parsed = JSON.parse(readFileSync(settingsPath, 'utf8'))
+    expect(parsed.hooks.Stop).toHaveLength(2)
+    expect(parsed.hooks.Stop[0]).toEqual(user)
+    expect(parsed.hooks.Stop[1].hooks[0]).toEqual({ type: 'http', url: 'http://127.0.0.1:3456/hook/claude?key=new' })
+  })
 })
 
 describe('uninstallClaudeHooks', () => {
@@ -98,6 +135,21 @@ describe('uninstallClaudeHooks', () => {
     expect(parsed.model).toBe('sonnet')
     expect(parsed.__termsprawlManaged).toBeUndefined()
     expect(parsed.hooks).toBeUndefined()
+  })
+
+  it('keeps a user hook added after install, whatever its position', () => {
+    const dir = makeSettingsDir()
+    const settingsPath = join(dir, 'settings.json')
+    installClaudeHooks(settingsPath, 'http://127.0.0.1:3456/')
+    const after = JSON.parse(readFileSync(settingsPath, 'utf8'))
+    after.hooks.Stop.push({ hooks: [{ type: 'command', command: 'echo later' }] })
+    writeFileSync(settingsPath, JSON.stringify(after), 'utf8')
+
+    uninstallClaudeHooks(settingsPath)
+
+    const parsed = JSON.parse(readFileSync(settingsPath, 'utf8'))
+    expect(parsed.hooks.Stop).toEqual([{ hooks: [{ type: 'command', command: 'echo later' }] }])
+    expect(parsed.hooks.PreToolUse).toBeUndefined()
   })
 
   it('is a no-op when the file does not exist or is not managed', () => {
